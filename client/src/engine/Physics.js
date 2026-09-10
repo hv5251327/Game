@@ -33,11 +33,20 @@ export class Physics {
     let finalX = targetX;
     let finalZ = targetZ;
 
+    const now = Date.now();
     const bounds = 10.5;
+    if (Math.abs(finalX) > bounds || Math.abs(finalZ) > bounds) {
+      const wall = this.apartment.colliders.find(c => c.type === 'wall' && (
+        (finalX > bounds && c.box.min.x > 0) || (finalX < -bounds && c.box.max.x < 0) ||
+        (finalZ > bounds && c.box.min.z > 0) || (finalZ < -bounds && c.box.max.z < 0)
+      ));
+      if (wall && this.onThermalHit && now - this.lastBumpTime > 500) {
+        this.lastBumpTime = now;
+        this.onThermalHit(wall.mesh);
+      }
+    }
     finalX = Math.max(-bounds, Math.min(bounds, finalX));
     finalZ = Math.max(-bounds, Math.min(bounds, finalZ));
-
-    const now = Date.now();
 
     for (const collider of this.apartment.colliders) {
       const box = collider.box;

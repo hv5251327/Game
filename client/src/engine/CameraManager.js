@@ -9,6 +9,8 @@ export class CameraManager {
     this.yaw = 0;
     this.pitch = 0.22;
     this.isPointerLocked = false;
+    this.isDragging = false;
+    this.lastPointer = { x: 0, y: 0 };
     this.headBobTimer = 0;
 
     this.initControls();
@@ -17,25 +19,28 @@ export class CameraManager {
   initControls() {
     // Click on canvas to request pointer lock
     this.domElement.addEventListener('mousedown', (e) => {
-      // Only lock on left click or middle click if not clicking UI
+      if (e.button !== 0) return;
+      this.isDragging = true;
+      this.lastPointer = { x: e.clientX, y: e.clientY };
       if (document.pointerLockElement !== this.domElement) {
         this.domElement.requestPointerLock?.();
       }
     });
+
+    window.addEventListener('mouseup', () => { this.isDragging = false; });
 
     document.addEventListener('pointerlockchange', () => {
       this.isPointerLocked = (document.pointerLockElement === this.domElement);
     });
 
     document.addEventListener('mousemove', (e) => {
-      if (this.isPointerLocked) {
-        const sensitivity = 0.0022;
-        this.yaw -= e.movementX * sensitivity;
-        this.pitch -= e.movementY * sensitivity;
-
-        // Clamp pitch so camera doesn't flip
-        this.pitch = Math.max(-Math.PI / 2.6, Math.min(Math.PI / 2.6, this.pitch));
-      }
+      if (!this.isPointerLocked && !this.isDragging) return;
+      const dx = this.isPointerLocked ? e.movementX : e.clientX - this.lastPointer.x;
+      const dy = this.isPointerLocked ? e.movementY : e.clientY - this.lastPointer.y;
+      this.lastPointer = { x: e.clientX, y: e.clientY };
+      const sensitivity = 0.0026;
+      this.yaw -= dx * sensitivity;
+      this.pitch = Math.max(-Math.PI / 2.6, Math.min(Math.PI / 2.6, this.pitch - dy * sensitivity));
     });
 
     // Touch look drag for mobile devices

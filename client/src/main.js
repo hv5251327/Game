@@ -55,6 +55,9 @@ class WobbleHouseGame {
     this.domStartMatch = document.getElementById('btn-start-match');
     this.domHostNote = document.getElementById('host-note');
     this.roomInfo = null;
+    this.practiceRoom = false;
+    this.isSpectating = false;
+    this.spectatorTargetId = null;
 
     this.init();
   }
@@ -318,6 +321,7 @@ class WobbleHouseGame {
     const color = document.getElementById('input-color').value || '#6ecb84';
     this.audio.ensureContext();
     this.localPlayer.setColor(color);
+    this.practiceRoom = botCount > 0;
     this.network.joinRoom(roomCode, nickname, color, botCount);
   }
 
@@ -417,6 +421,9 @@ class WobbleHouseGame {
     this.domRoomPanel.classList.remove('hidden');
     this.domRoomCode.textContent = data.roomCode;
     this.handleRoomUpdated(data);
+    if (this.practiceRoom && data.hostId === this.network.myId) {
+      setTimeout(() => this.network.startGame(), 250);
+    }
   }
 
   handleRoomUpdated(data) {
@@ -440,6 +447,9 @@ class WobbleHouseGame {
 
   handleCountdownStarted(data) {
     this.audio.playBuzzer();
+    this.isSpectating = false;
+    this.spectatorTargetId = null;
+    this.localPlayer.isDancing = false;
     this.domLobby.classList.add('hidden');
     this.domHud.classList.remove('hidden');
     this.domEndOverlay.classList.add('hidden');
@@ -504,7 +514,9 @@ class WobbleHouseGame {
 
       if (data.isKnockedOut) {
         this.localPlayer.isAlive = false;
-        this.showHitFeedNotice(`💀 YOU WERE KNOCKED FLAT OUT!`);
+        this.isSpectating = true;
+        this.spectatorTargetId = data.hitterId;
+        this.showHitFeedNotice('You are out — now spectating the tagger.');
       }
     } else {
       const remote = this.remotePlayers.get(data.victimId);
@@ -568,6 +580,18 @@ class WobbleHouseGame {
         this.remoteData.delete(id);
       }
     }
+
+    if (this.isSpectating) {
+      this.spectatorTargetId = data.hitterId === this.network.myId ? null : data.hitterId;
+      const target = this.remotePlayers.get(this.spectatorTargetId);
+      if (target) {
+        this.domRoleBadge.textContent = 'SPECTATING TAGGER';
+        this.domRoleBadge.className = 'role-badge hitter';
+        this.domRoleDesc.textContent = 'Mouse to orbit the tagger. You will return next round.';
+        this.domHpBar.classList.add('hidden');
+        this.domPeepDarkness.classList.add('hidden');
+      }
+    }
   }
 
   updateRoleUi(role) {
@@ -575,7 +599,7 @@ class WobbleHouseGame {
       this.domRoleBadge.textContent = 'TAGGER';
       this.domRoleBadge.className = 'role-badge hitter';
       this.domRoleDesc.textContent = 'Tag the wobblers. Press X or click to swing your foam baton.';
-      this.domPeepDarkness.classList.add('hidden');
+      this.domPeepDarkness.classList.remove('hidden');
       this.domHpBar.classList.add('hidden');
     } else {
       this.domRoleBadge.textContent = 'WOBBLER';
@@ -631,7 +655,9 @@ class WobbleHouseGame {
       moveZ = this.touchMove.y;
     }
 
-    const isMoving = (Math.abs(moveX) > 0.05 || Math.abs(moveZ) > 0.05);
+    const canControl = !this.isSpectating && this.localPlayer.isAlive;
+    if (!canControl) { moveX = 0; moveZ = 0; }
+    const isMoving = canControl && (Math.abs(moveX) > 0.05 || Math.abs(moveZ) > 0.05);
 
     // Spine Pitch Controls (Q/Z / Mouse Pitch)
     if (this.keys['KeyQ']) {
@@ -662,14 +688,14 @@ class WobbleHouseGame {
     }
 
     // 2. Physics & Collisions (Uniform 4.5 m/s, zero footstep noise)
-    const newPos = this.physics.resolvePlayerMovement(this.localPlayer, moveDir, delta, 4.5);
-    const newY = this.physics.resolveVerticalPhysics(this.localPlayer, delta, isJumping);
+    const newPos = canControl ? this.physics.resolvePlayerMovement(this.localPlayer, moveDir, delta, 4.5) : this.localPlayer.root.position;
+    const newY = canControl ? this.physics.resolveVerticalPhysics(this.localPlayer, delta, isJumping) : this.localPlayer.root.position.y;
 
     this.localPlayer.root.position.set(newPos.x, newY, newPos.z);
     this.localPlayer.updateAnimation(delta, isMoving);
 
     // 3. Sync Network Input
-    if (this.network.connected) {
+    if (this.network.connected && canControl) {
       this.network.sendInput({
         position: { x: newPos.x, y: newY, z: newPos.z },
         rotation: { y: this.localPlayer.root.rotation.y },
@@ -697,7 +723,8 @@ class WobbleHouseGame {
     this.apartment.update(delta);
 
     // 6. Camera Update
-    this.cameraManager.update(this.localPlayer, delta);
+    const spectatorTarget = this.isSpectating ? this.remotePlayers.get(this.spectatorTargetId) : null;
+    this.cameraManager.update(spectatorTarget || this.localPlayer, delta);
 
     // 7. Render Frame
     this.renderer.render(this.scene, this.camera);
