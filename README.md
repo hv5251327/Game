@@ -1,6 +1,6 @@
-# 🎮 HITTLERS - 3D Slapstick Ragdoll Party Horror Game
+# Wobble House — 3D Local Multiplayer Party Game
 
-A comedic slapstick party horror 3D multiplayer browser game inspired by *Human: Fall Flat*. Avatars feature squishy, rubbery bodies with flexible bending spines and floppy limbs in a cluttered 10-player apartment room.
+A playful soft-bodied 3D party game with squishy characters, flexible spines, floppy limbs, and a cluttered 10-player apartment playground.
 
 ---
 

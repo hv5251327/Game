@@ -21,13 +21,21 @@ export class NetworkClient {
     this.socket.on('connect', () => {
       this.connected = true;
       this.myId = this.socket.id;
-      console.log('Connected to HITTLERS game server! ID:', this.myId);
+      console.log('Connected to Wobble House server. ID:', this.myId);
     });
 
     this.socket.on('room_joined', (data) => {
       this.myId = data.playerId;
       this.roomCode = data.roomCode;
       this.callbacks.onRoomJoined?.(data);
+    });
+
+    this.socket.on('room_updated', (data) => {
+      this.callbacks.onRoomUpdated?.(data);
+    });
+
+    this.socket.on('room_error', (data) => {
+      this.callbacks.onRoomError?.(data);
     });
 
     this.socket.on('round_countdown_started', (data) => {

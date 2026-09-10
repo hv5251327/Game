@@ -1,7 +1,7 @@
 {
-  "name": "hittlers-ragdoll-game",
+  "name": "wobble-house",
   "version": "1.0.0",
-  "description": "HITTLERS - Slapstick Ragdoll Party Horror 3D Browser Game",
+  "description": "Wobble House - a soft-bodied local multiplayer party game",
   "main": "server/index.js",
   "type": "module",
   "scripts": {

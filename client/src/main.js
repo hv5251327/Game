@@ -7,7 +7,7 @@ import { CameraManager } from './engine/CameraManager.js';
 import { NetworkClient } from './engine/NetworkClient.js';
 import { supabaseService } from './engine/SupabaseService.js';
 
-class HittlersGame {
+class WobbleHouseGame {
   constructor() {
     this.scene = null;
     this.camera = null;
@@ -46,6 +46,15 @@ class HittlersGame {
     this.domHitFeed = document.getElementById('hit-feed');
     this.domLeaderboardModal = document.getElementById('leaderboard-modal');
     this.domLeaderboardList = document.getElementById('leaderboard-list');
+    this.domSetupPanel = document.getElementById('setup-panel');
+    this.domJoinPanel = document.getElementById('join-panel');
+    this.domRoomPanel = document.getElementById('room-panel');
+    this.domRoomCode = document.getElementById('room-code-display');
+    this.domRoomStatus = document.getElementById('room-status');
+    this.domRoomPlayers = document.getElementById('room-player-list');
+    this.domStartMatch = document.getElementById('btn-start-match');
+    this.domHostNote = document.getElementById('host-note');
+    this.roomInfo = null;
 
     this.init();
   }
@@ -53,22 +62,25 @@ class HittlersGame {
   init() {
     // 1. Setup Three.js Scene & Renderer
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x181926);
-    this.scene.fog = new THREE.FogExp2(0x181926, 0.025);
+    this.scene.background = new THREE.Color(0xb9d1d5);
+    this.scene.fog = new THREE.FogExp2(0xb9d1d5, 0.018);
 
     this.camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 100);
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.05;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     document.getElementById('canvas-container').appendChild(this.renderer.domElement);
 
     // 2. Lighting
-    const ambient = new THREE.AmbientLight(0xffffff, 0.7);
+    const ambient = new THREE.HemisphereLight(0xeaf8ff, 0x71856e, 2.0);
     this.scene.add(ambient);
 
-    const dirLight = new THREE.DirectionalLight(0xfff5e6, 1.3);
+    const dirLight = new THREE.DirectionalLight(0xfff5e6, 2.2);
     dirLight.position.set(12, 16, 10);
     dirLight.castShadow = true;
     dirLight.shadow.mapSize.width = 2048;
@@ -102,6 +114,8 @@ class HittlersGame {
     // 6. Network Client & Event Callbacks
     this.network = new NetworkClient({
       onRoomJoined: (data) => this.handleRoomJoined(data),
+      onRoomUpdated: (data) => this.handleRoomUpdated(data),
+      onRoomError: (data) => this.handleRoomError(data),
       onCountdownStarted: (data) => this.handleCountdownStarted(data),
       onRoundStarted: (data) => this.handleRoundStarted(data),
       onRoundEnded: (data) => this.handleRoundEnded(data),
@@ -254,55 +268,21 @@ class HittlersGame {
     });
 
     // Lobby Buttons
-    document.getElementById('btn-solo-hitter')?.addEventListener('click', () => {
-      const roomCode = 'SOLO-' + Math.floor(Math.random() * 900 + 100);
-      const nickname = 'The Hitter';
-      const color = '#ff4757';
-      const botCount = 9;
-
-      this.audio.ensureContext();
-      this.localPlayer.setColor(color);
-      this.setRole('HITTER');
-
-      this.network.joinRoom(roomCode, nickname, color, botCount);
-      this.domLobby.classList.add('hidden');
-      this.domHud.classList.remove('hidden');
-
-      setTimeout(() => {
-        this.network.socket?.emit('start_game', { forceHitter: true });
-      }, 500);
-    });
-
     document.getElementById('btn-solo-runner')?.addEventListener('click', () => {
-      const roomCode = 'SOLO-' + Math.floor(Math.random() * 900 + 100);
-      const nickname = 'RagdollRunner';
-      const color = '#2ed573';
-      const botCount = 9;
-
-      this.audio.ensureContext();
-      this.localPlayer.setColor(color);
-      this.setRole('RUNNER');
-
-      this.network.joinRoom(roomCode, nickname, color, botCount);
-      this.domLobby.classList.add('hidden');
-      this.domHud.classList.remove('hidden');
-
-      setTimeout(() => {
-        this.network.startGame();
-      }, 500);
+      this.joinRoom(`PRACTICE-${Math.floor(Math.random() * 900 + 100)}`, 5);
     });
+
+    document.getElementById('btn-create-room')?.addEventListener('click', () => {
+      const code = Math.random().toString(36).slice(2, 8).toUpperCase();
+      this.joinRoom(code, 0);
+    });
+
+    document.getElementById('btn-open-join')?.addEventListener('click', () => this.domJoinPanel.classList.toggle('hidden'));
 
     document.getElementById('btn-join-room')?.addEventListener('click', () => {
-      const roomCode = document.getElementById('input-room-code').value.trim() || 'LOBBY-1';
-      const nickname = document.getElementById('input-nickname').value.trim() || 'SlapstickHero';
-      const color = document.getElementById('input-color').value || '#2ed573';
-      const botCount = parseInt(document.getElementById('input-bots').value, 10) || 0;
-
-      this.audio.ensureContext();
-      this.localPlayer.setColor(color);
-      this.network.joinRoom(roomCode, nickname, color, botCount);
-      this.domLobby.classList.add('hidden');
-      this.domHud.classList.remove('hidden');
+      const roomCode = document.getElementById('input-room-code').value.trim().toUpperCase();
+      if (!roomCode) return this.showLobbyMessage('Enter a room code to join.');
+      this.joinRoom(roomCode, 0);
     });
 
     document.getElementById('btn-start-match')?.addEventListener('click', () => {
@@ -310,11 +290,10 @@ class HittlersGame {
       this.network.startGame();
     });
 
-    document.getElementById('btn-toggle-role')?.addEventListener('click', () => {
-      const nextRole = (this.localPlayer.role === 'HITTER') ? 'RUNNER' : 'HITTER';
-      this.setRole(nextRole);
-      this.network.socket?.emit('switch_role', { role: nextRole });
-      this.showHitFeedNotice(`Switched role to ${nextRole}!`);
+    document.getElementById('btn-copy-room')?.addEventListener('click', async () => {
+      const code = this.network.roomCode;
+      if (!code) return;
+      try { await navigator.clipboard.writeText(code); this.showLobbyMessage('Room code copied.'); } catch { this.showLobbyMessage(`Room code: ${code}`); }
     });
 
     // Leaderboard Modal
@@ -332,6 +311,18 @@ class HittlersGame {
     this.localPlayer.setRole(role);
     this.cameraManager.setRole(role);
     this.updateRoleUi(role);
+  }
+
+  joinRoom(roomCode, botCount = 0) {
+    const nickname = document.getElementById('input-nickname').value.trim() || 'Wobbler';
+    const color = document.getElementById('input-color').value || '#6ecb84';
+    this.audio.ensureContext();
+    this.localPlayer.setColor(color);
+    this.network.joinRoom(roomCode, nickname, color, botCount);
+  }
+
+  showLobbyMessage(message) {
+    if (this.domRoomStatus) this.domRoomStatus.textContent = message;
   }
 
   async loadLeaderboardData() {
@@ -422,25 +413,48 @@ class HittlersGame {
   }
 
   handleRoomJoined(data) {
-    console.log('Joined room:', data);
-    this.showHitFeedNotice(`Joined ${data.roomCode}!`);
+    this.domSetupPanel.classList.add('hidden');
+    this.domRoomPanel.classList.remove('hidden');
+    this.domRoomCode.textContent = data.roomCode;
+    this.handleRoomUpdated(data);
+  }
+
+  handleRoomUpdated(data) {
+    this.roomInfo = data;
+    if (!this.domRoomPanel || data.state !== 'LOBBY') return;
+    this.domRoomCode.textContent = data.roomCode;
+    this.domRoomStatus.textContent = `${data.players.length} player${data.players.length === 1 ? '' : 's'} in the room`;
+    this.domRoomPlayers.innerHTML = data.players.map((player) => `<div class="room-player"><span><i style="--player-color:${player.color}"></i>${this.escapeHtml(player.name)}</span><span>${player.id === data.hostId ? 'HOST' : 'READY'}</span></div>`).join('');
+    const isHost = data.hostId === this.network.myId;
+    this.domStartMatch.classList.toggle('hidden', !isHost);
+    this.domHostNote.textContent = isHost ? 'You are host. Start when everyone has joined.' : 'The host will start when everyone is ready.';
+  }
+
+  handleRoomError(data) {
+    this.showLobbyMessage(data.message || 'Unable to join that room.');
+  }
+
+  escapeHtml(value) {
+    const el = document.createElement('div'); el.textContent = value; return el.innerHTML;
   }
 
   handleCountdownStarted(data) {
     this.audio.playBuzzer();
+    this.domLobby.classList.add('hidden');
+    this.domHud.classList.remove('hidden');
     this.domEndOverlay.classList.add('hidden');
-    this.showHitFeedNotice(`🚨 Selection: ${data.hitterName} is THE HITTER! Round starting in 3s!`);
+    this.showHitFeedNotice(`${data.hitterName} is the tagger. Round starts in 3…`);
   }
 
   handleRoundStarted(data) {
-    this.showHitFeedNotice(`⚡ ROUND STARTED! SURVIVE 120 SECONDS!`);
+    this.showHitFeedNotice('Go! Keep wobbling until the clock runs out.');
   }
 
   handleRoundEnded(data) {
     this.domEndOverlay.classList.remove('hidden');
 
     if (data.winner === 'RUNNERS') {
-      this.domEndTitle.textContent = '🎉 RUNNERS SURVIVED!';
+      this.domEndTitle.textContent = 'Wobblers made it!';
       this.domEndTitle.style.color = '#2ed573';
       this.domEndSubtitle.textContent = data.reason || 'The 120s clock expired! Runners victory dance!';
       this.audio.playVictoryFanfare();
@@ -449,7 +463,7 @@ class HittlersGame {
         this.localPlayer.isDancing = true;
       }
     } else {
-      this.domEndTitle.textContent = '🔨 HITTER CLEAN SWEEP!';
+      this.domEndTitle.textContent = 'Tagger takes the round!';
       this.domEndTitle.style.color = '#ff4757';
       this.domEndSubtitle.textContent = data.reason || 'All runners were knocked flat out!';
       this.audio.playVictoryFanfare();
@@ -512,7 +526,8 @@ class HittlersGame {
   }
 
   handleGameTick(data) {
-    this.domTimer.textContent = `${data.timer}s`;
+    const mins = Math.floor(data.timer / 60);
+    this.domTimer.textContent = `${mins}:${String(data.timer % 60).padStart(2, '0')}`;
 
     const activeIds = new Set();
 
@@ -523,9 +538,8 @@ class HittlersGame {
         if (this.localPlayer.role !== p.role) {
           this.setRole(p.role);
         }
-        if (!p.isAlive) {
-          this.localPlayer.isAlive = false;
-        }
+        this.localPlayer.isAlive = p.isAlive;
+        this.localPlayer.hp = p.hp;
       } else {
         let remote = this.remotePlayers.get(p.id);
         if (!remote) {
@@ -558,15 +572,15 @@ class HittlersGame {
 
   updateRoleUi(role) {
     if (role === 'HITTER') {
-      this.domRoleBadge.textContent = '🔨 THE HITTER';
+      this.domRoleBadge.textContent = 'TAGGER';
       this.domRoleBadge.className = 'role-badge hitter';
-      this.domRoleDesc.textContent = '85% Blind! Press X or Click to Swing Stick. Hit objects to trigger Thermal Echoes!';
-      this.domPeepDarkness.classList.remove('hidden');
+      this.domRoleDesc.textContent = 'Tag the wobblers. Press X or click to swing your foam baton.';
+      this.domPeepDarkness.classList.add('hidden');
       this.domHpBar.classList.add('hidden');
     } else {
-      this.domRoleBadge.textContent = '🏃 RUNNER';
+      this.domRoleBadge.textContent = 'WOBBLER';
       this.domRoleBadge.className = 'role-badge runner';
-      this.domRoleDesc.textContent = 'Survive 120s! Crawl under tables, jump on beds, toggle 1st/3rd view with V!';
+      this.domRoleDesc.textContent = 'Stay upright until the clock runs out. Use V to switch views.';
       this.domPeepDarkness.classList.add('hidden');
       this.domHpBar.classList.remove('hidden');
       this.updateHpUi();
@@ -600,7 +614,7 @@ class HittlersGame {
     requestAnimationFrame(() => this.animate());
 
     const now = performance.now();
-    const delta = Math.min((now - this.lastTime) / 1000, 0.1);
+    const delta = Math.min((now - this.lastTime) / 1000, 0.05);
     this.lastTime = now;
 
     // 1. Locomotion Input (WASD, Arrow Keys, Touch Joystick)
@@ -671,7 +685,8 @@ class HittlersGame {
     for (const [id, remote] of this.remotePlayers.entries()) {
       const data = this.remoteData.get(id);
       if (data) {
-        remote.root.position.lerp(new THREE.Vector3(data.position.x, data.position.y, data.position.z), 0.35);
+        const smoothing = 1 - Math.exp(-14 * delta);
+        remote.root.position.lerp(new THREE.Vector3(data.position.x, data.position.y, data.position.z), smoothing);
         remote.root.rotation.y = data.rotation.y;
         const isRemoteMoving = (Math.hypot(data.position.x - remote.root.position.x, data.position.z - remote.root.position.z) > 0.02);
         remote.updateAnimation(delta, isRemoteMoving);
@@ -691,5 +706,5 @@ class HittlersGame {
 
 // Start game when page loads
 window.addEventListener('DOMContentLoaded', () => {
-  window.game = new HittlersGame();
+  window.game = new WobbleHouseGame();
 });

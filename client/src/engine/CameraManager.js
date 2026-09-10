@@ -7,7 +7,7 @@ export class CameraManager {
 
     this.mode = 'THIRD_PERSON'; // 'FIRST_PERSON', 'THIRD_PERSON', or 'HITTER_PEEP'
     this.yaw = 0;
-    this.pitch = 0.15;
+    this.pitch = 0.22;
     this.isPointerLocked = false;
     this.headBobTimer = 0;
 
@@ -109,15 +109,15 @@ export class CameraManager {
 
     } else if (this.mode === 'HITTER_PEEP') {
       // Low-angle strip tracking camera for the Hitter (matching the bottom 15% strip view)
-      const camDist = 2.4;
-      const camHeight = 0.7;
+      const camDist = 3.2;
+      const camHeight = 1.55;
       const camX = targetPos.x + Math.sin(this.yaw) * camDist;
       const camZ = targetPos.z + Math.cos(this.yaw) * camDist;
 
       this.camera.position.set(camX, targetPos.y + camHeight, camZ);
       const lookTarget = new THREE.Vector3(
         targetPos.x - Math.sin(this.yaw) * 4,
-        targetPos.y + 0.15, // Aligned towards floor, feet, and swinging bat
+        targetPos.y + 0.85,
         targetPos.z - Math.cos(this.yaw) * 4
       );
       this.camera.lookAt(lookTarget);

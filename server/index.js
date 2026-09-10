@@ -42,6 +42,7 @@ class GameRoom {
     this.players = new Map(); // id -> player
     this.hitterHistory = new Set(); // player IDs who have been Hitter
     this.currentHitterId = null;
+    this.hostId = null;
     this.state = 'LOBBY'; // 'LOBBY', 'COUNTDOWN', 'HUNTING', 'ROUND_END'
     this.timer = 0;
     this.roundWinner = null;
@@ -87,6 +88,7 @@ class GameRoom {
     };
 
     this.players.set(socketId, player);
+    if (!isBot && !this.hostId) this.hostId = socketId;
     if (isBot) this.bots.set(socketId, player);
 
     return player;
@@ -96,6 +98,9 @@ class GameRoom {
     this.players.delete(socketId);
     this.bots.delete(socketId);
     this.hitterHistory.delete(socketId);
+    if (this.hostId === socketId) {
+      this.hostId = Array.from(this.players.values()).find(p => !p.isBot)?.id || null;
+    }
 
     if (this.currentHitterId === socketId && (this.state === 'HUNTING' || this.state === 'COUNTDOWN')) {
       this.endRound('RUNNERS', 'Hitter disconnected! Runners win!');
@@ -128,6 +133,19 @@ class GameRoom {
     }
 
     this.botCount = this.bots.size;
+  }
+
+  getLobbySnapshot() {
+    return {
+      roomCode: this.code,
+      hostId: this.hostId,
+      state: this.state,
+      players: Array.from(this.players.values()).map(p => ({ id: p.id, name: p.name, color: p.color, isBot: p.isBot }))
+    };
+  }
+
+  emitLobby() {
+    io.to(this.code).emit('room_updated', this.getLobbySnapshot());
   }
 
   selectNextHitter(forcedPlayerId = null) {
@@ -192,7 +210,7 @@ class GameRoom {
 
     io.to(this.code).emit('round_countdown_started', {
       hitterId: this.currentHitterId,
-      hitterName: this.players.get(this.currentHitterId)?.name || 'The Hitter',
+      hitterName: this.players.get(this.currentHitterId)?.name || 'The Tagger',
       duration: COUNTDOWN_DURATION
     });
 
@@ -217,7 +235,7 @@ class GameRoom {
     io.to(this.code).emit('round_ended', {
       winner: winnerRole,
       hitterId: this.currentHitterId,
-      hitterName: this.players.get(this.currentHitterId)?.name || 'The Hitter',
+      hitterName: this.players.get(this.currentHitterId)?.name || 'The Tagger',
       reason: reason
     });
   }
@@ -375,7 +393,7 @@ class GameRoom {
     } else if (this.state === 'HUNTING') {
       this.timer -= delta;
       if (this.timer <= 0) {
-        this.endRound('RUNNERS', 'Time expired! Runners survived the Hitter!');
+        this.endRound('RUNNERS', 'Time expired! The wobblers made it!');
       }
     } else if (this.state === 'ROUND_END') {
       this.timer -= delta;
@@ -447,7 +465,12 @@ io.on('connection', (socket) => {
   let currentRoomCode = null;
 
   socket.on('join_room', ({ roomCode, nickname, color, botCount, autoStart, forceHitter }) => {
-    const code = (roomCode || 'LOBBY-1').toUpperCase();
+    const code = String(roomCode || '').trim().toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 16);
+    if (!code) return socket.emit('room_error', { message: 'Please enter a valid room code.' });
+    if (currentRoomCode && currentRoomCode !== code) {
+      socket.leave(currentRoomCode);
+      rooms.get(currentRoomCode)?.removePlayer(socket.id);
+    }
     socket.join(code);
     currentRoomCode = code;
 
@@ -458,6 +481,7 @@ io.on('connection', (socket) => {
     }
 
     const player = room.addPlayer(socket.id, nickname, color);
+    if (!player) return socket.emit('room_error', { message: 'That room is full.' });
     if (typeof botCount === 'number') {
       room.setBotCount(botCount);
     }
@@ -467,8 +491,10 @@ io.on('connection', (socket) => {
       roomCode: code,
       player: player,
       state: room.state,
-      hitterId: room.currentHitterId
+      hitterId: room.currentHitterId,
+      ...room.getLobbySnapshot()
     });
+    room.emitLobby();
 
     if (autoStart) {
       setTimeout(() => {
@@ -481,32 +507,18 @@ io.on('connection', (socket) => {
     if (!currentRoomCode) return;
     const room = rooms.get(currentRoomCode);
     if (room) {
+      if (room.hostId !== socket.id) return socket.emit('room_error', { message: 'Only the room host can start the game.' });
+      if (room.state !== 'LOBBY') return;
       room.startCountdown(forceHitter ? socket.id : null);
-    }
-  });
-
-  socket.on('switch_role', ({ role }) => {
-    if (!currentRoomCode) return;
-    const room = rooms.get(currentRoomCode);
-    if (!room) return;
-
-    const player = room.players.get(socket.id);
-    if (player) {
-      player.role = role;
-      if (role === 'HITTER') {
-        room.currentHitterId = socket.id;
-        for (const [id, p] of room.players.entries()) {
-          if (id !== socket.id) p.role = 'RUNNER';
-        }
-      }
     }
   });
 
   socket.on('set_bots', ({ count }) => {
     if (!currentRoomCode) return;
     const room = rooms.get(currentRoomCode);
-    if (room) {
+    if (room && room.hostId === socket.id && room.state === 'LOBBY') {
       room.setBotCount(count);
+      room.emitLobby();
     }
   });
 
@@ -518,10 +530,11 @@ io.on('connection', (socket) => {
     const player = room.players.get(socket.id);
     if (!player || !player.isAlive) return;
 
+    if (room.state !== 'HUNTING') return;
     if (inputData.position) {
-      player.position.x = inputData.position.x;
-      player.position.y = inputData.position.y;
-      player.position.z = inputData.position.z;
+      player.position.x = Math.max(-10.5, Math.min(10.5, Number(inputData.position.x) || 0));
+      player.position.y = Math.max(0, Math.min(3, Number(inputData.position.y) || 0));
+      player.position.z = Math.max(-10.5, Math.min(10.5, Number(inputData.position.z) || 0));
     }
     if (inputData.rotation) {
       player.rotation.y = inputData.rotation.y;
@@ -555,6 +568,7 @@ io.on('connection', (socket) => {
       const room = rooms.get(currentRoomCode);
       if (room) {
         room.removePlayer(socket.id);
+        if (rooms.has(currentRoomCode)) room.emitLobby();
       }
     }
   });
@@ -562,7 +576,7 @@ io.on('connection', (socket) => {
 
 server.listen(PORT, () => {
   console.log(`====================================================`);
-  console.log(`🎮 HITTLERS Game Server running on port ${PORT}`);
+  console.log(`🎮 Wobble House server running on port ${PORT}`);
   console.log(`🌐 Local URL: http://localhost:${PORT}`);
   console.log(`====================================================`);
 });

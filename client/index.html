@@ -1,156 +1,24 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>HITTLERS - Slapstick Ragdoll Party Horror 3D</title>
+  <meta name="theme-color" content="#e9edf1">
+  <title>Wobble House</title>
   <link rel="stylesheet" href="src/styles.css">
-
-  <!-- Import Map for ES Modules (Three.js) -->
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://unpkg.com/three@0.165.0/build/three.module.js",
-        "three/addons/": "https://unpkg.com/three@0.165.0/examples/jsm/"
-      }
-    }
-  </script>
-
-  <!-- Socket.io Client -->
+  <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.165.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.165.0/examples/jsm/"}}</script>
   <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
-
-  <!-- WebGL 3D Canvas -->
   <div id="canvas-container"></div>
-
-  <!-- 1. Lobby & Matchmaking Screen -->
-  <div id="lobby-screen">
-    <div class="lobby-card">
-      <h1 class="game-title">HITTLERS</h1>
-      <p class="game-subtitle">Slapstick Ragdoll Party Horror (Max 10 Players)</p>
-
-      <div class="form-group">
-        <label>Your Nickname</label>
-        <input type="text" id="input-nickname" class="form-input" placeholder="e.g. SlapstickHero" value="RagdollRunner">
-      </div>
-
-      <div class="form-group">
-        <label>Room Code</label>
-        <input type="text" id="input-room-code" class="form-input" placeholder="e.g. ROOM-101" value="LOBBY-1">
-      </div>
-
-      <div class="form-group">
-        <label>Avatar Color</label>
-        <div class="color-picker-row">
-          <input type="color" id="input-color" class="color-input" value="#2ed573">
-          <span style="font-size: 0.85rem; color: #a4b0be;">Pick your rubbery skin color</span>
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label>AI Slapstick Bots (0 - 9)</label>
-        <input type="number" id="input-bots" class="form-input" min="0" max="9" value="9">
-      </div>
-
-      <button id="btn-solo-hitter" class="btn-primary btn-solo">🔨 PLAY AS THE HITTER (9 BOTS)</button>
-      <button id="btn-solo-runner" class="btn-primary" style="background: linear-gradient(135deg, #2ed573, #1e90ff); margin-top: 8px;">🏃 PLAY AS RUNNER (9 BOTS)</button>
-      <button id="btn-join-room" class="btn-primary btn-secondary">👥 MULTIPLAYER HOST / JOIN</button>
-      <button id="btn-show-leaderboard" class="btn-primary btn-secondary" style="background: linear-gradient(135deg, #f39c12, #e67e22);">🏆 GLOBAL LEADERBOARD</button>
-    </div>
-  </div>
-
-  <!-- Leaderboard Modal -->
-  <div id="leaderboard-modal" class="modal-overlay hidden">
-    <div class="modal-card">
-      <h2 class="modal-title">🏆 GLOBAL LEADERBOARD</h2>
-      <p style="color:#a4b0be; font-size:0.85rem; margin-bottom:16px;">Powered by Supabase Live Database</p>
-      <div id="leaderboard-list" class="leaderboard-list">
-        <div style="color:#aaa; padding:20px;">Loading scores...</div>
-      </div>
-      <button id="btn-close-leaderboard" class="btn-primary" style="margin-top:16px;">Close</button>
-    </div>
-  </div>
-
-  <!-- 2. In-Game HUD -->
-  <div id="hud" class="hidden">
-    <!-- Top Bar: Timer, Role, Instructions -->
-    <div class="hud-top-bar">
-      <div class="timer-box">
-        <span id="match-timer" class="timer-text">120s</span>
-      </div>
-      <div id="role-badge" class="role-badge runner">🏃 RUNNER</div>
-      <div id="role-desc" class="role-desc">Survive 120s! Crawl under tables, jump on beds, toggle 1st/3rd view with V!</div>
-      <div style="display: flex; gap: 8px; margin-top: 4px;">
-        <button id="btn-start-match" class="btn-hud-small" style="background: #2ed573; color: #111;">⚡ Start Round</button>
-        <button id="btn-toggle-role" class="btn-hud-small">🔄 Switch Role</button>
-      </div>
-    </div>
-
-    <!-- Health Bar (For Runners) -->
-    <div id="hp-bar" class="hp-container">
-      <div class="hp-label">
-        <span>RUNNER HEALTH</span>
-        <span id="hp-text">100 / 100 HP</span>
-      </div>
-      <div class="hp-bar-outer">
-        <div id="hp-fill" class="hp-bar-inner"></div>
-      </div>
-    </div>
-
-    <!-- Controls Legend -->
-    <div class="controls-legend">
-      <div><kbd>W A S D</kbd> Move (Uniform 4.5 m/s)</div>
-      <div><kbd>X</kbd> or <kbd>Space</kbd> <strong>Swing Stick / Bat</strong></div>
-      <div><kbd>F</kbd> Sleep / Flat Flop (Slide under beds)</div>
-      <div><kbd>Ctrl / Shift</kbd> Crawl / Crouch</div>
-      <div><kbd>C</kbd> Sit &nbsp;|&nbsp; <kbd>E</kbd> Grab</div>
-      <div><kbd>Q / Z</kbd> Spine Pitch / Duck</div>
-      <div><kbd>V</kbd> Toggle 1st / 3rd Person View</div>
-      <div><kbd>Click</kbd> Mouse Aim Look</div>
-    </div>
-
-    <!-- Live Hit Feed -->
-    <div id="hit-feed"></div>
-
-    <!-- Panic Flail Alert (when hit by bat) -->
-    <div id="flail-alert" class="hidden">😱 PANIC SPRINT! FLAPPING ARMS!</div>
-  </div>
-
-  <!-- 3. Peep Darkness Viewport Filter (Active when role is HITTER) -->
-  <div id="peep-darkness-mask" class="hidden">
-    <div class="peep-blackout">
-      <div class="peep-title">👁️ PEEP DARKNESS (85% BLACKOUT)</div>
-      <div class="peep-hint">Top 85% is pitch black! Bump into obstacles or swing stick with <kbd style="background:rgba(255,255,255,0.2); padding:2px 8px; border-radius:4px; color:#ffa502;">X</kbd> to trigger Thermal Echoes!</div>
-    </div>
-    <div class="peep-strip-boundary"></div>
-    <div class="peep-visible-strip"></div>
-  </div>
-
-  <!-- 4. Round End Overlay -->
-  <div id="end-overlay" class="hidden">
-    <div class="end-card">
-      <h2 id="end-title" class="end-title">🎉 RUNNERS SURVIVED!</h2>
-      <p id="end-subtitle" class="end-subtitle">The 120s timer expired! Next round starting soon...</p>
-    </div>
-  </div>
-
-  <!-- 5. Mobile Virtual Touch Controls -->
-  <div id="touch-controls">
-    <div id="touch-joystick">
-      <div id="touch-knob"></div>
-    </div>
-    <div class="touch-buttons-group">
-      <button id="btn-jump" class="touch-btn">JUMP</button>
-      <button id="btn-crawl" class="touch-btn">CRAWL</button>
-      <button id="btn-flop" class="touch-btn">FLOP</button>
-      <button id="btn-sit" class="touch-btn">SIT</button>
-      <button id="btn-view" class="touch-btn">1P/3P</button>
-      <button id="btn-swing" class="touch-btn btn-action">🔨 SWING STICK (X)</button>
-    </div>
-  </div>
-
-  <!-- Game Scripts -->
+  <main id="lobby-screen" class="lobby-screen"><section class="lobby-card">
+    <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div><p class="eyebrow">LOCAL PARTY GAME</p><h1 class="game-title">WOBBLE HOUSE</h1><p class="game-subtitle">A soft-bodied scramble for 1–10 players.</p>
+    <div id="setup-panel"><label class="form-group">Nickname<input type="text" id="input-nickname" class="form-input" maxlength="16" placeholder="Your name" value="Wobbler"></label><label class="form-group">Your colour<span class="color-picker-row"><input type="color" id="input-color" class="color-input" value="#6ecb84"><span>Choose a wobbly shade</span></span></label><div class="lobby-actions"><button id="btn-create-room" class="btn-primary">Create room</button><button id="btn-open-join" class="btn-quiet">Join with a code</button><button id="btn-solo-runner" class="btn-quiet">Practice with bots</button></div><div id="join-panel" class="join-panel hidden"><label class="form-group">Room code<input type="text" id="input-room-code" class="form-input room-code" maxlength="8" placeholder="ABC123"></label><button id="btn-join-room" class="btn-primary">Join room</button></div></div>
+    <div id="room-panel" class="room-panel hidden"><p class="eyebrow">ROOM CODE</p><button id="btn-copy-room" class="room-code-display" title="Copy room code"><span id="room-code-display">------</span><small>Copy</small></button><p id="room-status" class="room-status">Waiting for players…</p><div id="room-player-list" class="room-player-list"></div><button id="btn-start-match" class="btn-primary hidden">Start game</button><p id="host-note" class="host-note">The host will start when everyone is ready.</p></div>
+    <p class="lobby-hint">Share the code and open this address on the same Wi‑Fi.</p>
+  </section></main>
+  <div id="hud" class="hidden"><div class="hud-top-bar"><div class="timer-box"><span id="match-timer" class="timer-text">02:00</span></div><div id="role-badge" class="role-badge runner">RUNNER</div><div id="role-desc" class="role-desc">Keep moving. Stay upright. Make it to the bell.</div></div><div id="hp-bar" class="hp-container"><div class="hp-label"><span>STAMINA</span><span id="hp-text">100 / 100</span></div><div class="hp-bar-outer"><div id="hp-fill" class="hp-bar-inner"></div></div></div><div class="controls-legend"><div><kbd>WASD</kbd> move &nbsp; <kbd>Mouse</kbd> look</div><div><kbd>Space</kbd> jump &nbsp; <kbd>F</kbd> flop &nbsp; <kbd>Shift</kbd> crawl</div><div><kbd>V</kbd> view &nbsp; <kbd>X</kbd> swing</div></div><div id="hit-feed"></div><div id="flail-alert" class="hidden">WOBBLY!</div></div>
+  <div id="peep-darkness-mask" class="hidden"><div class="peep-blackout"><div class="peep-title">LISTEN CLOSELY</div><div class="peep-hint">Use <kbd>X</kbd> to tap objects and reveal a brief glow.</div></div><div class="peep-strip-boundary"></div><div class="peep-visible-strip"></div></div><div id="end-overlay" class="hidden"><div class="end-card"><p class="eyebrow">ROUND COMPLETE</p><h2 id="end-title" class="end-title">Runners made it!</h2><p id="end-subtitle" class="end-subtitle"></p></div></div>
+  <div id="touch-controls"><div id="touch-joystick"><div id="touch-knob"></div></div><div class="touch-buttons-group"><button id="btn-jump" class="touch-btn">JUMP</button><button id="btn-crawl" class="touch-btn">CRAWL</button><button id="btn-flop" class="touch-btn">FLOP</button><button id="btn-view" class="touch-btn">VIEW</button><button id="btn-swing" class="touch-btn btn-action">SWING</button></div></div>
   <script type="module" src="src/main.js"></script>
-</body>
-</html>
+</body></html>

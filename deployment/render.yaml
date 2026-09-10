@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: hittlers-game-server
+    name: wobble-house-game
     runtime: node
     plan: free
     buildCommand: npm install
