@@ -7,7 +7,7 @@ export class Apartment {
     this.crawlables = []; // low clearance areas (tables, bed bottoms)
     this.jumpables = []; // beds, couches
     this.interactiveProps = []; // yoga balls, loose cushions, stools
-    this.thermalObjects = new Map(); // mesh -> { timer: 0, initialEmissive, material }
+    this.thermalObjects = new Map(); // mesh -> { timer: 0, initialEmissive, material, outlineMesh }
     this.fans = [];
 
     this.buildApartment();
@@ -17,26 +17,26 @@ export class Apartment {
     const roomSize = 22;
     const wallHeight = 4.5;
 
-    // --- Materials ---
+    // Materials
     const floorMat = new THREE.MeshStandardMaterial({
-      color: 0x8d6e63, // warm wood floor
+      color: 0x5c4033, // warm apartment wood floor
       roughness: 0.6,
       metalness: 0.1
     });
 
     const wallMat = new THREE.MeshStandardMaterial({
-      color: 0xdedede, // modern apartment apartment wall
+      color: 0xcccccc,
       roughness: 0.8
     });
 
     const ceilingMat = new THREE.MeshStandardMaterial({
-      color: 0xf5f5f5,
+      color: 0x333338,
       roughness: 0.9
     });
 
     const carpetMat = new THREE.MeshStandardMaterial({
-      color: 0x3f51b5, // central blue rug
-      roughness: 0.9
+      color: 0x2c3e50, // central blue rug
+      roughness: 0.85
     });
 
     // Floor
@@ -46,7 +46,7 @@ export class Apartment {
     floor.receiveShadow = true;
     this.scene.add(floor);
 
-    // Central Carpet for lobby spawn
+    // Central Carpet
     const carpetGeo = new THREE.CylinderGeometry(4.5, 4.5, 0.04, 32);
     const carpet = new THREE.Mesh(carpetGeo, carpetMat);
     carpet.position.set(0, 0.02, 0);
@@ -59,7 +59,7 @@ export class Apartment {
     ceiling.rotation.x = Math.PI / 2;
     this.scene.add(ceiling);
 
-    // Walls & Wall Colliders
+    // Walls & Colliders
     const half = roomSize / 2;
     const wallGeoZ = new THREE.BoxGeometry(0.3, wallHeight, roomSize);
     const wallGeoX = new THREE.BoxGeometry(roomSize, wallHeight, 0.3);
@@ -83,7 +83,7 @@ export class Apartment {
       this.colliders.push({ box, mesh: wallMesh, type: 'wall' });
     });
 
-    // --- Build Furniture & Clutter ---
+    // --- Build Cluttered Apartment Furniture ---
     this.buildBunkBed(-7.0, -7.0, 0, 'bunk_1');
     this.buildBunkBed(-7.0, 7.0, 0, 'bunk_2');
     this.buildDaybed(7.0, -7.0, Math.PI / 2, 'daybed_1');
@@ -114,11 +114,27 @@ export class Apartment {
   registerThermalObject(mesh, id) {
     if (!mesh.material) return;
     mesh.userData.thermalId = id;
+
+    // Create glowing wireframe outline for thermal silhouette
+    let outlineMesh = null;
+    try {
+      const edges = new THREE.EdgesGeometry(mesh.geometry);
+      const lineMat = new THREE.LineBasicMaterial({
+        color: 0x00ffff,
+        linewidth: 2,
+        transparent: true,
+        opacity: 0.0
+      });
+      outlineMesh = new THREE.LineSegments(edges, lineMat);
+      outlineMesh.renderOrder = 10;
+      mesh.add(outlineMesh);
+    } catch (e) {}
+
     this.thermalObjects.set(mesh, {
       timer: 0,
       originalEmissive: mesh.material.emissive ? mesh.material.emissive.clone() : new THREE.Color(0, 0, 0),
-      originalColor: mesh.material.color ? mesh.material.color.clone() : new THREE.Color(1, 1, 1),
-      material: mesh.material
+      material: mesh.material,
+      outlineMesh
     });
   }
 
@@ -143,13 +159,14 @@ export class Apartment {
       [width / 2, height / 2, length / 2]
     ];
     postOffsets.forEach(pos => {
-      const post = new THREE.Mesh(postGeo, frameMat);
+      const post = new THREE.Mesh(postGeo, frameMat.clone());
       post.position.set(...pos);
       post.castShadow = true;
       group.add(post);
+      this.registerThermalObject(post, `${id}_post`);
     });
 
-    // Lower Mattress (Height 0.4m from floor - leaves 0.35m crawl space underneath!)
+    // Lower Mattress
     const matGeo = new THREE.BoxGeometry(width - 0.1, 0.25, length - 0.1);
     const lowerMat = new THREE.Mesh(matGeo, mattressMat.clone());
     lowerMat.position.set(0, 0.4, 0);
@@ -157,7 +174,7 @@ export class Apartment {
     lowerMat.receiveShadow = true;
     group.add(lowerMat);
 
-    // Upper Mattress (Height 1.7m)
+    // Upper Mattress
     const upperMat = new THREE.Mesh(matGeo, mattressMat.clone());
     upperMat.position.set(0, 1.7, 0);
     upperMat.castShadow = true;
@@ -178,21 +195,17 @@ export class Apartment {
     group.rotation.y = rotY;
     this.scene.add(group);
 
-    // Register thermal
     this.registerThermalObject(lowerMat, `${id}_lower`);
     this.registerThermalObject(upperMat, `${id}_upper`);
 
-    // Add Jumpable top & lower bed colliders
     const lowerBox = new THREE.Box3().setFromObject(lowerMat);
     const upperBox = new THREE.Box3().setFromObject(upperMat);
     this.jumpables.push({ box: upperBox, topY: 1.82, mesh: upperMat });
     this.jumpables.push({ box: lowerBox, topY: 0.52, mesh: lowerMat });
 
-    // Colliders
     this.colliders.push({ box: upperBox, mesh: upperMat, type: 'bed_upper' });
     this.colliders.push({ box: lowerBox, mesh: lowerMat, type: 'bed_lower' });
 
-    // Under-bed crawl space clearance (0.4m clearance)
     this.crawlables.push({
       box: new THREE.Box3(
         new THREE.Vector3(x - width / 2, 0, z - length / 2),
@@ -212,9 +225,10 @@ export class Apartment {
     const length = 3.2;
 
     const baseGeo = new THREE.BoxGeometry(width, 0.2, length);
-    const base = new THREE.Mesh(baseGeo, frameMat);
+    const base = new THREE.Mesh(baseGeo, frameMat.clone());
     base.position.set(0, 0.35, 0);
     group.add(base);
+    this.registerThermalObject(base, `${id}_base`);
 
     const cushionGeo = new THREE.BoxGeometry(width - 0.1, 0.25, length - 0.1);
     const cushion = new THREE.Mesh(cushionGeo, cushionMat.clone());
@@ -232,7 +246,6 @@ export class Apartment {
     this.jumpables.push({ box: cBox, topY: 0.68, mesh: cushion });
     this.colliders.push({ box: cBox, mesh: cushion, type: 'daybed' });
 
-    // Crawlable under daybed (0.35m clearance)
     this.crawlables.push({
       box: new THREE.Box3(
         new THREE.Vector3(x - width / 2, 0, z - length / 2),
@@ -249,7 +262,7 @@ export class Apartment {
 
     const width = 2.6;
     const length = 4.2;
-    const height = 1.05; // Tabletop at 1.05m, 0.95m open crawl space under table!
+    const height = 1.05;
     const thickness = 0.1;
 
     // Tabletop
@@ -260,7 +273,7 @@ export class Apartment {
     top.receiveShadow = true;
     group.add(top);
 
-    // 4 Corner Legs
+    // Legs
     const legGeo = new THREE.CylinderGeometry(0.06, 0.06, height, 12);
     const legOffsets = [
       [-width / 2 + 0.15, height / 2, -length / 2 + 0.15],
@@ -269,10 +282,11 @@ export class Apartment {
       [width / 2 - 0.15, height / 2, length / 2 - 0.15]
     ];
     legOffsets.forEach(pos => {
-      const leg = new THREE.Mesh(legGeo, woodMat);
+      const leg = new THREE.Mesh(legGeo, woodMat.clone());
       leg.position.set(...pos);
       leg.castShadow = true;
       group.add(leg);
+      this.registerThermalObject(leg, `${id}_leg`);
     });
 
     group.position.set(x, 0, z);
@@ -285,7 +299,6 @@ export class Apartment {
     this.jumpables.push({ box: topBox, topY: height + thickness / 2, mesh: top });
     this.colliders.push({ box: topBox, mesh: top, type: 'table_top' });
 
-    // Open crawl area beneath dining table (players can walk/crouch/crawl under)
     this.crawlables.push({
       box: new THREE.Box3(
         new THREE.Vector3(x - width / 2, 0, z - length / 2),
@@ -302,7 +315,7 @@ export class Apartment {
 
     const width = 1.8;
     const length = 2.4;
-    const height = 0.55; // Low coffee table
+    const height = 0.55;
 
     const topGeo = new THREE.BoxGeometry(width, 0.08, length);
     const top = new THREE.Mesh(topGeo, mat.clone());
@@ -311,7 +324,6 @@ export class Apartment {
     top.receiveShadow = true;
     group.add(top);
 
-    // Legs
     const legGeo = new THREE.BoxGeometry(0.08, height, 0.08);
     const legOffsets = [
       [-width / 2 + 0.1, height / 2, -length / 2 + 0.1],
@@ -320,9 +332,10 @@ export class Apartment {
       [width / 2 - 0.1, height / 2, length / 2 - 0.1]
     ];
     legOffsets.forEach(pos => {
-      const leg = new THREE.Mesh(legGeo, mat);
+      const leg = new THREE.Mesh(legGeo, mat.clone());
       leg.position.set(...pos);
       group.add(leg);
+      this.registerThermalObject(leg, `${id}_leg`);
     });
 
     group.position.set(x, 0, z);
@@ -335,7 +348,6 @@ export class Apartment {
     this.jumpables.push({ box: topBox, topY: height + 0.04, mesh: top });
     this.colliders.push({ box: topBox, mesh: top, type: 'coffee_table' });
 
-    // Crawlable under coffee table (0.5m clearance - requires Crawl or Flat Flop!)
     this.crawlables.push({
       box: new THREE.Box3(
         new THREE.Vector3(x - width / 2, 0, z - length / 2),
@@ -348,9 +360,8 @@ export class Apartment {
   // --- 5. Couch ---
   buildCouch(x, z, rotY, id) {
     const group = new THREE.Group();
-    const couchMat = new THREE.MeshStandardMaterial({ color: 0xb71c1c, roughness: 0.8 }); // Red plush couch
+    const couchMat = new THREE.MeshStandardMaterial({ color: 0xb71c1c, roughness: 0.8 });
 
-    // Base & Seat
     const seatGeo = new THREE.BoxGeometry(2.0, 0.5, 4.0);
     const seat = new THREE.Mesh(seatGeo, couchMat.clone());
     seat.position.set(0, 0.35, 0);
@@ -358,20 +369,18 @@ export class Apartment {
     seat.receiveShadow = true;
     group.add(seat);
 
-    // Backrest
     const backGeo = new THREE.BoxGeometry(0.4, 0.8, 4.0);
-    const back = new THREE.Mesh(backGeo, couchMat);
+    const back = new THREE.Mesh(backGeo, couchMat.clone());
     back.position.set(-0.8, 0.8, 0);
     back.castShadow = true;
     group.add(back);
 
-    // Armrests
     const armGeo = new THREE.BoxGeometry(2.0, 0.4, 0.3);
-    const arm1 = new THREE.Mesh(armGeo, couchMat);
+    const arm1 = new THREE.Mesh(armGeo, couchMat.clone());
     arm1.position.set(0, 0.7, 1.85);
     group.add(arm1);
 
-    const arm2 = new THREE.Mesh(armGeo, couchMat);
+    const arm2 = new THREE.Mesh(armGeo, couchMat.clone());
     arm2.position.set(0, 0.7, -1.85);
     group.add(arm2);
 
@@ -379,7 +388,10 @@ export class Apartment {
     group.rotation.y = rotY;
     this.scene.add(group);
 
-    this.registerThermalObject(seat, id);
+    this.registerThermalObject(seat, `${id}_seat`);
+    this.registerThermalObject(back, `${id}_back`);
+    this.registerThermalObject(arm1, `${id}_arm1`);
+    this.registerThermalObject(arm2, `${id}_arm2`);
 
     const sBox = new THREE.Box3().setFromObject(seat);
     this.jumpables.push({ box: sBox, topY: 0.6, mesh: seat });
@@ -414,7 +426,7 @@ export class Apartment {
     this.scene.add(group);
   }
 
-  // --- 7. Bouncy Yoga Balls (Dynamic Tripping Props) ---
+  // --- 7. Bouncy Yoga Balls ---
   buildYogaBall(x, z, colorHex, id) {
     const radius = 0.55;
     const geo = new THREE.SphereGeometry(radius, 24, 24);
@@ -455,7 +467,7 @@ export class Apartment {
     const legGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.45, 8);
     for (let i = 0; i < 3; i++) {
       const angle = (i / 3) * Math.PI * 2;
-      const leg = new THREE.Mesh(legGeo, woodMat);
+      const leg = new THREE.Mesh(legGeo, woodMat.clone());
       leg.position.set(Math.cos(angle) * 0.2, 0.225, Math.sin(angle) * 0.2);
       leg.rotation.z = Math.cos(angle) * 0.1;
       group.add(leg);
@@ -475,21 +487,17 @@ export class Apartment {
     const metalMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.8, roughness: 0.3 });
     const bladeMat = new THREE.MeshStandardMaterial({ color: 0x5d4037, roughness: 0.5 });
 
-    // Rod
     const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.6, 12), metalMat);
     rod.position.set(0, 0.3, 0);
     group.add(rod);
 
-    // Motor Hub
     const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.15, 16), metalMat);
     group.add(hub);
 
-    // Light
     const light = new THREE.PointLight(0xfff3e0, 0.8, 12);
     light.position.set(0, -0.1, 0);
     group.add(light);
 
-    // Blades
     const bladesGroup = new THREE.Group();
     for (let i = 0; i < 4; i++) {
       const blade = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.02, 1.2), bladeMat);
@@ -508,7 +516,7 @@ export class Apartment {
     this.fans.push(bladesGroup);
   }
 
-  // Trigger Thermal Impact Echo: neon cyan fading to thermal orange/yellow for 2.5 seconds
+  // Trigger Radiant Thermal Impact Echo: only the hit object illuminates brightly for 2.5 seconds
   triggerThermalEcho(meshOrId) {
     let target = null;
     if (typeof meshOrId === 'string') {
@@ -523,7 +531,7 @@ export class Apartment {
     }
 
     if (target) {
-      target.data.timer = 2.5; // 2.5 seconds radiant glow
+      target.data.timer = 2.5; // 2.5s duration
     }
   }
 
@@ -540,11 +548,9 @@ export class Apartment {
         prop.pos.x += prop.vel.x * delta;
         prop.pos.z += prop.vel.z * delta;
 
-        // Friction
         prop.vel.x *= 0.94;
         prop.vel.z *= 0.94;
 
-        // Room wall bounds bounce
         if (Math.abs(prop.pos.x) > bounds - prop.radius) {
           prop.vel.x *= -0.7;
           prop.pos.x = Math.sign(prop.pos.x) * (bounds - prop.radius);
@@ -554,7 +560,6 @@ export class Apartment {
           prop.pos.z = Math.sign(prop.pos.z) * (bounds - prop.radius);
         }
 
-        // Rolling rotation
         const speed = Math.hypot(prop.vel.x, prop.vel.z);
         if (speed > 0.05) {
           prop.mesh.rotation.x += prop.vel.z * delta * 2.0;
@@ -563,36 +568,42 @@ export class Apartment {
       }
     }
 
-    // Update Thermal Echo radiant glows
+    // Update Radiant Thermal Echoes: Neon Cyan -> Heat Orange -> Thermal Yellow -> Fade
     for (const [mesh, data] of this.thermalObjects.entries()) {
       if (data.timer > 0) {
         data.timer -= delta;
-        const progress = Math.max(0, data.timer / 2.5); // 1.0 (new hit) down to 0.0 (faded)
+        const progress = Math.max(0, data.timer / 2.5); // 1.0 (hit) down to 0.0 (fade)
 
         if (!data.material.emissive) continue;
 
-        // Color transition: Neon Cyan (0x00ffff) -> Heat Orange (0xff6600) -> Yellow (0xffcc00) -> Dark
         const cyan = new THREE.Color(0x00ffff);
-        const orange = new THREE.Color(0xff5500);
-        const yellow = new THREE.Color(0xffcc00);
+        const orange = new THREE.Color(0xff6600);
+        const yellow = new THREE.Color(0xffee00);
 
         let glowColor = new THREE.Color();
-        if (progress > 0.6) {
-          // Cyan to orange
-          const t = (progress - 0.6) / 0.4;
+        if (progress > 0.5) {
+          const t = (progress - 0.5) / 0.5;
           glowColor.lerpColors(orange, cyan, t);
         } else {
-          // Orange to yellow to fade
-          const t = progress / 0.6;
+          const t = progress / 0.5;
           glowColor.lerpColors(new THREE.Color(0x000000), yellow, t);
         }
 
         data.material.emissive.copy(glowColor);
-        data.material.emissiveIntensity = progress * 2.0;
+        data.material.emissiveIntensity = progress * 2.5;
+
+        // Update wireframe outline opacity & color
+        if (data.outlineMesh && data.outlineMesh.material) {
+          data.outlineMesh.material.color.copy(glowColor);
+          data.outlineMesh.material.opacity = progress * 0.9;
+        }
 
         if (data.timer <= 0) {
           data.material.emissive.copy(data.originalEmissive);
           data.material.emissiveIntensity = 0;
+          if (data.outlineMesh && data.outlineMesh.material) {
+            data.outlineMesh.material.opacity = 0;
+          }
         }
       }
     }

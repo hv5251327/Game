@@ -85,11 +85,11 @@ class HittlersGame {
     // 3. Environment & Physics
     this.apartment = new Apartment(this.scene);
     this.physics = new Physics(this.apartment, (mesh) => {
-      // Thermal echo outline pulse on bump
+      // Thermal echo outline pulse on bump (only for Hitter, with debounced sound)
       if (this.localPlayer && this.localPlayer.role === 'HITTER') {
         this.apartment.triggerThermalEcho(mesh);
         this.network.triggerThermalEcho(mesh.userData.thermalId, mesh.position);
-        this.audio.playThud();
+        this.audio.playObjectHit();
       }
     });
 
@@ -136,7 +136,7 @@ class HittlersGame {
         this.triggerLocalBatSwing();
       }
 
-      // Perspective Toggle (V key)
+      // Perspective Toggle (V key for Runners)
       if (e.code === 'KeyV' && this.localPlayer.role === 'RUNNER') {
         const mode = this.cameraManager.togglePerspective();
         this.showHitFeedNotice(`Camera switched to ${mode.replace('_', ' ')}`);
@@ -148,7 +148,6 @@ class HittlersGame {
         if (this.localPlayer.isFlatFlop) {
           this.localPlayer.isCrawling = false;
           this.localPlayer.isSitting = false;
-          this.audio.playThud();
         }
       }
 
@@ -240,7 +239,6 @@ class HittlersGame {
       this.localPlayer.isFlatFlop = !this.localPlayer.isFlatFlop;
       if (this.localPlayer.isFlatFlop) {
         this.localPlayer.isCrawling = false;
-        this.audio.playThud();
       }
     });
     this.bindTouchButton('btn-sit', () => {
@@ -375,26 +373,50 @@ class HittlersGame {
 
   triggerLocalBatSwing() {
     const now = Date.now();
-    if (now - this.lastSwingTime < 750) return; // 0.8s cooldown
+    if (now - this.lastSwingTime < 700) return; // 0.7s cooldown
     this.lastSwingTime = now;
 
     this.localPlayer.triggerBatSwing();
     this.audio.playBatWhoosh();
     this.network.swingBat();
 
-    // Check hit against obstacles in front for Thermal Impact Echo
     const forward = new THREE.Vector3(
       -Math.sin(this.cameraManager.yaw),
       0,
       -Math.cos(this.cameraManager.yaw)
     );
 
-    const hitCheckPos = this.localPlayer.root.position.clone().add(forward.clone().multiplyScalar(1.6));
-    for (const collider of this.apartment.colliders) {
-      if (collider.box.containsPoint(hitCheckPos)) {
-        this.apartment.triggerThermalEcho(collider.mesh);
-        this.audio.playBatThwack();
-        break;
+    // 1. Check if swinging stick connects with an obstacle -> ONLY THAT OBJECT lights up in Thermal View!
+    let objectHitFound = false;
+    for (let dist = 0.8; dist <= 2.2; dist += 0.4) {
+      const hitCheckPos = this.localPlayer.root.position.clone().add(forward.clone().multiplyScalar(dist));
+      for (const collider of this.apartment.colliders) {
+        if (collider.box.containsPoint(hitCheckPos)) {
+          this.apartment.triggerThermalEcho(collider.mesh);
+          this.network.triggerThermalEcho(collider.mesh.userData.thermalId, collider.mesh.position);
+          this.audio.playObjectHit();
+          objectHitFound = true;
+          break;
+        }
+      }
+      if (objectHitFound) break;
+    }
+
+    // Also check yoga balls
+    if (!objectHitFound) {
+      for (const prop of this.apartment.interactiveProps) {
+        if (prop.isYogaBall) {
+          const dx = prop.pos.x - this.localPlayer.root.position.x;
+          const dz = prop.pos.z - this.localPlayer.root.position.z;
+          const dist = Math.hypot(dx, dz);
+          if (dist < 2.2) {
+            prop.vel.x += forward.x * 12.0;
+            prop.vel.z += forward.z * 12.0;
+            this.apartment.triggerThermalEcho(prop.mesh);
+            this.audio.playObjectHit();
+            break;
+          }
+        }
       }
     }
   }
@@ -450,6 +472,7 @@ class HittlersGame {
     }
   }
 
+  // Only triggers when a runner avatar is struck!
   handlePlayerHit(data) {
     this.audio.playBatThwack();
     this.audio.playScream(Math.floor(Math.random() * 4));
@@ -457,7 +480,6 @@ class HittlersGame {
     this.showHitFeedNotice(`💥 ${data.victimName} got WHACKED! (-${data.damage} HP)`);
 
     if (data.victimId === this.network.myId) {
-      // Local player hit!
       this.localPlayer.hp = data.remainingHp;
       this.localPlayer.isFlailing = true;
       this.localPlayer.flailTimer = 3.0;
@@ -471,7 +493,6 @@ class HittlersGame {
         this.showHitFeedNotice(`💀 YOU WERE KNOCKED FLAT OUT!`);
       }
     } else {
-      // Remote player hit
       const remote = this.remotePlayers.get(data.victimId);
       if (remote) {
         remote.hp = data.remainingHp;
@@ -539,14 +560,14 @@ class HittlersGame {
     if (role === 'HITTER') {
       this.domRoleBadge.textContent = '🔨 THE HITTER';
       this.domRoleBadge.className = 'role-badge hitter';
-      this.domRoleDesc.textContent = '85% Blind! Press X or Space or Click to Swing Stick. Bump furniture to trigger Thermal Echoes!';
-      this.domPeepDarkness.classList.remove('hidden'); // Peep Darkness active!
+      this.domRoleDesc.textContent = '85% Blind! Press X or Click to Swing Stick. Hit objects to trigger Thermal Echoes!';
+      this.domPeepDarkness.classList.remove('hidden');
       this.domHpBar.classList.add('hidden');
     } else {
       this.domRoleBadge.textContent = '🏃 RUNNER';
       this.domRoleBadge.className = 'role-badge runner';
       this.domRoleDesc.textContent = 'Survive 120s! Crawl under tables, jump on beds, toggle 1st/3rd view with V!';
-      this.domPeepDarkness.classList.add('hidden'); // Darkness off for Runners!
+      this.domPeepDarkness.classList.add('hidden');
       this.domHpBar.classList.remove('hidden');
       this.updateHpUi();
     }
@@ -598,7 +619,7 @@ class HittlersGame {
 
     const isMoving = (Math.abs(moveX) > 0.05 || Math.abs(moveZ) > 0.05);
 
-    // Spine Pitch / Ducking Controls (Q/Z / Mouse Pitch)
+    // Spine Pitch Controls (Q/Z / Mouse Pitch)
     if (this.keys['KeyQ']) {
       this.localPlayer.spinePitch = Math.min(1.0, this.localPlayer.spinePitch + delta * 3.0);
     } else if (this.keys['KeyZ']) {
@@ -613,7 +634,6 @@ class HittlersGame {
     // Jump (Space key when Runner)
     const isJumping = (this.keys['Space'] && this.localPlayer.role === 'RUNNER');
 
-    // Direction relative to camera yaw
     const yaw = this.cameraManager.yaw;
     const moveDir = new THREE.Vector3(
       moveX * Math.cos(yaw) + moveZ * Math.sin(yaw),
@@ -625,10 +645,9 @@ class HittlersGame {
     if (isMoving) {
       const targetAngle = Math.atan2(-moveDir.x, -moveDir.z);
       this.localPlayer.root.rotation.y = targetAngle;
-      if (Math.random() < 0.05) this.audio.playFootstep();
     }
 
-    // 2. Physics & Collisions (Uniform 4.5 m/s)
+    // 2. Physics & Collisions (Uniform 4.5 m/s, zero footstep noise)
     const newPos = this.physics.resolvePlayerMovement(this.localPlayer, moveDir, delta, 4.5);
     const newY = this.physics.resolveVerticalPhysics(this.localPlayer, delta, isJumping);
 
@@ -659,7 +678,7 @@ class HittlersGame {
       }
     }
 
-    // 5. Update Apartment & Thermal Echoes
+    // 5. Update Apartment Thermal Echoes
     this.apartment.update(delta);
 
     // 6. Camera Update

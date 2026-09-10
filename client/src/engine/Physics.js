@@ -5,6 +5,7 @@ export class Physics {
     this.apartment = apartment;
     this.onThermalHit = onThermalHit;
     this.gravity = -18.0;
+    this.lastBumpTime = 0;
   }
 
   // Check and resolve collisions for a player avatar
@@ -15,7 +16,6 @@ export class Physics {
     const isCrawling = avatar.isCrawling;
     const isFlatFlop = avatar.isFlatFlop;
 
-    // Determine current character collision height and radius
     let charHeight = 1.6;
     let charRadius = 0.35;
 
@@ -27,37 +27,30 @@ export class Physics {
       charRadius = 0.35;
     }
 
-    // Proposed new position
     const targetX = currentPos.x + moveDir.x * speed * delta;
     const targetZ = currentPos.z + moveDir.z * speed * delta;
 
     let finalX = targetX;
     let finalZ = targetZ;
 
-    // Room boundaries (22m room -> -10.5 to 10.5)
     const bounds = 10.5;
     finalX = Math.max(-bounds, Math.min(bounds, finalX));
     finalZ = Math.max(-bounds, Math.min(bounds, finalZ));
 
-    // Check collision with apartment objects
+    const now = Date.now();
+
     for (const collider of this.apartment.colliders) {
       const box = collider.box;
-
-      // Expand box by character radius for sphere/cylinder collision
       const expandedBox = box.clone().expandByScalar(charRadius);
 
-      // Check if avatar's vertical span overlaps the box
       const avatarMinY = currentPos.y;
       const avatarMaxY = currentPos.y + charHeight;
-
       const yOverlap = (avatarMinY < box.max.y && avatarMaxY > box.min.y);
 
       if (yOverlap) {
-        // Check horizontal intersection
         if (finalX >= expandedBox.min.x && finalX <= expandedBox.max.x &&
             finalZ >= expandedBox.min.z && finalZ <= expandedBox.max.z) {
 
-          // Check if object is crawlable and character fits underneath
           let canCrawlUnder = false;
           for (const crawlable of this.apartment.crawlables) {
             if (crawlable.box.containsPoint(new THREE.Vector3(finalX, 0.1, finalZ))) {
@@ -68,17 +61,17 @@ export class Physics {
             }
           }
 
-          if (canCrawlUnder) {
-            // Can pass underneath!
-            continue;
+          if (canCrawlUnder) continue;
+
+          // Trigger thermal hit on bump with 1.0s debounce (no continuous loop!)
+          if (now - this.lastBumpTime > 1000) {
+            this.lastBumpTime = now;
+            if (this.onThermalHit && collider.mesh) {
+              this.onThermalHit(collider.mesh);
+            }
           }
 
-          // Trigger Thermal Impact Echo if Hitter bumps into it
-          if (this.onThermalHit && collider.mesh) {
-            this.onThermalHit(collider.mesh);
-          }
-
-          // Resolve collision along axes
+          // Resolve collision
           const overlapX1 = finalX - expandedBox.min.x;
           const overlapX2 = expandedBox.max.x - finalX;
           const overlapZ1 = finalZ - expandedBox.min.z;
@@ -96,7 +89,7 @@ export class Physics {
       }
     }
 
-    // Interactive yoga balls collision & push
+    // Dynamic Yoga Ball interaction
     for (const prop of this.apartment.interactiveProps) {
       if (prop.isYogaBall) {
         const dx = finalX - prop.pos.x;
@@ -105,18 +98,19 @@ export class Physics {
         const minDist = charRadius + prop.radius;
 
         if (dist < minDist && dist > 0.001) {
-          // Push ball away
           const pushForce = speed * 1.5;
           prop.vel.x -= (dx / dist) * pushForce;
           prop.vel.z -= (dz / dist) * pushForce;
 
-          // Push player back slightly
           const pushBack = (minDist - dist) * 0.5;
           finalX += (dx / dist) * pushBack;
           finalZ += (dz / dist) * pushBack;
 
-          if (this.onThermalHit && prop.mesh) {
-            this.onThermalHit(prop.mesh);
+          if (now - this.lastBumpTime > 1000) {
+            this.lastBumpTime = now;
+            if (this.onThermalHit && prop.mesh) {
+              this.onThermalHit(prop.mesh);
+            }
           }
         }
       }
@@ -125,7 +119,6 @@ export class Physics {
     return { x: finalX, y: currentPos.y, z: finalZ };
   }
 
-  // Handle jump, ground detection, and landing on beds/furniture
   resolveVerticalPhysics(avatar, delta, isJumping = false, jumpVelocity = 0) {
     let currentY = avatar.root.position.y;
     let targetGroundY = 0;
@@ -133,7 +126,6 @@ export class Physics {
     const posX = avatar.root.position.x;
     const posZ = avatar.root.position.z;
 
-    // Check if player is above any jumpable platform (bed, daybed, couch)
     for (const jumpable of this.apartment.jumpables) {
       const box = jumpable.box;
       if (posX >= box.min.x && posX <= box.max.x && posZ >= box.min.z && posZ <= box.max.z) {
@@ -146,12 +138,11 @@ export class Physics {
     let newVy = (avatar.verticalVelocity || 0) + this.gravity * delta;
 
     if (isJumping && currentY <= targetGroundY + 0.1) {
-      newVy = jumpVelocity || 6.5; // Jump impulse
+      newVy = jumpVelocity || 6.5;
     }
 
     let newY = currentY + newVy * delta;
 
-    // Ground snap
     if (newY <= targetGroundY) {
       newY = targetGroundY;
       newVy = 0;

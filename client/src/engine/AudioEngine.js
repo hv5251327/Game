@@ -1,9 +1,10 @@
-// Slapstick Web Audio API Synthesizer - 100% self-contained procedural audio engine
+// Slapstick Web Audio API Synthesizer - Clean, punchy, zero continuous background noise
 export class AudioEngine {
   constructor() {
     this.ctx = null;
     this.initialized = false;
     this.masterGain = null;
+    this.lastSoundTime = {};
   }
 
   init() {
@@ -12,7 +13,7 @@ export class AudioEngine {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       this.ctx = new AudioContext();
       this.masterGain = this.ctx.createGain();
-      this.masterGain.gain.value = 0.8;
+      this.masterGain.gain.value = 0.85;
       this.masterGain.connect(this.ctx.destination);
       this.initialized = true;
     } catch (e) {
@@ -27,61 +28,62 @@ export class AudioEngine {
     }
   }
 
-  // Wood baseball bat whoosh sound
+  // Wooden stick whoosh sound on swing
   playBatWhoosh() {
     this.ensureContext();
     if (!this.ctx) return;
 
+    const t = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     const filter = this.ctx.createBiquadFilter();
 
     filter.type = 'bandpass';
-    filter.frequency.setValueAtTime(400, this.ctx.currentTime);
-    filter.frequency.exponentialRampToValueAtTime(150, this.ctx.currentTime + 0.25);
+    filter.frequency.setValueAtTime(500, t);
+    filter.frequency.exponentialRampToValueAtTime(160, t + 0.22);
     filter.Q.value = 3.0;
 
     osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(180, this.ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(40, this.ctx.currentTime + 0.25);
+    osc.frequency.setValueAtTime(220, t);
+    osc.frequency.exponentialRampToValueAtTime(50, t + 0.22);
 
-    gain.gain.setValueAtTime(0.01, this.ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.4, this.ctx.currentTime + 0.05);
-    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.25);
+    gain.gain.setValueAtTime(0.01, t);
+    gain.gain.linearRampToValueAtTime(0.35, t + 0.04);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
 
     osc.connect(filter);
     filter.connect(gain);
     gain.connect(this.masterGain);
 
-    osc.start();
-    osc.stop(this.ctx.currentTime + 0.26);
+    osc.start(t);
+    osc.stop(t + 0.23);
   }
 
-  // Resonant wooden bat THWACK / smack
+  // Resonant wooden bat / stick THWACK on hitting a runner
   playBatThwack() {
     this.ensureContext();
     if (!this.ctx) return;
 
     const t = this.ctx.currentTime;
 
-    // 1. Sharp wooden crack noise burst
-    const bufferSize = this.ctx.sampleRate * 0.08;
+    // 1. Sharp wooden crack burst
+    const bufferSize = Math.floor(this.ctx.sampleRate * 0.07);
     const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
     const data = buffer.getChannelData(0);
     for (let i = 0; i < bufferSize; i++) {
-      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.2));
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.18));
     }
     const noise = this.ctx.createBufferSource();
     noise.buffer = buffer;
 
     const noiseFilter = this.ctx.createBiquadFilter();
     noiseFilter.type = 'bandpass';
-    noiseFilter.frequency.value = 1800;
-    noiseFilter.Q.value = 2.5;
+    noiseFilter.frequency.value = 1900;
+    noiseFilter.Q.value = 2.0;
 
     const noiseGain = this.ctx.createGain();
-    noiseGain.gain.setValueAtTime(0.8, t);
-    noiseGain.gain.exponentialRampToValueAtTime(0.01, t + 0.08);
+    noiseGain.gain.setValueAtTime(0.9, t);
+    noiseGain.gain.exponentialRampToValueAtTime(0.01, t + 0.07);
 
     noise.connect(noiseFilter);
     noiseFilter.connect(noiseGain);
@@ -92,18 +94,49 @@ export class AudioEngine {
     const oscGain = this.ctx.createGain();
 
     osc.type = 'triangle';
-    osc.frequency.setValueAtTime(320, t);
-    osc.frequency.exponentialRampToValueAtTime(70, t + 0.2);
+    osc.frequency.setValueAtTime(340, t);
+    osc.frequency.exponentialRampToValueAtTime(80, t + 0.18);
 
-    oscGain.gain.setValueAtTime(0.9, t);
-    oscGain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+    oscGain.gain.setValueAtTime(0.8, t);
+    oscGain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
 
     osc.connect(oscGain);
     oscGain.connect(this.masterGain);
 
     noise.start(t);
     osc.start(t);
-    osc.stop(t + 0.26);
+    osc.stop(t + 0.21);
+  }
+
+  // Solid wood/furniture object impact sound (when hitting bed, table, wall, box)
+  playObjectHit() {
+    this.ensureContext();
+    if (!this.ctx) return;
+
+    const t = this.ctx.currentTime;
+
+    // Deep resonant furniture clack
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    const filter = this.ctx.createBiquadFilter();
+
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(800, t);
+    filter.frequency.exponentialRampToValueAtTime(100, t + 0.15);
+
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(180, t);
+    osc.frequency.exponentialRampToValueAtTime(45, t + 0.15);
+
+    gain.gain.setValueAtTime(0.6, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.masterGain);
+
+    osc.start(t);
+    osc.stop(t + 0.19);
   }
 
   // Comedic cartoon high-pitched panic scream (Formant synthesis)
@@ -112,39 +145,36 @@ export class AudioEngine {
     if (!this.ctx) return;
 
     const t = this.ctx.currentTime;
-    const duration = 1.2;
+    const duration = 1.1;
 
-    const pitches = [550, 720, 880, 480];
+    const pitches = [580, 750, 900, 510];
     const baseFreq = pitches[variation % pitches.length];
 
-    // Vocal cord carrier
     const osc = this.ctx.createOscillator();
     osc.type = 'sawtooth';
 
-    // Screaming frequency modulation with comical vibrato
-    osc.frequency.setValueAtTime(baseFreq * 0.8, t);
+    // Vocal cord carrier with rapid vibrato
+    osc.frequency.setValueAtTime(baseFreq * 0.85, t);
     osc.frequency.linearRampToValueAtTime(baseFreq * 1.6, t + 0.15);
-    osc.frequency.linearRampToValueAtTime(baseFreq * 1.3, t + 0.6);
+    osc.frequency.linearRampToValueAtTime(baseFreq * 1.35, t + 0.5);
     osc.frequency.exponentialRampToValueAtTime(baseFreq * 0.5, t + duration);
 
-    // Vibrato LFO
     const lfo = this.ctx.createOscillator();
     const lfoGain = this.ctx.createGain();
-    lfo.frequency.value = 14; // rapid comedy wobble
-    lfoGain.gain.value = 40;
+    lfo.frequency.value = 15;
+    lfoGain.gain.value = 45;
     lfo.connect(osc.frequency);
 
-    // Formant filter (vowel scream "AAAAAA!")
     const formant = this.ctx.createBiquadFilter();
     formant.type = 'bandpass';
-    formant.frequency.setValueAtTime(1400, t);
-    formant.frequency.linearRampToValueAtTime(2200, t + 0.3);
-    formant.Q.value = 4.0;
+    formant.frequency.setValueAtTime(1500, t);
+    formant.frequency.linearRampToValueAtTime(2400, t + 0.3);
+    formant.Q.value = 4.5;
 
     const gain = this.ctx.createGain();
     gain.gain.setValueAtTime(0.01, t);
-    gain.gain.linearRampToValueAtTime(0.7, t + 0.05);
-    gain.gain.setValueAtTime(0.6, t + 0.8);
+    gain.gain.linearRampToValueAtTime(0.75, t + 0.05);
+    gain.gain.setValueAtTime(0.65, t + 0.7);
     gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
 
     lfo.start(t);
@@ -157,54 +187,7 @@ export class AudioEngine {
     lfo.stop(t + duration);
   }
 
-  // Rubbery yoga ball bouncy boing
-  playBoing() {
-    this.ensureContext();
-    if (!this.ctx) return;
-
-    const t = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(180, t);
-    osc.frequency.exponentialRampToValueAtTime(560, t + 0.15);
-    osc.frequency.exponentialRampToValueAtTime(220, t + 0.35);
-
-    gain.gain.setValueAtTime(0.6, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
-
-    osc.connect(gain);
-    gain.connect(this.masterGain);
-
-    osc.start(t);
-    osc.stop(t + 0.36);
-  }
-
-  // Body floor / mattress flop thud
-  playThud() {
-    this.ensureContext();
-    if (!this.ctx) return;
-
-    const t = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(120, t);
-    osc.frequency.exponentialRampToValueAtTime(35, t + 0.2);
-
-    gain.gain.setValueAtTime(0.7, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
-
-    osc.connect(gain);
-    gain.connect(this.masterGain);
-
-    osc.start(t);
-    osc.stop(t + 0.21);
-  }
-
-  // 3-second round start warning buzzer
+  // Round start buzzer
   playBuzzer() {
     this.ensureContext();
     if (!this.ctx) return;
@@ -214,24 +197,24 @@ export class AudioEngine {
     const gain = this.ctx.createGain();
 
     osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(110, t);
+    osc.frequency.setValueAtTime(120, t);
 
-    gain.gain.setValueAtTime(0.4, t);
-    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+    gain.gain.setValueAtTime(0.35, t);
+    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.28);
 
     osc.connect(gain);
     gain.connect(this.masterGain);
 
     osc.start(t);
-    osc.stop(t + 0.31);
+    osc.stop(t + 0.29);
   }
 
-  // Slapstick Victory Fanfare chord
+  // Victory Fanfare
   playVictoryFanfare() {
     this.ensureContext();
     if (!this.ctx) return;
 
-    const notes = [261.63, 329.63, 392.00, 523.25]; // C major chord
+    const notes = [261.63, 329.63, 392.00, 523.25];
     notes.forEach((freq, idx) => {
       const t = this.ctx.currentTime + idx * 0.12;
       const osc = this.ctx.createOscillator();
@@ -249,28 +232,5 @@ export class AudioEngine {
       osc.start(t);
       osc.stop(t + 0.65);
     });
-  }
-
-  // Soft footstep tap
-  playFootstep() {
-    this.ensureContext();
-    if (!this.ctx) return;
-
-    const t = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(140 + Math.random() * 40, t);
-    osc.frequency.exponentialRampToValueAtTime(50, t + 0.06);
-
-    gain.gain.setValueAtTime(0.12, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
-
-    osc.connect(gain);
-    gain.connect(this.masterGain);
-
-    osc.start(t);
-    osc.stop(t + 0.07);
   }
 }
