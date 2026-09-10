@@ -24,7 +24,7 @@
   <!-- WebGL 3D Canvas -->
   <div id="canvas-container"></div>
 
-  <!-- 1. Lobby & Matchmaking Screen -->
+  <!-- 1. Clean Lobby Screen (Original Layout) -->
   <div id="lobby-screen">
     <div class="lobby-card">
       <h1 class="game-title">HITTLERS</h1>
@@ -41,22 +41,20 @@
       </div>
 
       <div class="form-group">
-        <label>Avatar Color (Clay / Matte)</label>
+        <label>Avatar Color</label>
         <div class="color-picker-row">
           <input type="color" id="input-color" class="color-input" value="#f0f0f0">
-          <span style="font-size: 0.85rem; color: #a4b0be;">Pick your clay skin color</span>
+          <span style="font-size: 0.85rem; color: #a4b0be;">Pick your clay avatar color</span>
         </div>
       </div>
 
       <div class="form-group">
-        <label>AI Slapstick Bots (0 - 9)</label>
+        <label>Fill With AI Bots (0 - 9)</label>
         <input type="number" id="input-bots" class="form-input" min="0" max="9" value="9">
       </div>
 
-      <button id="btn-solo-hitter" class="btn-primary btn-solo">🔨 PLAY AS THE HITTER (9 BOTS)</button>
-      <button id="btn-solo-runner" class="btn-primary" style="background: linear-gradient(135deg, #2ed573, #1e90ff); margin-top: 8px;">🏃 PLAY AS RUNNER (9 BOTS)</button>
-      <button id="btn-join-room" class="btn-primary btn-secondary">👥 MULTIPLAYER HOST / JOIN</button>
-      <button id="btn-show-leaderboard" class="btn-primary btn-secondary" style="background: linear-gradient(135deg, #f39c12, #e67e22);">🏆 GLOBAL LEADERBOARD</button>
+      <button id="btn-join-room" class="btn-primary">🎮 JOIN / HOST ROOM</button>
+      <button id="btn-show-leaderboard" class="btn-primary btn-secondary">🏆 GLOBAL LEADERBOARD</button>
     </div>
   </div>
 
@@ -74,17 +72,14 @@
 
   <!-- 2. In-Game HUD -->
   <div id="hud" class="hidden">
-    <!-- Top Bar: Timer, Role, Instructions -->
+    <!-- Top Bar: Timer, Role, Start Round -->
     <div class="hud-top-bar">
       <div class="timer-box">
         <span id="match-timer" class="timer-text">120s</span>
       </div>
       <div id="role-badge" class="role-badge runner">🏃 RUNNER</div>
       <div id="role-desc" class="role-desc">Survive 120s! Crawl under tables, jump on beds, toggle 1st/3rd view with V!</div>
-      <div style="display: flex; gap: 8px; margin-top: 4px;">
-        <button id="btn-start-match" class="btn-hud-small" style="background: #2ed573; color: #111;">⚡ Start Round</button>
-        <button id="btn-toggle-role" class="btn-hud-small">🔄 Switch Role</button>
-      </div>
+      <button id="btn-start-match" class="btn-primary" style="padding: 6px 18px; font-size: 0.85rem; margin-top: 4px; pointer-events: auto; width: auto;">⚡ Start Match</button>
     </div>
 
     <!-- Health Bar (For Runners) -->
@@ -101,7 +96,7 @@
     <!-- Controls Legend -->
     <div class="controls-legend">
       <div><kbd>W A S D</kbd> Move (Uniform 4.5 m/s)</div>
-      <div><kbd>X</kbd> or <kbd>Space</kbd> <strong>Swing Stick / Bat</strong></div>
+      <div><kbd>X</kbd> or <kbd>Space</kbd> / <kbd>Click</kbd> <strong>Swing Bat</strong></div>
       <div><kbd>F</kbd> Sleep / Flat Flop (Slide under beds)</div>
       <div><kbd>Ctrl / Shift</kbd> Crawl / Crouch</div>
       <div><kbd>C</kbd> Sit &nbsp;|&nbsp; <kbd>E</kbd> Grab</div>
@@ -121,7 +116,7 @@
   <div id="peep-darkness-mask" class="hidden">
     <div class="peep-blackout">
       <div class="peep-title">👁️ PEEP DARKNESS (85% BLACKOUT)</div>
-      <div class="peep-hint">Top 85% is pitch black! Bump into obstacles or swing stick with <kbd style="background:rgba(255,255,255,0.2); padding:2px 8px; border-radius:4px; color:#ffa502;">X</kbd> to trigger Thermal Echoes!</div>
+      <div class="peep-hint">Top 85% is pitch black! Bump obstacles or swing bat (<kbd style="background:rgba(255,255,255,0.2); padding:2px 8px; border-radius:4px; color:#ffa502;">X</kbd>) to trigger Thermal Echoes!</div>
     </div>
     <div class="peep-strip-boundary"></div>
     <div class="peep-visible-strip"></div>
@@ -146,7 +141,7 @@
       <button id="btn-flop" class="touch-btn">FLOP</button>
       <button id="btn-sit" class="touch-btn">SIT</button>
       <button id="btn-view" class="touch-btn">1P/3P</button>
-      <button id="btn-swing" class="touch-btn btn-action">🔨 SWING STICK (X)</button>
+      <button id="btn-swing" class="touch-btn btn-action">🔨 SWING BAT (X)</button>
     </div>
   </div>
 

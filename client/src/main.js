@@ -7,7 +7,7 @@ import { CameraManager } from './engine/CameraManager.js';
 import { NetworkClient } from './engine/NetworkClient.js';
 import { supabaseService } from './engine/SupabaseService.js';
 
-class WobbleHouseGame {
+class HittlersGame {
   constructor() {
     this.scene = null;
     this.camera = null;
@@ -46,18 +46,6 @@ class WobbleHouseGame {
     this.domHitFeed = document.getElementById('hit-feed');
     this.domLeaderboardModal = document.getElementById('leaderboard-modal');
     this.domLeaderboardList = document.getElementById('leaderboard-list');
-    this.domSetupPanel = document.getElementById('setup-panel');
-    this.domJoinPanel = document.getElementById('join-panel');
-    this.domRoomPanel = document.getElementById('room-panel');
-    this.domRoomCode = document.getElementById('room-code-display');
-    this.domRoomStatus = document.getElementById('room-status');
-    this.domRoomPlayers = document.getElementById('room-player-list');
-    this.domStartMatch = document.getElementById('btn-start-match');
-    this.domHostNote = document.getElementById('host-note');
-    this.roomInfo = null;
-    this.practiceRoom = false;
-    this.isSpectating = false;
-    this.spectatorTargetId = null;
 
     this.init();
   }
@@ -65,25 +53,22 @@ class WobbleHouseGame {
   init() {
     // 1. Setup Three.js Scene & Renderer
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0xb9d1d5);
-    this.scene.fog = new THREE.FogExp2(0xb9d1d5, 0.018);
+    this.scene.background = new THREE.Color(0x181926);
+    this.scene.fog = new THREE.FogExp2(0x181926, 0.025);
 
     this.camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 100);
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.05;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     document.getElementById('canvas-container').appendChild(this.renderer.domElement);
 
     // 2. Lighting
-    const ambient = new THREE.HemisphereLight(0xeaf8ff, 0x71856e, 2.0);
+    const ambient = new THREE.AmbientLight(0xffffff, 0.7);
     this.scene.add(ambient);
 
-    const dirLight = new THREE.DirectionalLight(0xfff5e6, 2.2);
+    const dirLight = new THREE.DirectionalLight(0xfff5e6, 1.3);
     dirLight.position.set(12, 16, 10);
     dirLight.castShadow = true;
     dirLight.shadow.mapSize.width = 2048;
@@ -100,7 +85,7 @@ class WobbleHouseGame {
     // 3. Environment & Physics
     this.apartment = new Apartment(this.scene);
     this.physics = new Physics(this.apartment, (mesh) => {
-      // Thermal echo outline pulse on bump (only for Hitter, with debounced sound)
+      // Thermal echo outline pulse on bump (only for Hitter)
       if (this.localPlayer && this.localPlayer.role === 'HITTER') {
         this.apartment.triggerThermalEcho(mesh);
         this.network.triggerThermalEcho(mesh.userData.thermalId, mesh.position);
@@ -111,14 +96,12 @@ class WobbleHouseGame {
     // 4. Camera Manager
     this.cameraManager = new CameraManager(this.camera, this.renderer.domElement);
 
-    // 5. Local Human: Fall Flat Avatar
-    this.localPlayer = new RagdollAvatar(this.scene, '#2ed573', true);
+    // 5. Local Human: Fall Flat Bob Avatar
+    this.localPlayer = new RagdollAvatar(this.scene, '#f0f0f0', true);
 
     // 6. Network Client & Event Callbacks
     this.network = new NetworkClient({
       onRoomJoined: (data) => this.handleRoomJoined(data),
-      onRoomUpdated: (data) => this.handleRoomUpdated(data),
-      onRoomError: (data) => this.handleRoomError(data),
       onCountdownStarted: (data) => this.handleCountdownStarted(data),
       onRoundStarted: (data) => this.handleRoundStarted(data),
       onRoundEnded: (data) => this.handleRoundEnded(data),
@@ -270,33 +253,23 @@ class WobbleHouseGame {
       }
     });
 
-    // Lobby Buttons
-    document.getElementById('btn-solo-runner')?.addEventListener('click', () => {
-      this.joinRoom(`PRACTICE-${Math.floor(Math.random() * 900 + 100)}`, 5);
-    });
-
-    document.getElementById('btn-create-room')?.addEventListener('click', () => {
-      const code = Math.random().toString(36).slice(2, 8).toUpperCase();
-      this.joinRoom(code, 0);
-    });
-
-    document.getElementById('btn-open-join')?.addEventListener('click', () => this.domJoinPanel.classList.toggle('hidden'));
-
+    // Lobby Join Button
     document.getElementById('btn-join-room')?.addEventListener('click', () => {
-      const roomCode = document.getElementById('input-room-code').value.trim().toUpperCase();
-      if (!roomCode) return this.showLobbyMessage('Enter a room code to join.');
-      this.joinRoom(roomCode, 0);
+      const roomCode = document.getElementById('input-room-code').value.trim() || 'LOBBY-1';
+      const nickname = document.getElementById('input-nickname').value.trim() || 'Bob';
+      const color = document.getElementById('input-color').value || '#f0f0f0';
+      const botCount = parseInt(document.getElementById('input-bots').value, 10);
+
+      this.audio.ensureContext();
+      this.localPlayer.setColor(color);
+      this.network.joinRoom(roomCode, nickname, color, isNaN(botCount) ? 9 : botCount, true);
+      this.domLobby.classList.add('hidden');
+      this.domHud.classList.remove('hidden');
     });
 
     document.getElementById('btn-start-match')?.addEventListener('click', () => {
       this.audio.ensureContext();
       this.network.startGame();
-    });
-
-    document.getElementById('btn-copy-room')?.addEventListener('click', async () => {
-      const code = this.network.roomCode;
-      if (!code) return;
-      try { await navigator.clipboard.writeText(code); this.showLobbyMessage('Room code copied.'); } catch { this.showLobbyMessage(`Room code: ${code}`); }
     });
 
     // Leaderboard Modal
@@ -316,19 +289,6 @@ class WobbleHouseGame {
     this.updateRoleUi(role);
   }
 
-  joinRoom(roomCode, botCount = 0) {
-    const nickname = document.getElementById('input-nickname').value.trim() || 'Wobbler';
-    const color = document.getElementById('input-color').value || '#6ecb84';
-    this.audio.ensureContext();
-    this.localPlayer.setColor(color);
-    this.practiceRoom = botCount > 0;
-    this.network.joinRoom(roomCode, nickname, color, botCount);
-  }
-
-  showLobbyMessage(message) {
-    if (this.domRoomStatus) this.domRoomStatus.textContent = message;
-  }
-
   async loadLeaderboardData() {
     if (!this.domLeaderboardList) return;
     this.domLeaderboardList.innerHTML = '<div style="color:#aaa; padding:20px;">Loading Supabase leaderboard...</div>';
@@ -345,7 +305,7 @@ class WobbleHouseGame {
     this.domLeaderboardList.innerHTML = scores.map((s, idx) => `
       <div class="leaderboard-item">
         <span class="lb-rank">#${idx + 1}</span>
-        <span class="lb-name" style="color: ${s.avatar_color || '#fff'}">${s.username || 'Hero'}</span>
+        <span class="lb-name" style="color: ${s.avatar_color || '#fff'}">${s.username || 'Bob'}</span>
         <span class="lb-stat">🏃 Escapes: ${s.runner_escapes || 0}</span>
         <span class="lb-stat">🔨 Sweeps: ${s.hitter_clean_sweeps || 0}</span>
       </div>
@@ -368,7 +328,7 @@ class WobbleHouseGame {
 
   triggerLocalBatSwing() {
     const now = Date.now();
-    if (now - this.lastSwingTime < 700) return; // 0.7s cooldown
+    if (now - this.lastSwingTime < 700) return;
     this.lastSwingTime = now;
 
     this.localPlayer.triggerBatSwing();
@@ -381,7 +341,6 @@ class WobbleHouseGame {
       -Math.cos(this.cameraManager.yaw)
     );
 
-    // 1. Check if swinging stick connects with an obstacle -> ONLY THAT OBJECT lights up in Thermal View!
     let objectHitFound = false;
     for (let dist = 0.8; dist <= 2.2; dist += 0.4) {
       const hitCheckPos = this.localPlayer.root.position.clone().add(forward.clone().multiplyScalar(dist));
@@ -397,7 +356,6 @@ class WobbleHouseGame {
       if (objectHitFound) break;
     }
 
-    // Also check yoga balls
     if (!objectHitFound) {
       for (const prop of this.apartment.interactiveProps) {
         if (prop.isYogaBall) {
@@ -417,54 +375,25 @@ class WobbleHouseGame {
   }
 
   handleRoomJoined(data) {
-    this.domSetupPanel.classList.add('hidden');
-    this.domRoomPanel.classList.remove('hidden');
-    this.domRoomCode.textContent = data.roomCode;
-    this.handleRoomUpdated(data);
-    if (this.practiceRoom && data.hostId === this.network.myId) {
-      setTimeout(() => this.network.startGame(), 250);
-    }
-  }
-
-  handleRoomUpdated(data) {
-    this.roomInfo = data;
-    if (!this.domRoomPanel || data.state !== 'LOBBY') return;
-    this.domRoomCode.textContent = data.roomCode;
-    this.domRoomStatus.textContent = `${data.players.length} player${data.players.length === 1 ? '' : 's'} in the room`;
-    this.domRoomPlayers.innerHTML = data.players.map((player) => `<div class="room-player"><span><i style="--player-color:${player.color}"></i>${this.escapeHtml(player.name)}</span><span>${player.id === data.hostId ? 'HOST' : 'READY'}</span></div>`).join('');
-    const isHost = data.hostId === this.network.myId;
-    this.domStartMatch.classList.toggle('hidden', !isHost);
-    this.domHostNote.textContent = isHost ? 'You are host. Start when everyone has joined.' : 'The host will start when everyone is ready.';
-  }
-
-  handleRoomError(data) {
-    this.showLobbyMessage(data.message || 'Unable to join that room.');
-  }
-
-  escapeHtml(value) {
-    const el = document.createElement('div'); el.textContent = value; return el.innerHTML;
+    console.log('Joined room:', data);
+    this.showHitFeedNotice(`Joined ${data.roomCode}!`);
   }
 
   handleCountdownStarted(data) {
     this.audio.playBuzzer();
-    this.isSpectating = false;
-    this.spectatorTargetId = null;
-    this.localPlayer.isDancing = false;
-    this.domLobby.classList.add('hidden');
-    this.domHud.classList.remove('hidden');
     this.domEndOverlay.classList.add('hidden');
-    this.showHitFeedNotice(`${data.hitterName} is the tagger. Round starts in 3…`);
+    this.showHitFeedNotice(`🚨 Selection: ${data.hitterName} is THE HITTER! Round starting in 3s!`);
   }
 
   handleRoundStarted(data) {
-    this.showHitFeedNotice('Go! Keep wobbling until the clock runs out.');
+    this.showHitFeedNotice(`⚡ ROUND STARTED! SURVIVE 120 SECONDS!`);
   }
 
   handleRoundEnded(data) {
     this.domEndOverlay.classList.remove('hidden');
 
     if (data.winner === 'RUNNERS') {
-      this.domEndTitle.textContent = 'Wobblers made it!';
+      this.domEndTitle.textContent = '🎉 RUNNERS SURVIVED!';
       this.domEndTitle.style.color = '#2ed573';
       this.domEndSubtitle.textContent = data.reason || 'The 120s clock expired! Runners victory dance!';
       this.audio.playVictoryFanfare();
@@ -473,7 +402,7 @@ class WobbleHouseGame {
         this.localPlayer.isDancing = true;
       }
     } else {
-      this.domEndTitle.textContent = 'Tagger takes the round!';
+      this.domEndTitle.textContent = '🔨 HITTER CLEAN SWEEP!';
       this.domEndTitle.style.color = '#ff4757';
       this.domEndSubtitle.textContent = data.reason || 'All runners were knocked flat out!';
       this.audio.playVictoryFanfare();
@@ -496,7 +425,6 @@ class WobbleHouseGame {
     }
   }
 
-  // Only triggers when a runner avatar is struck!
   handlePlayerHit(data) {
     this.audio.playBatThwack();
     this.audio.playScream(Math.floor(Math.random() * 4));
@@ -514,9 +442,7 @@ class WobbleHouseGame {
 
       if (data.isKnockedOut) {
         this.localPlayer.isAlive = false;
-        this.isSpectating = true;
-        this.spectatorTargetId = data.hitterId;
-        this.showHitFeedNotice('You are out — now spectating the tagger.');
+        this.showHitFeedNotice(`💀 YOU WERE KNOCKED FLAT OUT!`);
       }
     } else {
       const remote = this.remotePlayers.get(data.victimId);
@@ -538,8 +464,7 @@ class WobbleHouseGame {
   }
 
   handleGameTick(data) {
-    const mins = Math.floor(data.timer / 60);
-    this.domTimer.textContent = `${mins}:${String(data.timer % 60).padStart(2, '0')}`;
+    this.domTimer.textContent = `${data.timer}s`;
 
     const activeIds = new Set();
 
@@ -550,12 +475,13 @@ class WobbleHouseGame {
         if (this.localPlayer.role !== p.role) {
           this.setRole(p.role);
         }
-        this.localPlayer.isAlive = p.isAlive;
-        this.localPlayer.hp = p.hp;
+        if (!p.isAlive) {
+          this.localPlayer.isAlive = false;
+        }
       } else {
         let remote = this.remotePlayers.get(p.id);
         if (!remote) {
-          remote = new RagdollAvatar(this.scene, p.color || '#ff4757', false);
+          remote = new RagdollAvatar(this.scene, p.color || '#f5f5f5', false);
           this.remotePlayers.set(p.id, remote);
         }
 
@@ -580,31 +506,19 @@ class WobbleHouseGame {
         this.remoteData.delete(id);
       }
     }
-
-    if (this.isSpectating) {
-      this.spectatorTargetId = data.hitterId === this.network.myId ? null : data.hitterId;
-      const target = this.remotePlayers.get(this.spectatorTargetId);
-      if (target) {
-        this.domRoleBadge.textContent = 'SPECTATING TAGGER';
-        this.domRoleBadge.className = 'role-badge hitter';
-        this.domRoleDesc.textContent = 'Mouse to orbit the tagger. You will return next round.';
-        this.domHpBar.classList.add('hidden');
-        this.domPeepDarkness.classList.add('hidden');
-      }
-    }
   }
 
   updateRoleUi(role) {
     if (role === 'HITTER') {
-      this.domRoleBadge.textContent = 'TAGGER';
+      this.domRoleBadge.textContent = '🔨 THE HITTER';
       this.domRoleBadge.className = 'role-badge hitter';
-      this.domRoleDesc.textContent = 'Tag the wobblers. Press X or click to swing your foam baton.';
+      this.domRoleDesc.textContent = '85% Blind! Press X or Click to Swing Bat. Hit objects to trigger Thermal Echoes!';
       this.domPeepDarkness.classList.remove('hidden');
       this.domHpBar.classList.add('hidden');
     } else {
-      this.domRoleBadge.textContent = 'WOBBLER';
+      this.domRoleBadge.textContent = '🏃 RUNNER';
       this.domRoleBadge.className = 'role-badge runner';
-      this.domRoleDesc.textContent = 'Stay upright until the clock runs out. Use V to switch views.';
+      this.domRoleDesc.textContent = 'Survive 120s! Crawl under tables, jump on beds, toggle 1st/3rd view with V!';
       this.domPeepDarkness.classList.add('hidden');
       this.domHpBar.classList.remove('hidden');
       this.updateHpUi();
@@ -638,7 +552,7 @@ class WobbleHouseGame {
     requestAnimationFrame(() => this.animate());
 
     const now = performance.now();
-    const delta = Math.min((now - this.lastTime) / 1000, 0.05);
+    const delta = Math.min((now - this.lastTime) / 1000, 0.1);
     this.lastTime = now;
 
     // 1. Locomotion Input (WASD, Arrow Keys, Touch Joystick)
@@ -655,9 +569,7 @@ class WobbleHouseGame {
       moveZ = this.touchMove.y;
     }
 
-    const canControl = !this.isSpectating && this.localPlayer.isAlive;
-    if (!canControl) { moveX = 0; moveZ = 0; }
-    const isMoving = canControl && (Math.abs(moveX) > 0.05 || Math.abs(moveZ) > 0.05);
+    const isMoving = (Math.abs(moveX) > 0.05 || Math.abs(moveZ) > 0.05);
 
     // Spine Pitch Controls (Q/Z / Mouse Pitch)
     if (this.keys['KeyQ']) {
@@ -687,15 +599,15 @@ class WobbleHouseGame {
       this.localPlayer.root.rotation.y = targetAngle;
     }
 
-    // 2. Physics & Collisions (Uniform 4.5 m/s, zero footstep noise)
-    const newPos = canControl ? this.physics.resolvePlayerMovement(this.localPlayer, moveDir, delta, 4.5) : this.localPlayer.root.position;
-    const newY = canControl ? this.physics.resolveVerticalPhysics(this.localPlayer, delta, isJumping) : this.localPlayer.root.position.y;
+    // 2. Physics & Collisions (Uniform 4.5 m/s)
+    const newPos = this.physics.resolvePlayerMovement(this.localPlayer, moveDir, delta, 4.5);
+    const newY = this.physics.resolveVerticalPhysics(this.localPlayer, delta, isJumping);
 
     this.localPlayer.root.position.set(newPos.x, newY, newPos.z);
     this.localPlayer.updateAnimation(delta, isMoving);
 
     // 3. Sync Network Input
-    if (this.network.connected && canControl) {
+    if (this.network.connected) {
       this.network.sendInput({
         position: { x: newPos.x, y: newY, z: newPos.z },
         rotation: { y: this.localPlayer.root.rotation.y },
@@ -711,8 +623,7 @@ class WobbleHouseGame {
     for (const [id, remote] of this.remotePlayers.entries()) {
       const data = this.remoteData.get(id);
       if (data) {
-        const smoothing = 1 - Math.exp(-14 * delta);
-        remote.root.position.lerp(new THREE.Vector3(data.position.x, data.position.y, data.position.z), smoothing);
+        remote.root.position.lerp(new THREE.Vector3(data.position.x, data.position.y, data.position.z), 0.35);
         remote.root.rotation.y = data.rotation.y;
         const isRemoteMoving = (Math.hypot(data.position.x - remote.root.position.x, data.position.z - remote.root.position.z) > 0.02);
         remote.updateAnimation(delta, isRemoteMoving);
@@ -723,8 +634,7 @@ class WobbleHouseGame {
     this.apartment.update(delta);
 
     // 6. Camera Update
-    const spectatorTarget = this.isSpectating ? this.remotePlayers.get(this.spectatorTargetId) : null;
-    this.cameraManager.update(spectatorTarget || this.localPlayer, delta);
+    this.cameraManager.update(this.localPlayer, delta);
 
     // 7. Render Frame
     this.renderer.render(this.scene, this.camera);
@@ -733,5 +643,5 @@ class WobbleHouseGame {
 
 // Start game when page loads
 window.addEventListener('DOMContentLoaded', () => {
-  window.game = new WobbleHouseGame();
+  window.game = new HittlersGame();
 });
