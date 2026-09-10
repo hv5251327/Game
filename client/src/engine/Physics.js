@@ -16,7 +16,7 @@ export class Physics {
     const isCrawling = avatar.isCrawling;
     const isFlatFlop = avatar.isFlatFlop;
 
-    let charHeight = 1.6;
+    let charHeight = 1.691;
     let charRadius = 0.35;
 
     if (isFlatFlop) {
@@ -60,12 +60,20 @@ export class Physics {
         if (finalX >= expandedBox.min.x && finalX <= expandedBox.max.x &&
             finalZ >= expandedBox.min.z && finalZ <= expandedBox.max.z) {
 
+          // If standing safely on top of the surface, allow free movement across it
+          if (currentPos.y >= box.max.y - 0.15) {
+            continue;
+          }
+
+          // Check if player is crawling/flat flop and can pass under
           let canCrawlUnder = false;
-          for (const crawlable of this.apartment.crawlables) {
-            if (crawlable.box.containsPoint(new THREE.Vector3(finalX, 0.1, finalZ))) {
-              if (charHeight <= crawlable.clearance) {
-                canCrawlUnder = true;
-                break;
+          if (isCrawling || isFlatFlop) {
+            for (const crawlable of this.apartment.crawlables) {
+              if (crawlable.box.containsPoint(new THREE.Vector3(finalX, 0.1, finalZ))) {
+                if (charHeight <= crawlable.clearance) {
+                  canCrawlUnder = true;
+                  break;
+                }
               }
             }
           }
@@ -80,7 +88,7 @@ export class Physics {
             }
           }
 
-          // Resolve collision
+          // Resolve collision along minimum penetration axis
           const overlapX1 = finalX - expandedBox.min.x;
           const overlapX2 = expandedBox.max.x - finalX;
           const overlapZ1 = finalZ - expandedBox.min.z;

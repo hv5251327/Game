@@ -194,6 +194,7 @@ export class Apartment {
     group.position.set(x, 0, z);
     group.rotation.y = rotY;
     this.scene.add(group);
+    group.updateMatrixWorld(true);
 
     this.registerThermalObject(lowerMat, `${id}_lower`);
     this.registerThermalObject(upperMat, `${id}_upper`);
@@ -206,10 +207,11 @@ export class Apartment {
     this.colliders.push({ box: upperBox, mesh: upperMat, type: 'bed_upper' });
     this.colliders.push({ box: lowerBox, mesh: lowerMat, type: 'bed_lower' });
 
+    const bedBounds = new THREE.Box3().setFromObject(group);
     this.crawlables.push({
       box: new THREE.Box3(
-        new THREE.Vector3(x - width / 2, 0, z - length / 2),
-        new THREE.Vector3(x + width / 2, 0.4, z + length / 2)
+        new THREE.Vector3(bedBounds.min.x, 0, bedBounds.min.z),
+        new THREE.Vector3(bedBounds.max.x, 0.4, bedBounds.max.z)
       ),
       clearance: 0.4
     });
@@ -240,16 +242,18 @@ export class Apartment {
     group.position.set(x, 0, z);
     group.rotation.y = rotY;
     this.scene.add(group);
+    group.updateMatrixWorld(true);
 
     this.registerThermalObject(cushion, id);
     const cBox = new THREE.Box3().setFromObject(cushion);
     this.jumpables.push({ box: cBox, topY: 0.68, mesh: cushion });
     this.colliders.push({ box: cBox, mesh: cushion, type: 'daybed' });
 
+    const daybedBounds = new THREE.Box3().setFromObject(group);
     this.crawlables.push({
       box: new THREE.Box3(
-        new THREE.Vector3(x - width / 2, 0, z - length / 2),
-        new THREE.Vector3(x + width / 2, 0.35, z + length / 2)
+        new THREE.Vector3(daybedBounds.min.x, 0, daybedBounds.min.z),
+        new THREE.Vector3(daybedBounds.max.x, 0.35, daybedBounds.max.z)
       ),
       clearance: 0.35
     });
@@ -292,17 +296,24 @@ export class Apartment {
     group.position.set(x, 0, z);
     group.rotation.y = rotY;
     this.scene.add(group);
+    group.updateMatrixWorld(true);
 
     this.registerThermalObject(top, id);
 
     const topBox = new THREE.Box3().setFromObject(top);
     this.jumpables.push({ box: topBox, topY: height + thickness / 2, mesh: top });
-    this.colliders.push({ box: topBox, mesh: top, type: 'table_top' });
 
+    // Full table solid footprint collider to prevent walking through standing up
+    const tableBounds = new THREE.Box3().setFromObject(group);
+    tableBounds.min.y = 0;
+    tableBounds.max.y = height + thickness / 2;
+    this.colliders.push({ box: tableBounds, mesh: top, type: 'dining_table' });
+
+    // Crawl volume under the table
     this.crawlables.push({
       box: new THREE.Box3(
-        new THREE.Vector3(x - width / 2, 0, z - length / 2),
-        new THREE.Vector3(x + width / 2, height - thickness / 2, z + length / 2)
+        new THREE.Vector3(tableBounds.min.x + 0.1, 0, tableBounds.min.z + 0.1),
+        new THREE.Vector3(tableBounds.max.x - 0.1, height - thickness / 2, tableBounds.max.z - 0.1)
       ),
       clearance: height - thickness / 2
     });
@@ -341,17 +352,23 @@ export class Apartment {
     group.position.set(x, 0, z);
     group.rotation.y = rotY;
     this.scene.add(group);
+    group.updateMatrixWorld(true);
 
     this.registerThermalObject(top, id);
 
     const topBox = new THREE.Box3().setFromObject(top);
     this.jumpables.push({ box: topBox, topY: height + 0.04, mesh: top });
-    this.colliders.push({ box: topBox, mesh: top, type: 'coffee_table' });
+
+    // Full coffee table solid collider
+    const tableBounds = new THREE.Box3().setFromObject(group);
+    tableBounds.min.y = 0;
+    tableBounds.max.y = height + 0.04;
+    this.colliders.push({ box: tableBounds, mesh: top, type: 'coffee_table' });
 
     this.crawlables.push({
       box: new THREE.Box3(
-        new THREE.Vector3(x - width / 2, 0, z - length / 2),
-        new THREE.Vector3(x + width / 2, height - 0.04, z + length / 2)
+        new THREE.Vector3(tableBounds.min.x + 0.05, 0, tableBounds.min.z + 0.05),
+        new THREE.Vector3(tableBounds.max.x - 0.05, height - 0.04, tableBounds.max.z - 0.05)
       ),
       clearance: height - 0.04
     });
@@ -387,15 +404,16 @@ export class Apartment {
     group.position.set(x, 0, z);
     group.rotation.y = rotY;
     this.scene.add(group);
+    group.updateMatrixWorld(true);
 
     this.registerThermalObject(seat, `${id}_seat`);
     this.registerThermalObject(back, `${id}_back`);
     this.registerThermalObject(arm1, `${id}_arm1`);
     this.registerThermalObject(arm2, `${id}_arm2`);
 
-    const sBox = new THREE.Box3().setFromObject(seat);
-    this.jumpables.push({ box: sBox, topY: 0.6, mesh: seat });
-    this.colliders.push({ box: sBox, mesh: seat, type: 'couch' });
+    const couchBounds = new THREE.Box3().setFromObject(group);
+    this.jumpables.push({ box: couchBounds, topY: 0.6, mesh: seat });
+    this.colliders.push({ box: couchBounds, mesh: seat, type: 'couch' });
   }
 
   // --- 6. Cardboard Boxes ---
@@ -418,12 +436,16 @@ export class Apartment {
       group.add(mesh);
 
       this.registerThermalObject(mesh, `${id}_${idx}`);
-      const bbox = new THREE.Box3().setFromObject(mesh);
-      this.colliders.push({ box: bbox, mesh, type: 'box' });
     });
 
     group.position.set(x, 0, z);
     this.scene.add(group);
+    group.updateMatrixWorld(true);
+
+    group.children.forEach((mesh, idx) => {
+      const bbox = new THREE.Box3().setFromObject(mesh);
+      this.colliders.push({ box: bbox, mesh, type: 'box' });
+    });
   }
 
   // --- 7. Bouncy Yoga Balls ---
@@ -475,9 +497,10 @@ export class Apartment {
 
     group.position.set(x, 0, z);
     this.scene.add(group);
+    group.updateMatrixWorld(true);
 
     this.registerThermalObject(seat, id);
-    const box = new THREE.Box3().setFromObject(seat);
+    const box = new THREE.Box3().setFromObject(group);
     this.colliders.push({ box, mesh: seat, type: 'stool' });
   }
 

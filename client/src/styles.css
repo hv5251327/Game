@@ -142,6 +142,28 @@ body, html {
   padding: 11px;
 }
 
+.btn-hitter {
+  background: linear-gradient(135deg, #ff4757, #ff6b81) !important;
+  box-shadow: 0 8px 20px rgba(255, 71, 87, 0.4) !important;
+}
+
+.waiting-host-notice {
+  font-size: 0.85rem;
+  color: #ffa502;
+  font-weight: 700;
+  padding: 6px 14px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 165, 2, 0.5);
+  letter-spacing: 0.5px;
+  animation: pulseNotice 1.5s infinite alternate;
+}
+
+@keyframes pulseNotice {
+  from { opacity: 0.75; }
+  to { opacity: 1.0; }
+}
+
 /* Modal */
 .modal-overlay {
   position: fixed;

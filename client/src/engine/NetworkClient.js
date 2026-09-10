@@ -72,13 +72,24 @@ export class NetworkClient {
     });
   }
 
-  joinRoom(roomCode, nickname, color, botCount = 0) {
+  joinRoom(roomCode, nickname, color, botCount = 0, preferredRole = 'RANDOM', autoStart = false) {
     if (!this.socket) this.connect();
-    this.socket.emit('join_room', { roomCode, nickname, color, botCount });
+    this.socket.emit('join_room', {
+      roomCode,
+      nickname,
+      color,
+      botCount,
+      preferredRole,
+      forceHitter: (preferredRole === 'HITTER'),
+      autoStart
+    });
   }
 
-  startGame() {
-    this.socket?.emit('start_game');
+  startGame(forceHitter = false) {
+    this.socket?.emit('start_game', {
+      forceHitter,
+      preferredRole: forceHitter ? 'HITTER' : 'RANDOM'
+    });
   }
 
   setBots(count) {

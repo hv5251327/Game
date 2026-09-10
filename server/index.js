@@ -37,6 +37,7 @@ class GameRoom {
     this.players = new Map();
     this.hitterHistory = new Set();
     this.currentHitterId = null;
+    this.hostId = null; // First player who creates/joins becomes Host
     this.state = 'LOBBY';
     this.timer = 0;
     this.roundWinner = null;
@@ -52,8 +53,12 @@ class GameRoom {
     this.startTickLoop();
   }
 
-  addPlayer(socketId, name, color, isBot = false) {
+  addPlayer(socketId, name, color, isBot = false, preferredRole = 'RANDOM') {
     if (this.players.size >= MAX_PLAYERS) return null;
+
+    if (!isBot && !this.hostId) {
+      this.hostId = socketId;
+    }
 
     const spawnRadius = 2.4;
     const angle = (this.players.size / MAX_PLAYERS) * Math.PI * 2;
@@ -65,6 +70,7 @@ class GameRoom {
       name: name || (isBot ? `Bot-${Math.floor(Math.random() * 1000)}` : `Player ${this.players.size + 1}`),
       color: color || '#f4f2ee',
       role: 'RUNNER',
+      preferredRole: preferredRole || 'RANDOM',
       hp: 100,
       maxHp: 100,
       isAlive: true,
@@ -96,6 +102,11 @@ class GameRoom {
     this.players.delete(socketId);
     this.bots.delete(socketId);
     this.hitterHistory.delete(socketId);
+
+    if (this.hostId === socketId) {
+      const nextRealPlayer = Array.from(this.players.values()).find(p => !p.isBot && p.id !== socketId);
+      this.hostId = nextRealPlayer ? nextRealPlayer.id : null;
+    }
 
     if (this.currentHitterId === socketId && (this.state === 'HUNTING' || this.state === 'COUNTDOWN')) {
       this.endRound('RUNNERS', 'The Hitter disconnected! Runners win!');
@@ -134,12 +145,23 @@ class GameRoom {
     if (forcedPlayerId && this.players.has(forcedPlayerId)) {
       chosen = this.players.get(forcedPlayerId);
     } else {
-      let candidates = playerList.filter(p => !this.hitterHistory.has(p.id));
-      if (candidates.length === 0) {
-        this.hitterHistory.clear();
-        candidates = playerList;
+      // Prioritize human players who requested to play as Hunter / Hitter
+      const hunterRequesters = playerList.filter(p => !p.isBot && p.preferredRole === 'HITTER');
+      if (hunterRequesters.length > 0) {
+        let candidates = hunterRequesters.filter(p => !this.hitterHistory.has(p.id));
+        if (candidates.length === 0) {
+          this.hitterHistory.clear();
+          candidates = hunterRequesters;
+        }
+        chosen = candidates[Math.floor(Math.random() * candidates.length)];
+      } else {
+        let candidates = playerList.filter(p => !this.hitterHistory.has(p.id));
+        if (candidates.length === 0) {
+          this.hitterHistory.clear();
+          candidates = playerList;
+        }
+        chosen = candidates[Math.floor(Math.random() * candidates.length)];
       }
-      chosen = candidates[Math.floor(Math.random() * candidates.length)];
     }
 
     this.hitterHistory.add(chosen.id);
@@ -406,6 +428,7 @@ class GameRoom {
         state: this.state,
         timer: Math.ceil(this.timer),
         hitterId: this.currentHitterId,
+        hostId: this.hostId,
         players: playersArray,
         roundWinner: this.roundWinner
       });
@@ -423,7 +446,7 @@ class GameRoom {
 io.on('connection', (socket) => {
   let currentRoomCode = null;
 
-  socket.on('join_room', ({ roomCode, nickname, color, botCount, autoStart, forceHitter }) => {
+  socket.on('join_room', ({ roomCode, nickname, color, botCount, autoStart, preferredRole, forceHitter }) => {
     const code = (roomCode || 'LOBBY-1').toUpperCase();
     socket.join(code);
     currentRoomCode = code;
@@ -434,31 +457,43 @@ io.on('connection', (socket) => {
       rooms.set(code, room);
     }
 
-    const player = room.addPlayer(socket.id, nickname, color);
+    const rolePref = forceHitter ? 'HITTER' : (preferredRole || 'RANDOM');
+    const player = room.addPlayer(socket.id, nickname, color, false, rolePref);
     if (typeof botCount === 'number') {
       room.setBotCount(botCount);
     }
+
+    const isHost = (socket.id === room.hostId);
 
     socket.emit('room_joined', {
       playerId: socket.id,
       roomCode: code,
       player: player,
       state: room.state,
-      hitterId: room.currentHitterId
+      hitterId: room.currentHitterId,
+      hostId: room.hostId,
+      isHost: isHost
     });
 
-    if (autoStart) {
+    // If autoStart is requested AND this player is the host, start countdown
+    if (autoStart && isHost && room.state === 'LOBBY') {
       setTimeout(() => {
         room.startCountdown(forceHitter ? socket.id : null);
       }, 400);
     }
   });
 
-  socket.on('start_game', ({ forceHitter } = {}) => {
+  socket.on('start_game', ({ forceHitter, preferredRole } = {}) => {
     if (!currentRoomCode) return;
     const room = rooms.get(currentRoomCode);
     if (room) {
-      room.startCountdown(forceHitter ? socket.id : null);
+      // ONLY the room host can start the match!
+      if (room.hostId && socket.id !== room.hostId) {
+        socket.emit('room_error', { message: 'Only the room host can start the match.' });
+        return;
+      }
+      const shouldForce = forceHitter || (preferredRole === 'HITTER');
+      room.startCountdown(shouldForce ? socket.id : null);
     }
   });
 

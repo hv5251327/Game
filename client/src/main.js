@@ -36,6 +36,11 @@ class HittlersGame {
     this.domTimer = document.getElementById('match-timer');
     this.domRoleBadge = document.getElementById('role-badge');
     this.domRoleDesc = document.getElementById('role-desc');
+    this.domHostControls = document.getElementById('host-controls');
+    this.domBtnStartMatch = document.getElementById('btn-start-match');
+    this.domBtnStartHunter = document.getElementById('btn-start-as-hunter');
+    this.domWaitingForHost = document.getElementById('waiting-for-host');
+    this.domSelectRole = document.getElementById('select-role');
     this.domHpBar = document.getElementById('hp-bar');
     this.domHpFill = document.getElementById('hp-fill');
     this.domHpText = document.getElementById('hp-text');
@@ -259,17 +264,23 @@ class HittlersGame {
       const nickname = document.getElementById('input-nickname').value.trim() || 'Bob';
       const color = document.getElementById('input-color').value || '#f0f0f0';
       const botCount = parseInt(document.getElementById('input-bots').value, 10);
+      const preferredRole = document.getElementById('select-role')?.value || 'RANDOM';
 
       this.audio.ensureContext();
       this.localPlayer.setColor(color);
-      this.network.joinRoom(roomCode, nickname, color, isNaN(botCount) ? 9 : botCount, true);
+      this.network.joinRoom(roomCode, nickname, color, isNaN(botCount) ? 9 : botCount, preferredRole, false);
       this.domLobby.classList.add('hidden');
       this.domHud.classList.remove('hidden');
     });
 
     document.getElementById('btn-start-match')?.addEventListener('click', () => {
       this.audio.ensureContext();
-      this.network.startGame();
+      this.network.startGame(false);
+    });
+
+    document.getElementById('btn-start-as-hunter')?.addEventListener('click', () => {
+      this.audio.ensureContext();
+      this.network.startGame(true);
     });
 
     // Leaderboard Modal
@@ -376,7 +387,11 @@ class HittlersGame {
 
   handleRoomJoined(data) {
     console.log('Joined room:', data);
-    this.showHitFeedNotice(`Joined ${data.roomCode}!`);
+    if (data.isHost) {
+      this.showHitFeedNotice(`👑 You are the HOST of ${data.roomCode}! Click Start Match when ready.`);
+    } else {
+      this.showHitFeedNotice(`Joined ${data.roomCode}! Waiting for Host to start match.`);
+    }
   }
 
   handleCountdownStarted(data) {
@@ -465,6 +480,24 @@ class HittlersGame {
 
   handleGameTick(data) {
     this.domTimer.textContent = `${data.timer}s`;
+
+    // Host UI Controls Synchronization
+    const isHost = (data.hostId === this.network.myId);
+    if (this.domHostControls) {
+      if (isHost) {
+        this.domHostControls.classList.remove('hidden');
+        if (this.domWaitingForHost) this.domWaitingForHost.classList.add('hidden');
+      } else {
+        this.domHostControls.classList.add('hidden');
+        if (this.domWaitingForHost) {
+          if (data.state === 'LOBBY' || data.state === 'ROUND_END') {
+            this.domWaitingForHost.classList.remove('hidden');
+          } else {
+            this.domWaitingForHost.classList.add('hidden');
+          }
+        }
+      }
+    }
 
     const activeIds = new Set();
 
