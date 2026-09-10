@@ -588,7 +588,7 @@ export class Apartment {
     if (targetGroup) {
       for (const [mesh, data] of this.thermalObjects.entries()) {
         if (mesh.userData.thermalGroup === targetGroup || mesh.userData.thermalId === targetGroup || data.groupId === targetGroup || data.id === targetGroup) {
-          data.timer = 2.5; // 2.5s duration
+          data.timer = 1.0; // 1.0s snappy thermal echo duration
         }
       }
     }
@@ -627,11 +627,11 @@ export class Apartment {
       }
     }
 
-    // Update Radiant Thermal Echoes: Neon Cyan/White -> Heat Orange -> Thermal Yellow -> Fade
+    // Update Radiant Thermal Echoes: Neon Cyan/White -> Heat Orange -> Thermal Yellow -> Fade (1.0s)
     for (const [mesh, data] of this.thermalObjects.entries()) {
       if (data.timer > 0) {
         data.timer -= delta;
-        const progress = Math.max(0, data.timer / 2.5); // 1.0 (hit) down to 0.0 (fade)
+        const progress = Math.max(0, data.timer / 1.0); // 1.0 (hit) down to 0.0 (fade)
 
         if (!data.material.emissive) continue;
 

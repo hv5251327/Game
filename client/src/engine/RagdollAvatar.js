@@ -972,6 +972,32 @@ export class RagdollAvatar {
       }
       this.head.rotation.set(bind.head[0], 0, 0);
     }
+
+    // Update 1.0s Thermal Reveal Timer (Radiant cyan glow for anti-camp reveal)
+    if (this.thermalTimer > 0) {
+      this.thermalTimer -= delta;
+      const progress = Math.max(0, this.thermalTimer / 1.0);
+      if (this.skinMat && this.skinMat.emissive) {
+        this.skinMat.emissive.setRGB(0.0, progress * 1.0, progress * 1.0);
+        this.skinMat.emissiveIntensity = progress * 3.5;
+      }
+      if (this.thermalTimer <= 0) {
+        this.isThermalRevealed = false;
+        if (this.skinMat && this.skinMat.emissive) {
+          this.skinMat.emissive.setRGB(0, 0, 0);
+          this.skinMat.emissiveIntensity = 0;
+        }
+      }
+    }
+  }
+
+  triggerThermalReveal(duration = 1.0) {
+    this.thermalTimer = duration;
+    this.isThermalRevealed = true;
+    if (this.skinMat && this.skinMat.emissive) {
+      this.skinMat.emissive.setRGB(0.0, 1.0, 1.0);
+      this.skinMat.emissiveIntensity = 3.5;
+    }
   }
 
   destroy() {

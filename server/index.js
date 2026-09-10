@@ -340,7 +340,7 @@ class GameRoom {
   updateBots(delta) {
     if (this.state !== 'HUNTING' && this.state !== 'LOBBY') return;
 
-    const bounds = 9.5;
+    const bounds = 8.8;
 
     if (this.soundInvestigateTimer > 0) {
       this.soundInvestigateTimer -= delta;
@@ -355,11 +355,11 @@ class GameRoom {
         if (bot.flailTimer <= 0) bot.isFlailing = false;
       }
 
-      // Blind AI Hitter: Investigates sounds or wanders blindly
-      if (bot.role === 'HITTER' && this.state === 'HUNTING') {
-        bot.botTurnTimer = (bot.botTurnTimer || 0) - delta;
-        bot.botSwingCooldown = (bot.botSwingCooldown || 0) - delta;
+      bot.botTurnTimer = (bot.botTurnTimer || 0) - delta;
+      bot.botSwingCooldown = (bot.botSwingCooldown || 0) - delta;
 
+      // 1. Blind AI Hitter: Investigates sounds or hunts nearby runners
+      if (bot.role === 'HITTER') {
         let targetAngle = bot.rotation.y;
 
         if (this.lastSoundLocation && this.soundInvestigateTimer > 0) {
@@ -367,11 +367,29 @@ class GameRoom {
           const dz = this.lastSoundLocation.z - bot.position.z;
           targetAngle = Math.atan2(-dx, -dz) + Math.sin(Date.now() * 0.003) * 0.3;
         } else {
-          if (bot.botTurnTimer <= 0) {
-            bot.botTurnTimer = 1.8 + Math.random() * 2.0;
-            bot.botWanderAngle = bot.rotation.y + (Math.random() - 0.5) * 2.5;
+          let nearestRunner = null;
+          let minRunnerDist = Infinity;
+          for (const p of this.players.values()) {
+            if (p.role === 'RUNNER' && p.isAlive) {
+              const d = Math.hypot(p.position.x - bot.position.x, p.position.z - bot.position.z);
+              if (d < minRunnerDist) {
+                minRunnerDist = d;
+                nearestRunner = p;
+              }
+            }
           }
-          targetAngle = bot.botWanderAngle;
+
+          if (nearestRunner && minRunnerDist < 4.5) {
+            const dx = nearestRunner.position.x - bot.position.x;
+            const dz = nearestRunner.position.z - bot.position.z;
+            targetAngle = Math.atan2(-dx, -dz);
+          } else {
+            if (bot.botTurnTimer <= 0) {
+              bot.botTurnTimer = 1.8 + Math.random() * 2.5;
+              bot.botWanderAngle = bot.rotation.y + (Math.random() - 0.5) * 2.5;
+            }
+            targetAngle = bot.botWanderAngle || bot.rotation.y;
+          }
         }
 
         bot.rotation.y = targetAngle;
@@ -382,19 +400,19 @@ class GameRoom {
         // Bend down if near the middle table to hit underneath
         if (Math.abs(bot.position.x) < 2.0 && Math.abs(bot.position.z) < 2.6) {
           bot.isCrawling = true;
+          bot.spinePitch = -0.6;
         } else {
           bot.isCrawling = false;
+          bot.spinePitch = 0;
         }
 
-        if (bot.botSwingCooldown <= 0) {
-          bot.botSwingCooldown = 1.1 + Math.random() * 1.5;
+        if (this.state === 'HUNTING' && bot.botSwingCooldown <= 0) {
+          bot.botSwingCooldown = 1.2 + Math.random() * 1.5;
           this.handleBatSwing(botId);
         }
-      } else if (bot.role === 'RUNNER') {
-        let vx = 0;
-        let vz = 0;
-
-        // Flee from the nearest active hunter
+      }
+      // 2. AI Runner: Flees from active hunters
+      else if (bot.role === 'RUNNER') {
         let nearestHitter = null;
         let minDist = Infinity;
         for (const hid of this.currentHitterIds) {
@@ -408,20 +426,29 @@ class GameRoom {
           }
         }
 
+        let speed = BASE_SPEED * 0.5;
+
         if (nearestHitter && this.state === 'HUNTING' && minDist < 6.5) {
+          // Flee directly away from nearest hunter
           const dx = bot.position.x - nearestHitter.position.x;
           const dz = bot.position.z - nearestHitter.position.z;
-          vx = (dx / (minDist || 1)) * BASE_SPEED;
-          vz = (dz / (minDist || 1)) * BASE_SPEED;
-          bot.rotation.y = Math.atan2(vx, vz);
+          bot.rotation.y = Math.atan2(dx, dz);
+          speed = BASE_SPEED * 0.95;
+
+          if (Math.abs(bot.position.x) < 1.4 && Math.abs(bot.position.z) < 1.8) {
+            bot.isCrawling = true;
+          }
         } else {
-          if (Math.random() < 0.03) bot.rotation.y += (Math.random() - 0.5) * 1.5;
-          vx = -Math.sin(bot.rotation.y) * (BASE_SPEED * 0.4);
-          vz = -Math.cos(bot.rotation.y) * (BASE_SPEED * 0.4);
+          if (bot.botTurnTimer <= 0) {
+            bot.botTurnTimer = 2.0 + Math.random() * 3.0;
+            bot.botWanderAngle = bot.rotation.y + (Math.random() - 0.5) * 2.0;
+          }
+          bot.rotation.y = bot.botWanderAngle || bot.rotation.y;
+          speed = BASE_SPEED * 0.45;
         }
 
-        bot.position.x += vx * delta;
-        bot.position.z += vz * delta;
+        bot.position.x += -Math.sin(bot.rotation.y) * speed * delta;
+        bot.position.z += -Math.cos(bot.rotation.y) * speed * delta;
 
         if (Math.random() < 0.005) bot.isCrawling = !bot.isCrawling;
       }
@@ -429,10 +456,12 @@ class GameRoom {
       if (Math.abs(bot.position.x) > bounds) {
         bot.position.x = Math.sign(bot.position.x) * bounds;
         bot.botWanderAngle = Math.random() * Math.PI * 2;
+        bot.botTurnTimer = 0.5;
       }
       if (Math.abs(bot.position.z) > bounds) {
         bot.position.z = Math.sign(bot.position.z) * bounds;
         bot.botWanderAngle = Math.random() * Math.PI * 2;
+        bot.botTurnTimer = 0.5;
       }
     }
   }

@@ -813,13 +813,20 @@ class HittlersGame {
       });
     }
 
-    // 4. Update Remote Players
+    // 4. Update Remote Players & AI Bots
     for (const [id, remote] of this.remotePlayers.entries()) {
       const data = this.remoteData.get(id);
       if (data) {
-        remote.root.position.lerp(new THREE.Vector3(data.position.x, data.position.y, data.position.z), 0.35);
+        remote.root.position.lerp(new THREE.Vector3(data.position.x, data.position.y || 0, data.position.z), 0.35);
         remote.root.rotation.y = data.rotation.y;
-        const isRemoteMoving = (Math.hypot(data.position.x - remote.root.position.x, data.position.z - remote.root.position.z) > 0.02);
+        remote.spinePitch = (typeof data.spinePitch === 'number') ? data.spinePitch : 0;
+        remote.isCrawling = !!data.isCrawling;
+        remote.isFlatFlop = !!data.isFlatFlop;
+        remote.isSitting = !!data.isSitting;
+        remote.isFlailing = !!data.isFlailing;
+        remote.isAlive = (data.isAlive !== false);
+
+        const isRemoteMoving = (Math.hypot(data.position.x - remote.root.position.x, data.position.z - remote.root.position.z) > 0.012);
         remote.updateAnimation(delta, isRemoteMoving);
       }
     }
