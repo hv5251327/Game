@@ -165,8 +165,8 @@ class HittlersGame {
         this.triggerLocalBatSwing();
       }
 
-      // Perspective Toggle (V key for Runners)
-      if (e.code === 'KeyV' && this.localPlayer.role === 'RUNNER') {
+      // Perspective Toggle (V key)
+      if (e.code === 'KeyV') {
         const mode = this.cameraManager.togglePerspective();
         this.showHitFeedNotice(`Camera switched to ${mode.replace('_', ' ')}`);
       }
@@ -318,10 +318,8 @@ class HittlersGame {
     });
 
     this.bindTouchButton('btn-view', () => {
-      if (this.localPlayer.role === 'RUNNER') {
-        const mode = this.cameraManager.togglePerspective();
-        this.showHitFeedNotice(`Camera: ${mode.replace('_', ' ')}`);
-      }
+      const mode = this.cameraManager.togglePerspective();
+      this.showHitFeedNotice(`Camera: ${mode.replace('_', ' ')}`);
     });
 
     // Room Code from URL query (?room=CODE)
@@ -698,9 +696,9 @@ class HittlersGame {
       this.domRoleBadge.textContent = (hunterCount > 1) ? `🔨 THE HUNTER (1 of ${hunterCount})` : '🔨 THE HUNTER';
       this.domRoleBadge.className = 'role-badge hitter';
       this.domRoleDesc.textContent = (hunterCount > 1)
-        ? `85% Blind! You are 1 of ${hunterCount} Hunters! Press X or Click to Swing Bat. Knock out all runners!`
-        : '85% Blind! Press X or Click to Swing Bat. Hit objects to trigger Thermal Echoes!';
-      this.domPeepDarkness.classList.remove('hidden');
+        ? `You are 1 of ${hunterCount} Hunters! Hunt down all runners and hit them with your bat!`
+        : 'You are the HUNTER! Hunt down all runners and hit them with your bat!';
+      this.domPeepDarkness.classList.add('hidden');
       this.domHpBar.classList.add('hidden');
     } else {
       this.domRoleBadge.textContent = '🏃 RUNNER';
@@ -837,76 +835,11 @@ class HittlersGame {
     // 6. Camera Update
     this.cameraManager.update(this.localPlayer, delta);
 
-    // 7. Render Frame with Peep Darkness Visor for Hitter
-    if (this.localPlayer.role === 'HITTER') {
-      const W = window.innerWidth;
-      const H = window.innerHeight;
-      const stripH = Math.max(1, Math.floor(H * 0.15));
-      const topH = H - stripH;
-
-      this.renderer.autoClear = false;
-
-      // Pass 1: Bottom 15% Peep Strip (100% Crystal-Clear Room Visibility)
-      this.renderer.setViewport(0, 0, W, H);
-      this.renderer.setScissor(0, 0, W, stripH);
-      this.renderer.setScissorTest(true);
-      this.renderer.setClearColor(0x181926, 1.0);
-      this.renderer.clear();
-      this.renderer.render(this.scene, this.camera);
-
-      // Pass 2: Top 85% Blackout Visor (Pitch Black Dark Screen)
-      this.renderer.setScissor(0, stripH, W, topH);
-      this.renderer.setClearColor(0x000000, 1.0);
-      this.renderer.clear();
-
-      // Pass 3: Render Active Thermal Objects & Camping Revealed Players in the Top 85% Pitch Black Visor
-      const activeThermals = new Set();
-      for (const [mesh, data] of this.apartment.thermalObjects.entries()) {
-        if (data.timer > 0) {
-          activeThermals.add(mesh);
-        }
-      }
-
-      // Include revealed camping players in thermal pass
-      if (this.localPlayer.isThermalRevealed || this.localPlayer.thermalTimer > 0) {
-        this.localPlayer.root.traverse((obj) => {
-          if (obj.isMesh) activeThermals.add(obj);
-        });
-      }
-      for (const remote of this.remotePlayers.values()) {
-        if (remote.isThermalRevealed || remote.thermalTimer > 0) {
-          remote.root.traverse((obj) => {
-            if (obj.isMesh) activeThermals.add(obj);
-          });
-        }
-      }
-
-      if (activeThermals.size > 0) {
-        const hiddenObjects = [];
-        this.scene.traverse((obj) => {
-          if (obj.isMesh && !activeThermals.has(obj) && !activeThermals.has(obj.parent)) {
-            if (obj.visible) {
-              obj.visible = false;
-              hiddenObjects.push(obj);
-            }
-          }
-        });
-
-        this.renderer.render(this.scene, this.camera);
-
-        for (const obj of hiddenObjects) {
-          obj.visible = true;
-        }
-      }
-
-      this.renderer.setScissorTest(false);
-      this.renderer.autoClear = true;
-    } else {
-      this.renderer.autoClear = true;
-      this.renderer.setScissorTest(false);
-      this.renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
-      this.renderer.render(this.scene, this.camera);
-    }
+    // 7. Render Frame (Full 100% Screen View for Both Hunter and Runners)
+    this.renderer.autoClear = true;
+    this.renderer.setScissorTest(false);
+    this.renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+    this.renderer.render(this.scene, this.camera);
   }
 }
 

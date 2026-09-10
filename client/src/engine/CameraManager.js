@@ -99,9 +99,7 @@ export class CameraManager {
   }
 
   setRole(role) {
-    if (role === 'HITTER') {
-      this.mode = 'HITTER_PEEP';
-    } else if (this.mode === 'HITTER_PEEP') {
+    if (this.mode === 'HITTER_PEEP') {
       this.mode = 'THIRD_PERSON';
     }
   }
@@ -131,23 +129,8 @@ export class CameraManager {
       );
       this.camera.lookAt(lookTarget);
 
-    } else if (this.mode === 'HITTER_PEEP') {
-      // Low-angle strip tracking camera for the Hitter (matching the bottom 15% strip view)
-      const camDist = 3.2;
-      const camHeight = 1.55;
-      const camX = targetPos.x + Math.sin(this.yaw) * camDist;
-      const camZ = targetPos.z + Math.cos(this.yaw) * camDist;
-
-      this.camera.position.set(camX, targetPos.y + camHeight, camZ);
-      const lookTarget = new THREE.Vector3(
-        targetPos.x - Math.sin(this.yaw) * 4,
-        targetPos.y + 0.85,
-        targetPos.z - Math.cos(this.yaw) * 4
-      );
-      this.camera.lookAt(lookTarget);
-
     } else {
-      // Default: Third-Person over the shoulder
+      // Default: Third-Person over the shoulder (Full clear screen view)
       const camDist = 3.6;
       const camHeight = (avatar.isCrawling ? 1.2 : 2.0);
       const camX = targetPos.x + Math.sin(this.yaw) * Math.cos(this.pitch * 0.5) * camDist;
