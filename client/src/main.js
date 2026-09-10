@@ -70,22 +70,22 @@ class HittlersGame {
     document.getElementById('canvas-container').appendChild(this.renderer.domElement);
 
     // 2. Lighting
-    const ambient = new THREE.AmbientLight(0xffffff, 0.7);
-    this.scene.add(ambient);
+    this.ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+    this.scene.add(this.ambientLight);
 
-    const dirLight = new THREE.DirectionalLight(0xfff5e6, 1.3);
-    dirLight.position.set(12, 16, 10);
-    dirLight.castShadow = true;
-    dirLight.shadow.mapSize.width = 2048;
-    dirLight.shadow.mapSize.height = 2048;
-    dirLight.shadow.camera.near = 0.5;
-    dirLight.shadow.camera.far = 45;
+    this.dirLight = new THREE.DirectionalLight(0xfff5e6, 1.3);
+    this.dirLight.position.set(12, 16, 10);
+    this.dirLight.castShadow = true;
+    this.dirLight.shadow.mapSize.width = 2048;
+    this.dirLight.shadow.mapSize.height = 2048;
+    this.dirLight.shadow.camera.near = 0.5;
+    this.dirLight.shadow.camera.far = 45;
     const d = 15;
-    dirLight.shadow.camera.left = -d;
-    dirLight.shadow.camera.right = d;
-    dirLight.shadow.camera.top = d;
-    dirLight.shadow.camera.bottom = -d;
-    this.scene.add(dirLight);
+    this.dirLight.shadow.camera.left = -d;
+    this.dirLight.shadow.camera.right = d;
+    this.dirLight.shadow.camera.top = d;
+    this.dirLight.shadow.camera.bottom = -d;
+    this.scene.add(this.dirLight);
 
     // 3. Environment & Physics
     this.apartment = new Apartment(this.scene);
@@ -298,6 +298,16 @@ class HittlersGame {
     this.localPlayer.setRole(role);
     this.cameraManager.setRole(role);
     this.updateRoleUi(role);
+
+    if (role === 'HITTER') {
+      if (this.ambientLight) this.ambientLight.intensity = 0.12;
+      if (this.dirLight) this.dirLight.intensity = 0.25;
+      if (this.scene.fog) this.scene.fog.density = 0.035;
+    } else {
+      if (this.ambientLight) this.ambientLight.intensity = 0.7;
+      if (this.dirLight) this.dirLight.intensity = 1.3;
+      if (this.scene.fog) this.scene.fog.density = 0.025;
+    }
   }
 
   async loadLeaderboardData() {

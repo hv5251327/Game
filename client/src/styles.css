@@ -426,7 +426,7 @@ body, html {
 .peep-blackout {
   width: 100vw;
   height: 85vh;
-  background: #000000;
+  background: rgba(0, 0, 0, 0.88);
   display: flex;
   flex-direction: column;
   justify-content: center;

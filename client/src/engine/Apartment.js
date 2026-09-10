@@ -111,9 +111,11 @@ export class Apartment {
     this.buildCeilingFan(5.5, wallHeight - 0.2, 5.5);
   }
 
-  registerThermalObject(mesh, id) {
+  registerThermalObject(mesh, id, groupId = null) {
     if (!mesh.material) return;
+    const gId = groupId || id;
     mesh.userData.thermalId = id;
+    mesh.userData.thermalGroup = gId;
 
     // Create glowing wireframe outline for thermal silhouette
     let outlineMesh = null;
@@ -121,16 +123,19 @@ export class Apartment {
       const edges = new THREE.EdgesGeometry(mesh.geometry);
       const lineMat = new THREE.LineBasicMaterial({
         color: 0x00ffff,
-        linewidth: 2,
+        linewidth: 3,
         transparent: true,
-        opacity: 0.0
+        opacity: 0.0,
+        depthTest: false
       });
       outlineMesh = new THREE.LineSegments(edges, lineMat);
-      outlineMesh.renderOrder = 10;
+      outlineMesh.renderOrder = 999;
       mesh.add(outlineMesh);
     } catch (e) {}
 
     this.thermalObjects.set(mesh, {
+      id,
+      groupId: gId,
       timer: 0,
       originalEmissive: mesh.material.emissive ? mesh.material.emissive.clone() : new THREE.Color(0, 0, 0),
       material: mesh.material,
@@ -158,12 +163,12 @@ export class Apartment {
       [-width / 2, height / 2, length / 2],
       [width / 2, height / 2, length / 2]
     ];
-    postOffsets.forEach(pos => {
+    postOffsets.forEach((pos, idx) => {
       const post = new THREE.Mesh(postGeo, frameMat.clone());
       post.position.set(...pos);
       post.castShadow = true;
       group.add(post);
-      this.registerThermalObject(post, `${id}_post`);
+      this.registerThermalObject(post, `${id}_post_${idx}`, id);
     });
 
     // Lower Mattress
@@ -183,11 +188,11 @@ export class Apartment {
 
     // Pillows
     const pillowGeo = new THREE.BoxGeometry(width * 0.7, 0.12, 0.6);
-    const pillow1 = new THREE.Mesh(pillowGeo, pillowMat);
+    const pillow1 = new THREE.Mesh(pillowGeo, pillowMat.clone());
     pillow1.position.set(0, 0.58, -length / 2 + 0.45);
     group.add(pillow1);
 
-    const pillow2 = new THREE.Mesh(pillowGeo, pillowMat);
+    const pillow2 = new THREE.Mesh(pillowGeo, pillowMat.clone());
     pillow2.position.set(0, 1.88, -length / 2 + 0.45);
     group.add(pillow2);
 
@@ -196,8 +201,10 @@ export class Apartment {
     this.scene.add(group);
     group.updateMatrixWorld(true);
 
-    this.registerThermalObject(lowerMat, `${id}_lower`);
-    this.registerThermalObject(upperMat, `${id}_upper`);
+    this.registerThermalObject(lowerMat, `${id}_lower`, id);
+    this.registerThermalObject(upperMat, `${id}_upper`, id);
+    this.registerThermalObject(pillow1, `${id}_pillow_1`, id);
+    this.registerThermalObject(pillow2, `${id}_pillow_2`, id);
 
     const lowerBox = new THREE.Box3().setFromObject(lowerMat);
     const upperBox = new THREE.Box3().setFromObject(upperMat);
@@ -230,7 +237,7 @@ export class Apartment {
     const base = new THREE.Mesh(baseGeo, frameMat.clone());
     base.position.set(0, 0.35, 0);
     group.add(base);
-    this.registerThermalObject(base, `${id}_base`);
+    this.registerThermalObject(base, `${id}_base`, id);
 
     const cushionGeo = new THREE.BoxGeometry(width - 0.1, 0.25, length - 0.1);
     const cushion = new THREE.Mesh(cushionGeo, cushionMat.clone());
@@ -244,7 +251,7 @@ export class Apartment {
     this.scene.add(group);
     group.updateMatrixWorld(true);
 
-    this.registerThermalObject(cushion, id);
+    this.registerThermalObject(cushion, `${id}_cushion`, id);
     const cBox = new THREE.Box3().setFromObject(cushion);
     this.jumpables.push({ box: cBox, topY: 0.68, mesh: cushion });
     this.colliders.push({ box: cBox, mesh: cushion, type: 'daybed' });
@@ -285,12 +292,12 @@ export class Apartment {
       [-width / 2 + 0.15, height / 2, length / 2 - 0.15],
       [width / 2 - 0.15, height / 2, length / 2 - 0.15]
     ];
-    legOffsets.forEach(pos => {
+    legOffsets.forEach((pos, idx) => {
       const leg = new THREE.Mesh(legGeo, woodMat.clone());
       leg.position.set(...pos);
       leg.castShadow = true;
       group.add(leg);
-      this.registerThermalObject(leg, `${id}_leg`);
+      this.registerThermalObject(leg, `${id}_leg_${idx}`, id);
     });
 
     group.position.set(x, 0, z);
@@ -298,7 +305,7 @@ export class Apartment {
     this.scene.add(group);
     group.updateMatrixWorld(true);
 
-    this.registerThermalObject(top, id);
+    this.registerThermalObject(top, `${id}_top`, id);
 
     const topBox = new THREE.Box3().setFromObject(top);
     this.jumpables.push({ box: topBox, topY: height + thickness / 2, mesh: top });
@@ -342,11 +349,11 @@ export class Apartment {
       [-width / 2 + 0.1, height / 2, length / 2 - 0.1],
       [width / 2 - 0.1, height / 2, length / 2 - 0.1]
     ];
-    legOffsets.forEach(pos => {
+    legOffsets.forEach((pos, idx) => {
       const leg = new THREE.Mesh(legGeo, mat.clone());
       leg.position.set(...pos);
       group.add(leg);
-      this.registerThermalObject(leg, `${id}_leg`);
+      this.registerThermalObject(leg, `${id}_leg_${idx}`, id);
     });
 
     group.position.set(x, 0, z);
@@ -354,7 +361,7 @@ export class Apartment {
     this.scene.add(group);
     group.updateMatrixWorld(true);
 
-    this.registerThermalObject(top, id);
+    this.registerThermalObject(top, `${id}_top`, id);
 
     const topBox = new THREE.Box3().setFromObject(top);
     this.jumpables.push({ box: topBox, topY: height + 0.04, mesh: top });
@@ -406,10 +413,10 @@ export class Apartment {
     this.scene.add(group);
     group.updateMatrixWorld(true);
 
-    this.registerThermalObject(seat, `${id}_seat`);
-    this.registerThermalObject(back, `${id}_back`);
-    this.registerThermalObject(arm1, `${id}_arm1`);
-    this.registerThermalObject(arm2, `${id}_arm2`);
+    this.registerThermalObject(seat, `${id}_seat`, id);
+    this.registerThermalObject(back, `${id}_back`, id);
+    this.registerThermalObject(arm1, `${id}_arm1`, id);
+    this.registerThermalObject(arm2, `${id}_arm2`, id);
 
     const couchBounds = new THREE.Box3().setFromObject(group);
     this.jumpables.push({ box: couchBounds, topY: 0.6, mesh: seat });
@@ -435,7 +442,7 @@ export class Apartment {
       mesh.receiveShadow = true;
       group.add(mesh);
 
-      this.registerThermalObject(mesh, `${id}_${idx}`);
+      this.registerThermalObject(mesh, `${id}_${idx}`, id);
     });
 
     group.position.set(x, 0, z);
@@ -463,7 +470,7 @@ export class Apartment {
     mesh.castShadow = true;
     this.scene.add(mesh);
 
-    this.registerThermalObject(mesh, id);
+    this.registerThermalObject(mesh, id, id);
 
     const prop = {
       id,
@@ -493,13 +500,14 @@ export class Apartment {
       leg.position.set(Math.cos(angle) * 0.2, 0.225, Math.sin(angle) * 0.2);
       leg.rotation.z = Math.cos(angle) * 0.1;
       group.add(leg);
+      this.registerThermalObject(leg, `${id}_leg_${i}`, id);
     }
 
     group.position.set(x, 0, z);
     this.scene.add(group);
     group.updateMatrixWorld(true);
 
-    this.registerThermalObject(seat, id);
+    this.registerThermalObject(seat, `${id}_seat`, id);
     const box = new THREE.Box3().setFromObject(group);
     this.colliders.push({ box, mesh: seat, type: 'stool' });
   }
@@ -539,22 +547,33 @@ export class Apartment {
     this.fans.push(bladesGroup);
   }
 
-  // Trigger Radiant Thermal Impact Echo: only the hit object illuminates brightly for 2.5 seconds
+  // Trigger Radiant Thermal Impact Echo: the TOTAL object (all sub-meshes) illuminates brightly for 2.5 seconds
   triggerThermalEcho(meshOrId) {
-    let target = null;
+    let targetGroup = null;
+
     if (typeof meshOrId === 'string') {
       for (const [mesh, data] of this.thermalObjects.entries()) {
-        if (mesh.userData.thermalId === meshOrId) {
-          target = { mesh, data };
+        if (mesh.userData.thermalId === meshOrId || mesh.userData.thermalGroup === meshOrId || data.id === meshOrId || data.groupId === meshOrId) {
+          targetGroup = mesh.userData.thermalGroup || data.groupId || meshOrId;
           break;
         }
       }
-    } else if (meshOrId && this.thermalObjects.has(meshOrId)) {
-      target = { mesh: meshOrId, data: this.thermalObjects.get(meshOrId) };
+      if (!targetGroup) targetGroup = meshOrId;
+    } else if (meshOrId) {
+      if (meshOrId.userData && (meshOrId.userData.thermalGroup || meshOrId.userData.thermalId)) {
+        targetGroup = meshOrId.userData.thermalGroup || meshOrId.userData.thermalId;
+      } else if (this.thermalObjects.has(meshOrId)) {
+        const data = this.thermalObjects.get(meshOrId);
+        targetGroup = data.groupId || data.id;
+      }
     }
 
-    if (target) {
-      target.data.timer = 2.5; // 2.5s duration
+    if (targetGroup) {
+      for (const [mesh, data] of this.thermalObjects.entries()) {
+        if (mesh.userData.thermalGroup === targetGroup || mesh.userData.thermalId === targetGroup || data.groupId === targetGroup || data.id === targetGroup) {
+          data.timer = 2.5; // 2.5s duration
+        }
+      }
     }
   }
 
@@ -591,7 +610,7 @@ export class Apartment {
       }
     }
 
-    // Update Radiant Thermal Echoes: Neon Cyan -> Heat Orange -> Thermal Yellow -> Fade
+    // Update Radiant Thermal Echoes: Neon Cyan/White -> Heat Orange -> Thermal Yellow -> Fade
     for (const [mesh, data] of this.thermalObjects.entries()) {
       if (data.timer > 0) {
         data.timer -= delta;
@@ -600,25 +619,29 @@ export class Apartment {
         if (!data.material.emissive) continue;
 
         const cyan = new THREE.Color(0x00ffff);
-        const orange = new THREE.Color(0xff6600);
-        const yellow = new THREE.Color(0xffee00);
+        const orange = new THREE.Color(0xff4500);
+        const yellow = new THREE.Color(0xffff00);
+        const white = new THREE.Color(0xffffff);
 
         let glowColor = new THREE.Color();
-        if (progress > 0.5) {
-          const t = (progress - 0.5) / 0.5;
+        if (progress > 0.7) {
+          const t = (progress - 0.7) / 0.3;
+          glowColor.lerpColors(cyan, white, t);
+        } else if (progress > 0.35) {
+          const t = (progress - 0.35) / 0.35;
           glowColor.lerpColors(orange, cyan, t);
         } else {
-          const t = progress / 0.5;
+          const t = progress / 0.35;
           glowColor.lerpColors(new THREE.Color(0x000000), yellow, t);
         }
 
         data.material.emissive.copy(glowColor);
-        data.material.emissiveIntensity = progress * 2.5;
+        data.material.emissiveIntensity = progress * 4.0;
 
         // Update wireframe outline opacity & color
         if (data.outlineMesh && data.outlineMesh.material) {
           data.outlineMesh.material.color.copy(glowColor);
-          data.outlineMesh.material.opacity = progress * 0.9;
+          data.outlineMesh.material.opacity = Math.min(1.0, progress * 1.5);
         }
 
         if (data.timer <= 0) {
