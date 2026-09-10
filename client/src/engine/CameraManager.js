@@ -43,31 +43,50 @@ export class CameraManager {
       this.pitch = Math.max(-Math.PI / 2.6, Math.min(Math.PI / 2.6, this.pitch - dy * sensitivity));
     });
 
-    // Touch look drag for mobile devices
-    let touchStartX = 0;
-    let touchStartY = 0;
+    // Touch look drag for mobile devices (multi-touch friendly)
+    let lookTouchId = null;
+    let lookStartX = 0;
+    let lookStartY = 0;
+
     this.domElement.addEventListener('touchstart', (e) => {
-      if (e.touches.length === 1) {
-        touchStartX = e.touches[0].clientX;
-        touchStartY = e.touches[0].clientY;
+      if (lookTouchId === null && e.changedTouches.length > 0) {
+        const t = e.changedTouches[0];
+        lookTouchId = t.identifier;
+        lookStartX = t.clientX;
+        lookStartY = t.clientY;
       }
     }, { passive: true });
 
     this.domElement.addEventListener('touchmove', (e) => {
-      if (e.touches.length === 1) {
-        const touchX = e.touches[0].clientX;
-        const touchY = e.touches[0].clientY;
-        const dx = touchX - touchStartX;
-        const dy = touchY - touchStartY;
-        touchStartX = touchX;
-        touchStartY = touchY;
+      if (lookTouchId === null) return;
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        if (t.identifier === lookTouchId) {
+          const dx = t.clientX - lookStartX;
+          const dy = t.clientY - lookStartY;
+          lookStartX = t.clientX;
+          lookStartY = t.clientY;
 
-        const sensitivity = 0.004;
-        this.yaw -= dx * sensitivity;
-        this.pitch -= dy * sensitivity;
-        this.pitch = Math.max(-Math.PI / 2.6, Math.min(Math.PI / 2.6, this.pitch));
+          const sensitivity = 0.0045;
+          this.yaw -= dx * sensitivity;
+          this.pitch = Math.max(-Math.PI / 2.6, Math.min(Math.PI / 2.6, this.pitch - dy * sensitivity));
+          break;
+        }
       }
     }, { passive: true });
+
+    const endLookTouch = (e) => {
+      if (lookTouchId === null) return;
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === lookTouchId) {
+          lookTouchId = null;
+          break;
+        }
+      }
+    };
+
+    this.domElement.addEventListener('touchend', endLookTouch, { passive: true });
+    this.domElement.addEventListener('touchcancel', endLookTouch, { passive: true });
   }
 
   togglePerspective() {

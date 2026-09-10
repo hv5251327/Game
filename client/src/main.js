@@ -26,6 +26,8 @@ class HittlersGame {
 
     this.keys = {};
     this.touchMove = { x: 0, y: 0 };
+    this.touchDuck = false;
+    this.touchCrawl = false;
     this.lastSwingTime = 0;
     this.lastTime = performance.now();
 
@@ -139,6 +141,19 @@ class HittlersGame {
     this.animate();
   }
 
+  bindTouchButton(id, callback) {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    const trigger = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.audio.ensureContext();
+      callback(btn);
+    };
+    btn.addEventListener('touchstart', trigger, { passive: false });
+    btn.addEventListener('click', trigger);
+  }
+
   bindInputs() {
     // Keyboard
     window.addEventListener('keydown', (e) => {
@@ -174,6 +189,11 @@ class HittlersGame {
         }
       }
 
+      // Crawl / Crouch (Ctrl / Shift key)
+      if (e.code === 'ControlLeft' || e.code === 'ShiftLeft') {
+        this.localPlayer.isCrawling = true;
+      }
+
       // Grab ('E' key)
       if (e.code === 'KeyE') {
         this.localPlayer.isGrabbing = true;
@@ -182,6 +202,11 @@ class HittlersGame {
 
     window.addEventListener('keyup', (e) => {
       this.keys[e.code] = false;
+      if (e.code === 'ControlLeft' || e.code === 'ShiftLeft') {
+        if (!this.touchCrawl) {
+          this.localPlayer.isCrawling = false;
+        }
+      }
       if (e.code === 'KeyE') {
         this.localPlayer.isGrabbing = false;
       }
@@ -194,7 +219,7 @@ class HittlersGame {
       }
     });
 
-    // Touch Joystick for Mobile
+    // Touch Joystick for Mobile Movement
     const joyContainer = document.getElementById('touch-joystick');
     const joyKnob = document.getElementById('touch-knob');
     if (joyContainer && joyKnob) {
@@ -245,25 +270,57 @@ class HittlersGame {
         this.physics.resolveVerticalPhysics(this.localPlayer, 0.016, true, 6.5);
       }
     });
-    this.bindTouchButton('btn-crawl', () => {
-      this.localPlayer.isCrawling = !this.localPlayer.isCrawling;
-      if (this.localPlayer.isCrawling) this.localPlayer.isFlatFlop = false;
+
+    this.bindTouchButton('btn-crawl', (btn) => {
+      this.touchCrawl = !this.touchCrawl;
+      this.localPlayer.isCrawling = this.touchCrawl;
+      if (this.touchCrawl) {
+        this.localPlayer.isFlatFlop = false;
+        document.getElementById('btn-flop')?.classList.remove('active');
+      }
+      btn?.classList.toggle('active', this.touchCrawl);
     });
-    this.bindTouchButton('btn-flop', () => {
+
+    this.bindTouchButton('btn-flop', (btn) => {
       this.localPlayer.isFlatFlop = !this.localPlayer.isFlatFlop;
       if (this.localPlayer.isFlatFlop) {
+        this.touchCrawl = false;
         this.localPlayer.isCrawling = false;
+        document.getElementById('btn-crawl')?.classList.remove('active');
+        this.localPlayer.isSitting = false;
+        document.getElementById('btn-sit')?.classList.remove('active');
+      }
+      btn?.classList.toggle('active', this.localPlayer.isFlatFlop);
+    });
+
+    this.bindTouchButton('btn-sit', (btn) => {
+      this.localPlayer.isSitting = !this.localPlayer.isSitting;
+      if (this.localPlayer.isSitting) {
+        this.localPlayer.isFlatFlop = false;
+        document.getElementById('btn-flop')?.classList.remove('active');
+        this.touchCrawl = false;
+        this.localPlayer.isCrawling = false;
+        document.getElementById('btn-crawl')?.classList.remove('active');
+      }
+      btn?.classList.toggle('active', this.localPlayer.isSitting);
+    });
+
+    this.bindTouchButton('btn-duck', (btn) => {
+      this.touchDuck = !this.touchDuck;
+      btn?.classList.toggle('active', this.touchDuck);
+      if (this.touchDuck) {
+        this.showHitFeedNotice('🦆 Ducking down (Bended Spine)');
       }
     });
-    this.bindTouchButton('btn-sit', () => {
-      this.localPlayer.isSitting = !this.localPlayer.isSitting;
-    });
+
     this.bindTouchButton('btn-swing', () => {
       this.triggerLocalBatSwing();
     });
+
     this.bindTouchButton('btn-view', () => {
       if (this.localPlayer.role === 'RUNNER') {
-        this.cameraManager.togglePerspective();
+        const mode = this.cameraManager.togglePerspective();
+        this.showHitFeedNotice(`Camera: ${mode.replace('_', ' ')}`);
       }
     });
 
@@ -709,17 +766,18 @@ class HittlersGame {
 
     const isMoving = (Math.abs(moveX) > 0.05 || Math.abs(moveZ) > 0.05);
 
-    // Spine Pitch Controls (Q/Z / Mouse Pitch)
+    // Spine Pitch Controls (Q/Z / Mouse Pitch / Touch Duck)
     if (this.keys['KeyQ']) {
       this.localPlayer.spinePitch = Math.min(1.0, this.localPlayer.spinePitch + delta * 3.0);
-    } else if (this.keys['KeyZ']) {
+    } else if (this.keys['KeyZ'] || this.touchDuck) {
       this.localPlayer.spinePitch = Math.max(-1.0, this.localPlayer.spinePitch - delta * 3.0);
     } else {
       this.localPlayer.spinePitch *= 0.9;
     }
 
-    // Crouch / Crawl
-    this.localPlayer.isCrawling = (this.keys['ControlLeft'] || this.keys['ShiftLeft'] || this.localPlayer.isCrawling);
+    // Crouch / Crawl (Keyboard hold or touch toggle)
+    const keyCrawling = !!(this.keys['ControlLeft'] || this.keys['ShiftLeft']);
+    this.localPlayer.isCrawling = keyCrawling || this.touchCrawl;
 
     // Jump (Space key when Runner)
     const isJumping = (this.keys['Space'] && this.localPlayer.role === 'RUNNER');
