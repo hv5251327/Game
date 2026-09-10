@@ -299,15 +299,9 @@ class HittlersGame {
     this.cameraManager.setRole(role);
     this.updateRoleUi(role);
 
-    if (role === 'HITTER') {
-      if (this.ambientLight) this.ambientLight.intensity = 0.12;
-      if (this.dirLight) this.dirLight.intensity = 0.25;
-      if (this.scene.fog) this.scene.fog.density = 0.035;
-    } else {
-      if (this.ambientLight) this.ambientLight.intensity = 0.7;
-      if (this.dirLight) this.dirLight.intensity = 1.3;
-      if (this.scene.fog) this.scene.fog.density = 0.025;
-    }
+    if (this.ambientLight) this.ambientLight.intensity = 0.75;
+    if (this.dirLight) this.dirLight.intensity = 1.35;
+    if (this.scene.fog) this.scene.fog.density = 0.025;
   }
 
   async loadLeaderboardData() {
@@ -679,8 +673,62 @@ class HittlersGame {
     // 6. Camera Update
     this.cameraManager.update(this.localPlayer, delta);
 
-    // 7. Render Frame
-    this.renderer.render(this.scene, this.camera);
+    // 7. Render Frame with Peep Darkness Visor for Hitter
+    if (this.localPlayer.role === 'HITTER') {
+      const W = window.innerWidth;
+      const H = window.innerHeight;
+      const stripH = Math.max(1, Math.floor(H * 0.15));
+      const topH = H - stripH;
+
+      this.renderer.autoClear = false;
+
+      // Pass 1: Bottom 15% Peep Strip (100% Crystal-Clear Room Visibility)
+      this.renderer.setViewport(0, 0, W, H);
+      this.renderer.setScissor(0, 0, W, stripH);
+      this.renderer.setScissorTest(true);
+      this.renderer.setClearColor(0x181926, 1.0);
+      this.renderer.clear();
+      this.renderer.render(this.scene, this.camera);
+
+      // Pass 2: Top 85% Blackout Visor (Pitch Black Dark Screen)
+      this.renderer.setScissor(0, stripH, W, topH);
+      this.renderer.setClearColor(0x000000, 1.0);
+      this.renderer.clear();
+
+      // Pass 3: Render Active Thermal Objects in the Top 85% Pitch Black Visor
+      const activeThermals = new Set();
+      for (const [mesh, data] of this.apartment.thermalObjects.entries()) {
+        if (data.timer > 0) {
+          activeThermals.add(mesh);
+        }
+      }
+
+      if (activeThermals.size > 0) {
+        const hiddenObjects = [];
+        this.scene.traverse((obj) => {
+          if (obj.isMesh && !activeThermals.has(obj) && !activeThermals.has(obj.parent)) {
+            if (obj.visible) {
+              obj.visible = false;
+              hiddenObjects.push(obj);
+            }
+          }
+        });
+
+        this.renderer.render(this.scene, this.camera);
+
+        for (const obj of hiddenObjects) {
+          obj.visible = true;
+        }
+      }
+
+      this.renderer.setScissorTest(false);
+      this.renderer.autoClear = true;
+    } else {
+      this.renderer.autoClear = true;
+      this.renderer.setScissorTest(false);
+      this.renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+      this.renderer.render(this.scene, this.camera);
+    }
   }
 }
 

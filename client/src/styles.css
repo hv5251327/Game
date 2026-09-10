@@ -426,7 +426,7 @@ body, html {
 .peep-blackout {
   width: 100vw;
   height: 85vh;
-  background: rgba(0, 0, 0, 0.88);
+  background: transparent;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -435,6 +435,7 @@ body, html {
   font-weight: 800;
   letter-spacing: 2px;
   text-shadow: 0 0 15px #00ffff;
+  pointer-events: none;
 }
 
 .peep-blackout .peep-title {
