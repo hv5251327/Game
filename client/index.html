@@ -6,25 +6,29 @@
   <title>HITTLERS - Slapstick Ragdoll Party Horror 3D</title>
   <link rel="stylesheet" href="src/styles.css">
 
-  <!-- Import Map for ES Modules (Three.js) -->
+  <!-- Local Import Map for Three.js (100% Offline & Instant) -->
   <script type="importmap">
     {
       "imports": {
-        "three": "https://unpkg.com/three@0.165.0/build/three.module.js",
-        "three/addons/": "https://unpkg.com/three@0.165.0/examples/jsm/"
+        "three": "./src/three.module.js"
       }
     }
   </script>
 
-  <!-- Socket.io Client -->
+  <!-- Socket.io Client with CDN fallback -->
   <script src="/socket.io/socket.io.js"></script>
+  <script>
+    if (typeof io === 'undefined') {
+      document.write('<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"><\/script>');
+    }
+  </script>
 </head>
 <body>
 
   <!-- WebGL 3D Canvas -->
   <div id="canvas-container"></div>
 
-  <!-- 1. Clean Lobby Screen (Original Layout) -->
+  <!-- 1. Clean Lobby Options Screen -->
   <div id="lobby-screen">
     <div class="lobby-card">
       <h1 class="game-title">HITTLERS</h1>
@@ -44,7 +48,7 @@
         <label>Avatar Color</label>
         <div class="color-picker-row">
           <input type="color" id="input-color" class="color-input" value="#f0f0f0">
-          <span style="font-size: 0.85rem; color: #a4b0be;">Pick your clay avatar color</span>
+          <span style="font-size: 0.85rem; color: #a4b0be;">Pick your avatar color</span>
         </div>
       </div>
 
@@ -72,7 +76,7 @@
 
   <!-- 2. In-Game HUD -->
   <div id="hud" class="hidden">
-    <!-- Top Bar: Timer, Role, Start Round -->
+    <!-- Top Bar: Timer, Role, Start Match -->
     <div class="hud-top-bar">
       <div class="timer-box">
         <span id="match-timer" class="timer-text">120s</span>
