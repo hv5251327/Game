@@ -266,15 +266,15 @@ export class Apartment {
     });
   }
 
-  // --- 3. Dining Table ---
+  // --- 3. Dining Table (1.5-person crawl space under table) ---
   buildDiningTable(x, z, rotY, id) {
     const group = new THREE.Group();
     const woodMat = new THREE.MeshStandardMaterial({ color: 0x5d4037, roughness: 0.4 });
 
-    const width = 2.8;
-    const length = 4.4;
-    const height = 1.30;
-    const thickness = 0.1;
+    const width = 1.45; // Sized for 1.5 persons width
+    const length = 2.4;
+    const height = 1.18;
+    const thickness = 0.08;
 
     // Tabletop
     const topGeo = new THREE.BoxGeometry(width, thickness, length);
@@ -284,19 +284,23 @@ export class Apartment {
     top.receiveShadow = true;
     group.add(top);
 
-    // Legs
-    const legGeo = new THREE.CylinderGeometry(0.06, 0.06, height, 12);
+    // 4 Corner Legs
+    const legRadius = 0.05;
+    const legGeo = new THREE.CylinderGeometry(legRadius, legRadius, height - thickness / 2, 12);
     const legOffsets = [
-      [-width / 2 + 0.15, height / 2, -length / 2 + 0.15],
-      [width / 2 - 0.15, height / 2, -length / 2 + 0.15],
-      [-width / 2 + 0.15, height / 2, length / 2 - 0.15],
-      [width / 2 - 0.15, height / 2, length / 2 - 0.15]
+      [-width / 2 + 0.12, (height - thickness / 2) / 2, -length / 2 + 0.12],
+      [width / 2 - 0.12, (height - thickness / 2) / 2, -length / 2 + 0.12],
+      [-width / 2 + 0.12, (height - thickness / 2) / 2, length / 2 - 0.12],
+      [width / 2 - 0.12, (height - thickness / 2) / 2, length / 2 - 0.12]
     ];
+
+    const legMeshes = [];
     legOffsets.forEach((pos, idx) => {
       const leg = new THREE.Mesh(legGeo, woodMat.clone());
       leg.position.set(...pos);
       leg.castShadow = true;
       group.add(leg);
+      legMeshes.push(leg);
       this.registerThermalObject(leg, `${id}_leg_${idx}`, id);
     });
 
@@ -310,17 +314,20 @@ export class Apartment {
     const topBox = new THREE.Box3().setFromObject(top);
     this.jumpables.push({ box: topBox, topY: height + thickness / 2, mesh: top });
 
-    // Full table solid footprint collider to prevent walking through standing up
-    const tableBounds = new THREE.Box3().setFromObject(group);
-    tableBounds.min.y = 0;
-    tableBounds.max.y = height + thickness / 2;
-    this.colliders.push({ box: tableBounds, mesh: top, type: 'dining_table' });
+    // Tabletop collider: blocks standing players (height > 1.14m), lets crawling/sleeping players go under!
+    this.colliders.push({ box: topBox, mesh: top, type: 'dining_table_top' });
 
-    // Crawl volume under the table (clearance 1.25m allows crawling and sleeping/flat-flop slides)
+    // Individual corner leg colliders
+    legMeshes.forEach(legMesh => {
+      const legBox = new THREE.Box3().setFromObject(legMesh);
+      this.colliders.push({ box: legBox, mesh: legMesh, type: 'dining_table_leg' });
+    });
+
+    // Crawl volume under the table
     this.crawlables.push({
       box: new THREE.Box3(
-        new THREE.Vector3(tableBounds.min.x + 0.1, 0, tableBounds.min.z + 0.1),
-        new THREE.Vector3(tableBounds.max.x - 0.1, height - thickness / 2, tableBounds.max.z - 0.1)
+        new THREE.Vector3(x - width / 2, 0, z - length / 2),
+        new THREE.Vector3(x + width / 2, height - thickness / 2, z + length / 2)
       ),
       clearance: height - thickness / 2
     });
@@ -331,11 +338,12 @@ export class Apartment {
     const group = new THREE.Group();
     const mat = new THREE.MeshStandardMaterial({ color: 0x263238, roughness: 0.3 });
 
-    const width = 1.8;
-    const length = 2.4;
+    const width = 1.6;
+    const length = 2.2;
     const height = 0.55;
+    const thickness = 0.08;
 
-    const topGeo = new THREE.BoxGeometry(width, 0.08, length);
+    const topGeo = new THREE.BoxGeometry(width, thickness, length);
     const top = new THREE.Mesh(topGeo, mat.clone());
     top.position.set(0, height, 0);
     top.castShadow = true;
@@ -349,10 +357,12 @@ export class Apartment {
       [-width / 2 + 0.1, height / 2, length / 2 - 0.1],
       [width / 2 - 0.1, height / 2, length / 2 - 0.1]
     ];
+    const legMeshes = [];
     legOffsets.forEach((pos, idx) => {
       const leg = new THREE.Mesh(legGeo, mat.clone());
       leg.position.set(...pos);
       group.add(leg);
+      legMeshes.push(leg);
       this.registerThermalObject(leg, `${id}_leg_${idx}`, id);
     });
 
@@ -364,20 +374,20 @@ export class Apartment {
     this.registerThermalObject(top, `${id}_top`, id);
 
     const topBox = new THREE.Box3().setFromObject(top);
-    this.jumpables.push({ box: topBox, topY: height + 0.04, mesh: top });
+    this.jumpables.push({ box: topBox, topY: height + thickness / 2, mesh: top });
+    this.colliders.push({ box: topBox, mesh: top, type: 'coffee_table_top' });
 
-    // Full coffee table solid collider
-    const tableBounds = new THREE.Box3().setFromObject(group);
-    tableBounds.min.y = 0;
-    tableBounds.max.y = height + 0.04;
-    this.colliders.push({ box: tableBounds, mesh: top, type: 'coffee_table' });
+    legMeshes.forEach(legMesh => {
+      const legBox = new THREE.Box3().setFromObject(legMesh);
+      this.colliders.push({ box: legBox, mesh: legMesh, type: 'coffee_table_leg' });
+    });
 
     this.crawlables.push({
       box: new THREE.Box3(
-        new THREE.Vector3(tableBounds.min.x + 0.05, 0, tableBounds.min.z + 0.05),
-        new THREE.Vector3(tableBounds.max.x - 0.05, height - 0.04, tableBounds.max.z - 0.05)
+        new THREE.Vector3(x - width / 2, 0, z - length / 2),
+        new THREE.Vector3(x + width / 2, height - thickness / 2, z + length / 2)
       ),
-      clearance: height - 0.04
+      clearance: height - thickness / 2
     });
   }
 

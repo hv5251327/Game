@@ -69,7 +69,8 @@ export class Physics {
           let canCrawlUnder = false;
           if (isCrawling || isFlatFlop) {
             for (const crawlable of this.apartment.crawlables) {
-              if (crawlable.box.containsPoint(new THREE.Vector3(finalX, 0.1, finalZ))) {
+              const expCrawl = crawlable.box.clone().expandByScalar(charRadius);
+              if (expCrawl.containsPoint(new THREE.Vector3(finalX, 0.1, finalZ))) {
                 if (charHeight <= crawlable.clearance) {
                   canCrawlUnder = true;
                   break;
