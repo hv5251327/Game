@@ -382,11 +382,13 @@ class HittlersGame {
 
     document.getElementById('btn-start-match')?.addEventListener('click', () => {
       this.audio.ensureContext();
+      this.domHostControls?.classList.add('hidden');
       this.network.startGame(false);
     });
 
     document.getElementById('btn-start-as-hunter')?.addEventListener('click', () => {
       this.audio.ensureContext();
+      this.domHostControls?.classList.add('hidden');
       this.network.startGame(true);
     });
 
@@ -432,20 +434,6 @@ class HittlersGame {
         <span class="lb-stat">🔨 Sweeps: ${s.hitter_clean_sweeps || 0}</span>
       </div>
     `).join('');
-  }
-
-  bindTouchButton(id, callback) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      this.audio.ensureContext();
-      callback();
-    }, { passive: false });
-    el.addEventListener('click', () => {
-      this.audio.ensureContext();
-      callback();
-    });
   }
 
   triggerLocalBatSwing() {
@@ -529,11 +517,15 @@ class HittlersGame {
   handleCountdownStarted(data) {
     this.audio.playBuzzer();
     this.domEndOverlay.classList.add('hidden');
+    this.domHostControls?.classList.add('hidden');
+    this.domWaitingForHost?.classList.add('hidden');
     const hCount = data.hunterCount || (data.hitterIds ? data.hitterIds.length : 1);
     this.showHitFeedNotice(`🚨 Selection: ${data.hitterName || 'The Hunters'} are HUNTING (${hCount} Hunter${hCount > 1 ? 's' : ''})! Round starting in 3s!`);
   }
 
   handleRoundStarted(data) {
+    this.domHostControls?.classList.add('hidden');
+    this.domWaitingForHost?.classList.add('hidden');
     const hCount = data.hunterCount || (data.hitterIds ? data.hitterIds.length : 1);
     this.showHitFeedNotice(`⚡ ROUND STARTED! SURVIVE 120 SECONDS (${hCount} Hunter${hCount > 1 ? 's' : ''})!`);
   }
@@ -634,21 +626,23 @@ class HittlersGame {
       this.domHudRoomCode.textContent = this.network.roomCode;
     }
 
-    // Host UI Controls Synchronization
+    // Host UI Controls Synchronization (All start options disappear once game starts)
     const isHost = (data.hostId === this.network.myId);
+    const isLobbyState = (data.state === 'LOBBY' || data.state === 'ROUND_END');
+
     if (this.domHostControls) {
-      if (isHost) {
+      if (isHost && isLobbyState) {
         this.domHostControls.classList.remove('hidden');
-        if (this.domWaitingForHost) this.domWaitingForHost.classList.add('hidden');
       } else {
         this.domHostControls.classList.add('hidden');
-        if (this.domWaitingForHost) {
-          if (data.state === 'LOBBY' || data.state === 'ROUND_END') {
-            this.domWaitingForHost.classList.remove('hidden');
-          } else {
-            this.domWaitingForHost.classList.add('hidden');
-          }
-        }
+      }
+    }
+
+    if (this.domWaitingForHost) {
+      if (!isHost && isLobbyState) {
+        this.domWaitingForHost.classList.remove('hidden');
+      } else {
+        this.domWaitingForHost.classList.add('hidden');
       }
     }
 
