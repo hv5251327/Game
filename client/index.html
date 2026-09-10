@@ -6,7 +6,7 @@
   <title>HITTLERS - Slapstick Ragdoll Party Horror 3D</title>
   <link rel="stylesheet" href="src/styles.css">
 
-  <!-- Local Import Map for Three.js (100% Offline & Instant) -->
+  <!-- Local and CDN Import Map for Three.js -->
   <script type="importmap">
     {
       "imports": {
@@ -28,7 +28,7 @@
   <!-- WebGL 3D Canvas -->
   <div id="canvas-container"></div>
 
-  <!-- 1. Clean Lobby Options Screen -->
+  <!-- 1. Lobby Options Screen -->
   <div id="lobby-screen">
     <div class="lobby-card">
       <h1 class="game-title">HITTLERS</h1>
@@ -47,8 +47,8 @@
       <div class="form-group">
         <label>Avatar Color</label>
         <div class="color-picker-row">
-          <input type="color" id="input-color" class="color-input" value="#f0f0f0">
-          <span style="font-size: 0.85rem; color: #a4b0be;">Pick your avatar color</span>
+          <input type="color" id="input-color" class="color-input" value="#f4f2ee">
+          <span style="font-size: 0.85rem; color: #a4b0be;">Pick your plasticine skin</span>
         </div>
       </div>
 
@@ -66,7 +66,7 @@
   <div id="leaderboard-modal" class="modal-overlay hidden">
     <div class="modal-card">
       <h2 class="modal-title">🏆 GLOBAL LEADERBOARD</h2>
-      <p style="color:#a4b0be; font-size:0.85rem; margin-bottom:16px;">Powered by Supabase Live Database</p>
+      <p style="color:#a4b0be; font-size:0.85rem; margin-bottom:16px;">Live Match Rankings</p>
       <div id="leaderboard-list" class="leaderboard-list">
         <div style="color:#aaa; padding:20px;">Loading scores...</div>
       </div>
@@ -76,7 +76,6 @@
 
   <!-- 2. In-Game HUD -->
   <div id="hud" class="hidden">
-    <!-- Top Bar: Timer, Role, Start Match -->
     <div class="hud-top-bar">
       <div class="timer-box">
         <span id="match-timer" class="timer-text">120s</span>
@@ -86,7 +85,6 @@
       <button id="btn-start-match" class="btn-primary" style="padding: 6px 18px; font-size: 0.85rem; margin-top: 4px; pointer-events: auto; width: auto;">⚡ Start Match</button>
     </div>
 
-    <!-- Health Bar (For Runners) -->
     <div id="hp-bar" class="hp-container">
       <div class="hp-label">
         <span>RUNNER HEALTH</span>
@@ -97,26 +95,22 @@
       </div>
     </div>
 
-    <!-- Controls Legend -->
     <div class="controls-legend">
-      <div><kbd>W A S D</kbd> Move (Uniform 4.5 m/s)</div>
+      <div><kbd>W A S D</kbd> Move (4.5 m/s)</div>
       <div><kbd>X</kbd> or <kbd>Space</kbd> / <kbd>Click</kbd> <strong>Swing Bat</strong></div>
-      <div><kbd>F</kbd> Sleep / Flat Flop (Slide under beds)</div>
+      <div><kbd>F</kbd> Sleep / Flat Flop</div>
       <div><kbd>Ctrl / Shift</kbd> Crawl / Crouch</div>
-      <div><kbd>C</kbd> Sit &nbsp;|&nbsp; <kbd>E</kbd> Grab</div>
+      <div><kbd>C</kbd> Sit  |  <kbd>E</kbd> Grab</div>
       <div><kbd>Q / Z</kbd> Spine Pitch / Duck</div>
       <div><kbd>V</kbd> Toggle 1st / 3rd Person View</div>
-      <div><kbd>Click</kbd> Mouse Aim Look</div>
+      <div><kbd>Click</kbd> Mouse Look</div>
     </div>
 
-    <!-- Live Hit Feed -->
     <div id="hit-feed"></div>
-
-    <!-- Panic Flail Alert (when hit by bat) -->
     <div id="flail-alert" class="hidden">😱 PANIC SPRINT! FLAPPING ARMS!</div>
   </div>
 
-  <!-- 3. Peep Darkness Viewport Filter (Active when role is HITTER) -->
+  <!-- 3. Peep Darkness Viewport Filter -->
   <div id="peep-darkness-mask" class="hidden">
     <div class="peep-blackout">
       <div class="peep-title">👁️ PEEP DARKNESS (85% BLACKOUT)</div>
@@ -145,11 +139,10 @@
       <button id="btn-flop" class="touch-btn">FLOP</button>
       <button id="btn-sit" class="touch-btn">SIT</button>
       <button id="btn-view" class="touch-btn">1P/3P</button>
-      <button id="btn-swing" class="touch-btn btn-action">🔨 SWING BAT (X)</button>
+      <button id="btn-swing" class="touch-btn btn-action">🔨 SWING BAT</button>
     </div>
   </div>
 
-  <!-- Game Scripts -->
   <script type="module" src="src/main.js"></script>
 </body>
 </html>

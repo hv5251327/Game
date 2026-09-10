@@ -11,35 +11,30 @@ const ROOT_DIR = path.resolve(__dirname, '..');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST']
-  }
+  cors: { origin: '*', methods: ['GET', 'POST'] }
 });
 
 const PORT = process.env.PORT || 3000;
 
-// Serve static client files
 app.use(express.static(path.join(ROOT_DIR, 'client')));
 app.use('/node_modules', express.static(path.join(ROOT_DIR, 'node_modules')));
 
-// Game Constants
+// Game Balance Constants
 const MAX_PLAYERS = 10;
-const ROUND_DURATION = 120; // 120 seconds
-const COUNTDOWN_DURATION = 3; // 3 seconds
-const ROUND_END_DURATION = 6; // 6 seconds
+const ROUND_DURATION = 120;
+const COUNTDOWN_DURATION = 3;
+const ROUND_END_DURATION = 6;
 const BAT_DAMAGE = 25;
 const BAT_RANGE = 2.6;
 const BASE_SPEED = 4.5;
 const FLAIL_DURATION = 3.0;
 
-// Room Storage
 const rooms = new Map();
 
 class GameRoom {
   constructor(roomCode) {
     this.code = roomCode;
-    this.players = new Map(); // id -> player
+    this.players = new Map();
     this.hitterHistory = new Set();
     this.currentHitterId = null;
     this.state = 'LOBBY';
@@ -48,11 +43,9 @@ class GameRoom {
     this.tickInterval = null;
     this.lastTick = Date.now();
     this.bots = new Map();
-    this.botCount = 0;
     this.botNames = ['Fluffy', 'Wobbles', 'Noodle', 'Jelly', 'Butter', 'Dizzy', 'Bonkers', 'Pancake', 'Spud'];
-    this.botColors = ['#f5f5f5', '#ff4757', '#2ed573', '#ffa502', '#1e90ff', '#9b59b6', '#00d2d3', '#ff6b81', '#70a1ff'];
+    this.botColors = ['#f4f2ee', '#ff4757', '#2ed573', '#ffa502', '#1e90ff', '#9b59b6', '#00d2d3', '#ff6b81', '#70a1ff'];
 
-    // Sound location tracking for blind AI Hitter
     this.lastSoundLocation = null;
     this.soundInvestigateTimer = 0;
 
@@ -69,8 +62,8 @@ class GameRoom {
 
     const player = {
       id: socketId,
-      name: name || (isBot ? `Bot-${Math.floor(Math.random()*1000)}` : `Player ${this.players.size + 1}`),
-      color: color || '#f5f5f5',
+      name: name || (isBot ? `Bot-${Math.floor(Math.random() * 1000)}` : `Player ${this.players.size + 1}`),
+      color: color || '#f4f2ee',
       role: 'RUNNER',
       hp: 100,
       maxHp: 100,
@@ -82,13 +75,12 @@ class GameRoom {
       isSitting: false,
       isGrabbing: false,
       spinePitch: 0,
-      position: { x: spawnX, y: 0.82, z: spawnZ },
+      position: { x: spawnX, y: 0, z: spawnZ },
       rotation: { y: Math.random() * Math.PI * 2 },
       velocity: { x: 0, y: 0, z: 0 },
       isBot: isBot,
       lastSwingTime: 0,
       score: 0,
-      // AI Bot wander behavior variables
       botWanderAngle: Math.random() * Math.PI * 2,
       botTurnTimer: Math.random() * 2.0,
       botSwingCooldown: Math.random() * 2.0
@@ -106,7 +98,7 @@ class GameRoom {
     this.hitterHistory.delete(socketId);
 
     if (this.currentHitterId === socketId && (this.state === 'HUNTING' || this.state === 'COUNTDOWN')) {
-      this.endRound('RUNNERS', 'Hitter disconnected! Runners win!');
+      this.endRound('RUNNERS', 'The Hitter disconnected! Runners win!');
     } else if (this.players.size === 0) {
       this.stop();
       rooms.delete(this.code);
@@ -126,14 +118,12 @@ class GameRoom {
 
     let botIndex = currentBots.length;
     while (this.bots.size < count && this.players.size < MAX_PLAYERS) {
-      const botId = `bot_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+      const botId = `bot_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       const name = this.botNames[botIndex % this.botNames.length];
       const color = this.botColors[botIndex % this.botColors.length];
       this.addPlayer(botId, name, color, true);
       botIndex++;
     }
-
-    this.botCount = this.bots.size;
   }
 
   selectNextHitter(forcedPlayerId = null) {
@@ -141,17 +131,14 @@ class GameRoom {
     if (playerList.length === 0) return null;
 
     let chosen = null;
-
     if (forcedPlayerId && this.players.has(forcedPlayerId)) {
       chosen = this.players.get(forcedPlayerId);
     } else {
       let candidates = playerList.filter(p => !this.hitterHistory.has(p.id));
-
       if (candidates.length === 0) {
         this.hitterHistory.clear();
         candidates = playerList;
       }
-
       chosen = candidates[Math.floor(Math.random() * candidates.length)];
     }
 
@@ -186,12 +173,8 @@ class GameRoom {
     const count = playerList.length;
     playerList.forEach((player, idx) => {
       const angle = (idx / count) * Math.PI * 2;
-      const rad = 3.0;
-      player.position = {
-        x: Math.cos(angle) * rad,
-        y: 0.82,
-        z: Math.sin(angle) * rad
-      };
+      const rad = 3.2;
+      player.position = { x: Math.cos(angle) * rad, y: 0, z: Math.sin(angle) * rad };
       player.rotation.y = angle + Math.PI;
     });
 
@@ -207,7 +190,6 @@ class GameRoom {
   startRound() {
     this.state = 'HUNTING';
     this.timer = ROUND_DURATION;
-
     io.to(this.code).emit('round_started', {
       hitterId: this.currentHitterId,
       duration: ROUND_DURATION
@@ -232,7 +214,7 @@ class GameRoom {
     if (!hitter || hitter.role !== 'HITTER' || !hitter.isAlive) return;
 
     const now = Date.now();
-    if (now - hitter.lastSwingTime < 750) return;
+    if (now - hitter.lastSwingTime < 700) return;
     hitter.lastSwingTime = now;
 
     io.to(this.code).emit('player_swung_bat', { hitterId });
@@ -245,25 +227,21 @@ class GameRoom {
 
       const dx = runner.position.x - hitter.position.x;
       const dz = runner.position.z - hitter.position.z;
-      const dist = Math.sqrt(dx * dx + dz * dz);
+      const dist = Math.hypot(dx, dz);
 
       if (dist <= BAT_RANGE) {
         const dot = (dx * swingDirX + dz * swingDirZ) / (dist || 1);
-        if (dot > 0.1) {
-          // HIT!
+        if (dot > 0.05) {
           runner.hp = Math.max(0, runner.hp - BAT_DAMAGE);
           runner.isFlailing = true;
           runner.flailTimer = FLAIL_DURATION;
 
-          // Record sound position of the scream so blind Hitter AI investigates
           this.lastSoundLocation = { x: runner.position.x, z: runner.position.z };
           this.soundInvestigateTimer = 3.5;
 
-          const knockbackMag = 6.5;
-          const kx = (dx / (dist || 1)) * knockbackMag;
-          const kz = (dz / (dist || 1)) * knockbackMag;
-          runner.velocity.x += kx;
-          runner.velocity.z += kz;
+          const knockback = 7.0;
+          runner.velocity.x += (dx / (dist || 1)) * knockback;
+          runner.velocity.z += (dz / (dist || 1)) * knockback;
 
           if (runner.hp <= 0) {
             runner.isAlive = false;
@@ -276,17 +254,12 @@ class GameRoom {
             hitterId: hitter.id,
             remainingHp: runner.hp,
             damage: BAT_DAMAGE,
-            isKnockedOut: !runner.isAlive,
-            impactPoint: {
-              x: runner.position.x,
-              y: runner.position.y + 0.5,
-              z: runner.position.z
-            }
+            isKnockedOut: !runner.isAlive
           });
 
-          const livingRunners = Array.from(this.players.values()).filter(p => p.role === 'RUNNER' && p.isAlive);
-          if (livingRunners.length === 0) {
-            this.endRound('HITTER', 'All runners knocked flat out! Clean sweep!');
+          const aliveRunners = Array.from(this.players.values()).filter(p => p.role === 'RUNNER' && p.isAlive);
+          if (aliveRunners.length === 0) {
+            this.endRound('HITTER', 'All runners knocked out! Clean sweep!');
           }
         }
       }
@@ -299,7 +272,6 @@ class GameRoom {
     const bounds = 9.5;
     const hitter = this.players.get(this.currentHitterId);
 
-    // Decay sound investigate timer
     if (this.soundInvestigateTimer > 0) {
       this.soundInvestigateTimer -= delta;
       if (this.soundInvestigateTimer <= 0) this.lastSoundLocation = null;
@@ -313,7 +285,7 @@ class GameRoom {
         if (bot.flailTimer <= 0) bot.isFlailing = false;
       }
 
-      // --- 1. AI HITTER BEHAVIOR (BLIND, NO RADAR VISION) ---
+      // Blind AI Hitter: Investigates sounds or wanders blindly
       if (bot.role === 'HITTER' && this.state === 'HUNTING') {
         bot.botTurnTimer = (bot.botTurnTimer || 0) - delta;
         bot.botSwingCooldown = (bot.botSwingCooldown || 0) - delta;
@@ -321,35 +293,27 @@ class GameRoom {
         let targetAngle = bot.rotation.y;
 
         if (this.lastSoundLocation && this.soundInvestigateTimer > 0) {
-          // Heard a scream! Steer roughly toward sound direction with clumsy wobble
           const dx = this.lastSoundLocation.x - bot.position.x;
           const dz = this.lastSoundLocation.z - bot.position.z;
-          const soundAngle = Math.atan2(-dx, -dz);
-          targetAngle = soundAngle + (Math.sin(Date.now() * 0.003) * 0.4); // clumsy stumble
+          targetAngle = Math.atan2(-dx, -dz) + Math.sin(Date.now() * 0.003) * 0.3;
         } else {
-          // Completely blind: wanders and blunders around furniture
           if (bot.botTurnTimer <= 0) {
-            bot.botTurnTimer = 1.5 + Math.random() * 2.5;
-            bot.botWanderAngle = bot.rotation.y + (Math.random() - 0.5) * 2.2;
+            bot.botTurnTimer = 1.8 + Math.random() * 2.0;
+            bot.botWanderAngle = bot.rotation.y + (Math.random() - 0.5) * 2.5;
           }
           targetAngle = bot.botWanderAngle;
         }
 
         bot.rotation.y = targetAngle;
-
-        // Walk forward blind
         const speed = BASE_SPEED * 0.85;
         bot.position.x += -Math.sin(bot.rotation.y) * speed * delta;
         bot.position.z += -Math.cos(bot.rotation.y) * speed * delta;
 
-        // Occasional blind slapstick stick swing
         if (bot.botSwingCooldown <= 0) {
-          bot.botSwingCooldown = 1.2 + Math.random() * 2.0;
+          bot.botSwingCooldown = 1.1 + Math.random() * 1.5;
           this.handleBatSwing(botId);
         }
-      }
-      // --- 2. AI RUNNER BEHAVIOR ---
-      else if (bot.role === 'RUNNER') {
+      } else if (bot.role === 'RUNNER') {
         let vx = 0;
         let vz = 0;
 
@@ -359,14 +323,11 @@ class GameRoom {
           const dist = Math.hypot(dx, dz);
 
           if (dist < 6.5) {
-            // Flee away from Hitter!
             vx = (dx / (dist || 1)) * BASE_SPEED;
             vz = (dz / (dist || 1)) * BASE_SPEED;
             bot.rotation.y = Math.atan2(vx, vz);
           } else {
-            if (Math.random() < 0.03) {
-              bot.rotation.y += (Math.random() - 0.5) * 1.5;
-            }
+            if (Math.random() < 0.03) bot.rotation.y += (Math.random() - 0.5) * 1.5;
             vx = -Math.sin(bot.rotation.y) * (BASE_SPEED * 0.4);
             vz = -Math.cos(bot.rotation.y) * (BASE_SPEED * 0.4);
           }
@@ -378,7 +339,6 @@ class GameRoom {
         if (Math.random() < 0.005) bot.isCrawling = !bot.isCrawling;
       }
 
-      // Keep within room
       if (Math.abs(bot.position.x) > bounds) {
         bot.position.x = Math.sign(bot.position.x) * bounds;
         bot.botWanderAngle = Math.random() * Math.PI * 2;
@@ -393,19 +353,13 @@ class GameRoom {
   update(delta) {
     if (this.state === 'COUNTDOWN') {
       this.timer -= delta;
-      if (this.timer <= 0) {
-        this.startRound();
-      }
+      if (this.timer <= 0) this.startRound();
     } else if (this.state === 'HUNTING') {
       this.timer -= delta;
-      if (this.timer <= 0) {
-        this.endRound('RUNNERS', 'Time expired! Runners survived the Hitter!');
-      }
+      if (this.timer <= 0) this.endRound('RUNNERS', 'Time expired! Runners survived the Hitter!');
     } else if (this.state === 'ROUND_END') {
       this.timer -= delta;
-      if (this.timer <= 0) {
-        this.startCountdown();
-      }
+      if (this.timer <= 0) this.startCountdown();
     }
 
     this.updateBots(delta);
@@ -466,7 +420,6 @@ class GameRoom {
   }
 }
 
-// Socket.io handlers
 io.on('connection', (socket) => {
   let currentRoomCode = null;
 
@@ -506,23 +459,6 @@ io.on('connection', (socket) => {
     const room = rooms.get(currentRoomCode);
     if (room) {
       room.startCountdown(forceHitter ? socket.id : null);
-    }
-  });
-
-  socket.on('switch_role', ({ role }) => {
-    if (!currentRoomCode) return;
-    const room = rooms.get(currentRoomCode);
-    if (!room) return;
-
-    const player = room.players.get(socket.id);
-    if (player) {
-      player.role = role;
-      if (role === 'HITTER') {
-        room.currentHitterId = socket.id;
-        for (const [id, p] of room.players.entries()) {
-          if (id !== socket.id) p.role = 'RUNNER';
-        }
-      }
     }
   });
 
