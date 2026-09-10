@@ -1,0 +1,27 @@
+{
+  "name": "hittlers-ragdoll-game",
+  "version": "1.0.0",
+  "description": "HITTLERS - Slapstick Ragdoll Party Horror 3D Browser Game",
+  "main": "server/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node server/index.js"
+  },
+  "keywords": [
+    "threejs",
+    "ragdoll",
+    "slapstick",
+    "multiplayer",
+    "socketio",
+    "webgl",
+    "game"
+  ],
+  "author": "Antigravity & Developer",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5",
+    "three": "^0.165.0"
+  }
+}

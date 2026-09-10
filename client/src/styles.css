@@ -1,0 +1,493 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  user-select: none;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+body, html {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #0b0c10;
+  color: #fff;
+}
+
+#canvas-container {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+}
+
+/* ==========================================================================
+   LOBBY SCREEN
+   ========================================================================== */
+#lobby-screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 100;
+  background: radial-gradient(circle at center, rgba(20, 24, 38, 0.95) 0%, rgba(10, 12, 18, 0.98) 100%);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  backdrop-filter: blur(10px);
+}
+
+.lobby-card {
+  background: rgba(30, 36, 52, 0.85);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 35px 45px;
+  max-width: 520px;
+  width: 90%;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(46, 213, 115, 0.15);
+  text-align: center;
+}
+
+.game-title {
+  font-size: 3rem;
+  font-weight: 900;
+  letter-spacing: 4px;
+  background: linear-gradient(135deg, #ff4757, #ffa502, #2ed573);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.game-subtitle {
+  font-size: 1rem;
+  color: #a4b0be;
+  margin-bottom: 24px;
+  letter-spacing: 1px;
+}
+
+.form-group {
+  margin-bottom: 16px;
+  text-align: left;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #ced6e0;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.form-input {
+  width: 100%;
+  padding: 12px 16px;
+  background: rgba(15, 18, 28, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  color: #fff;
+  font-size: 1rem;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.form-input:focus {
+  border-color: #2ed573;
+  box-shadow: 0 0 10px rgba(46, 213, 115, 0.3);
+}
+
+.color-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.color-input {
+  width: 50px;
+  height: 40px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  background: transparent;
+}
+
+.btn-primary {
+  width: 100%;
+  padding: 14px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #2ed573, #1e90ff);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  margin-top: 12px;
+  transition: transform 0.15s, box-shadow 0.15s;
+  box-shadow: 0 8px 20px rgba(46, 213, 115, 0.3);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 25px rgba(46, 213, 115, 0.45);
+}
+
+.btn-solo {
+  background: linear-gradient(135deg, #ff4757, #ffa502);
+  box-shadow: 0 8px 20px rgba(255, 71, 87, 0.3);
+  margin-top: 10px;
+}
+
+.btn-solo:hover {
+  box-shadow: 0 12px 25px rgba(255, 71, 87, 0.45);
+}
+
+/* ==========================================================================
+   IN-GAME HUD
+   ========================================================================== */
+#hud {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.hud-top-bar {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.timer-box {
+  background: rgba(15, 18, 28, 0.85);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 16px;
+  padding: 8px 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.timer-text {
+  font-size: 2.2rem;
+  font-weight: 900;
+  color: #ffa502;
+  letter-spacing: 2px;
+}
+
+.role-badge {
+  padding: 6px 18px;
+  border-radius: 20px;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.role-badge.runner {
+  background: #2ed573;
+  color: #111;
+}
+
+.role-badge.hitter {
+  background: #ff4757;
+  color: #fff;
+  box-shadow: 0 0 15px rgba(255, 71, 87, 0.6);
+}
+
+.role-desc {
+  font-size: 0.85rem;
+  color: #ced6e0;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 4px 12px;
+  border-radius: 8px;
+  max-width: 480px;
+  text-align: center;
+}
+
+/* Health Bar */
+.hp-container {
+  position: absolute;
+  bottom: 30px;
+  left: 30px;
+  background: rgba(15, 18, 28, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 12px 18px;
+  border-radius: 14px;
+  width: 240px;
+}
+
+.hp-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #a4b0be;
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.hp-bar-outer {
+  width: 100%;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.hp-bar-inner {
+  height: 100%;
+  width: 100%;
+  background: #2ed573;
+  transition: width 0.2s ease, background 0.3s;
+}
+
+/* Controls Guide Legend */
+.controls-legend {
+  position: absolute;
+  bottom: 30px;
+  right: 30px;
+  background: rgba(15, 18, 28, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 14px 18px;
+  border-radius: 14px;
+  font-size: 0.8rem;
+  color: #ced6e0;
+  line-height: 1.6;
+}
+
+.controls-legend kbd {
+  background: rgba(255, 255, 255, 0.15);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: bold;
+  color: #ffa502;
+}
+
+/* Hit Feed */
+#hit-feed {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.hit-feed-item {
+  background: rgba(15, 18, 28, 0.9);
+  border-left: 4px solid #ffa502;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #fff;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from { transform: translateX(50px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* Panic Flail Alert */
+#flail-alert {
+  position: absolute;
+  top: 35%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(255, 71, 87, 0.9);
+  color: #fff;
+  padding: 14px 28px;
+  border-radius: 30px;
+  font-size: 1.3rem;
+  font-weight: 900;
+  letter-spacing: 1px;
+  box-shadow: 0 0 30px rgba(255, 71, 87, 0.8);
+  animation: pulseFlail 0.5s infinite alternate;
+}
+
+@keyframes pulseFlail {
+  from { transform: translate(-50%, -50%) scale(1); }
+  to { transform: translate(-50%, -50%) scale(1.1); }
+}
+
+/* ==========================================================================
+   PEEP DARKNESS VIEWPORT (85% Top/Middle Blackout for The Hitter)
+   ========================================================================== */
+#peep-darkness-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 5;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.peep-blackout {
+  width: 100%;
+  height: 85%; /* 85% Pitch Black */
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: #00ffff;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-shadow: 0 0 10px #00ffff;
+}
+
+.peep-blackout .peep-hint {
+  font-size: 1.1rem;
+  margin-top: 10px;
+  opacity: 0.8;
+}
+
+.peep-strip-boundary {
+  width: 100%;
+  height: 3px;
+  background: linear-gradient(90deg, #00ffff, #ff7700, #00ffff);
+  box-shadow: 0 0 15px #00ffff;
+}
+
+.peep-visible-strip {
+  width: 100%;
+  height: 15%; /* Only bottom 15% strip visible */
+  background: transparent;
+}
+
+/* ==========================================================================
+   ROUND END OVERLAY
+   ========================================================================== */
+#end-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 150;
+  background: rgba(10, 12, 18, 0.88);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  backdrop-filter: blur(8px);
+}
+
+.end-card {
+  text-align: center;
+  background: rgba(30, 36, 52, 0.95);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+  padding: 40px 60px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+}
+
+.end-title {
+  font-size: 2.8rem;
+  font-weight: 900;
+  margin-bottom: 12px;
+}
+
+.end-subtitle {
+  font-size: 1.1rem;
+  color: #ced6e0;
+  margin-bottom: 24px;
+}
+
+/* ==========================================================================
+   TOUCH CONTROLS (Mobile Devices)
+   ========================================================================== */
+#touch-controls {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 20;
+  pointer-events: none;
+  display: none;
+}
+
+@media (max-width: 900px), (pointer: coarse) {
+  #touch-controls {
+    display: block;
+  }
+  .controls-legend {
+    display: none;
+  }
+}
+
+#touch-joystick {
+  position: absolute;
+  bottom: 40px;
+  left: 40px;
+  width: 120px;
+  height: 120px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  pointer-events: auto;
+}
+
+#touch-knob {
+  width: 50px;
+  height: 50px;
+  background: rgba(46, 213, 115, 0.8);
+  border-radius: 50%;
+  box-shadow: 0 0 15px rgba(46, 213, 115, 0.6);
+}
+
+.touch-buttons-group {
+  position: absolute;
+  bottom: 40px;
+  right: 40px;
+  display: grid;
+  grid-template-columns: repeat(3, 60px);
+  gap: 12px;
+  pointer-events: auto;
+}
+
+.touch-btn {
+  width: 60px;
+  height: 60px;
+  background: rgba(30, 36, 52, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 50%;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 800;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+}
+
+.touch-btn.btn-action {
+  background: #ff4757;
+  grid-column: span 2;
+  border-radius: 30px;
+  width: 100%;
+}
+
+.hidden {
+  display: none !important;
+}

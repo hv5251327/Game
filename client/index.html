@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>HITTLERS - Slapstick Ragdoll Party Horror 3D</title>
+  <link rel="stylesheet" href="src/styles.css">
+
+  <!-- Import Map for ES Modules (Three.js) -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.165.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.165.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <!-- Socket.io Client -->
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+
+  <!-- WebGL 3D Canvas -->
+  <div id="canvas-container"></div>
+
+  <!-- 1. Lobby & Matchmaking Screen -->
+  <div id="lobby-screen">
+    <div class="lobby-card">
+      <h1 class="game-title">HITTLERS</h1>
+      <p class="game-subtitle">Slapstick Ragdoll Party Horror (Max 10 Players)</p>
+
+      <div class="form-group">
+        <label>Your Nickname</label>
+        <input type="text" id="input-nickname" class="form-input" placeholder="e.g. SlapstickHero" value="RagdollRunner">
+      </div>
+
+      <div class="form-group">
+        <label>Room Code</label>
+        <input type="text" id="input-room-code" class="form-input" placeholder="e.g. ROOM-101" value="LOBBY-1">
+      </div>
+
+      <div class="form-group">
+        <label>Avatar Color</label>
+        <div class="color-picker-row">
+          <input type="color" id="input-color" class="color-input" value="#2ed573">
+          <span style="font-size: 0.85rem; color: #a4b0be;">Pick your rubbery skin color</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>AI Slapstick Bots (0 - 9)</label>
+        <input type="number" id="input-bots" class="form-input" min="0" max="9" value="0">
+      </div>
+
+      <button id="btn-join-room" class="btn-primary">🎮 JOIN / HOST ROOM</button>
+      <button id="btn-solo-test" class="btn-primary btn-solo">⚡ SOLO TEST (9 AI BOTS)</button>
+    </div>
+  </div>
+
+  <!-- 2. In-Game HUD -->
+  <div id="hud" class="hidden">
+    <!-- Top Bar: Timer, Role, Instructions -->
+    <div class="hud-top-bar">
+      <div class="timer-box">
+        <span id="match-timer" class="timer-text">120s</span>
+      </div>
+      <div id="role-badge" class="role-badge runner">🏃 RUNNER</div>
+      <div id="role-desc" class="role-desc">Survive 120s! Crawl under tables, jump on beds, toggle 1st/3rd view with V!</div>
+      <button id="btn-start-match" class="btn-primary" style="padding: 6px 16px; font-size: 0.85rem; margin-top: 4px; pointer-events: auto;">Start Round</button>
+    </div>
+
+    <!-- Health Bar (For Runners) -->
+    <div id="hp-bar" class="hp-container">
+      <div class="hp-label">
+        <span>RUNNER HEALTH</span>
+        <span id="hp-text">100 / 100 HP</span>
+      </div>
+      <div class="hp-bar-outer">
+        <div id="hp-fill" class="hp-bar-inner"></div>
+      </div>
+    </div>
+
+    <!-- Controls Legend -->
+    <div class="controls-legend">
+      <div><kbd>W A S D</kbd> Move (Uniform 4.5 m/s)</div>
+      <div><kbd>Space</kbd> Jump / Swing Bat</div>
+      <div><kbd>F</kbd> Sleep / Flat Flop (Slide under beds)</div>
+      <div><kbd>Ctrl / Shift</kbd> Crawl / Crouch</div>
+      <div><kbd>C</kbd> Sit &nbsp;|&nbsp; <kbd>E</kbd> Grab</div>
+      <div><kbd>Q / Z</kbd> Spine Pitch / Duck</div>
+      <div><kbd>V</kbd> Toggle 1st / 3rd Person View</div>
+      <div><kbd>Click</kbd> Lock Mouse Look</div>
+    </div>
+
+    <!-- Live Hit Feed -->
+    <div id="hit-feed"></div>
+
+    <!-- Panic Flail Alert (when hit by bat) -->
+    <div id="flail-alert" class="hidden">😱 PANIC SPRINT! FLAPPING ARMS!</div>
+  </div>
+
+  <!-- 3. Peep Darkness Viewport Filter (Active when role is HITTER) -->
+  <div id="peep-darkness-mask" class="hidden">
+    <div class="peep-blackout">
+      <div>👁️ PEEP DARKNESS (85% BLACKOUT)</div>
+      <div class="peep-hint">Bump into obstacles or swing bat to trigger Thermal Echoes!</div>
+    </div>
+    <div class="peep-strip-boundary"></div>
+    <div class="peep-visible-strip"></div>
+  </div>
+
+  <!-- 4. Round End Overlay -->
+  <div id="end-overlay" class="hidden">
+    <div class="end-card">
+      <h2 id="end-title" class="end-title">🎉 RUNNERS SURVIVED!</h2>
+      <p id="end-subtitle" class="end-subtitle">The 120s timer expired! Next round starting soon...</p>
+    </div>
+  </div>
+
+  <!-- 5. Mobile Virtual Touch Controls -->
+  <div id="touch-controls">
+    <div id="touch-joystick">
+      <div id="touch-knob"></div>
+    </div>
+    <div class="touch-buttons-group">
+      <button id="btn-jump" class="touch-btn">JUMP</button>
+      <button id="btn-crawl" class="touch-btn">CRAWL</button>
+      <button id="btn-flop" class="touch-btn">FLOP</button>
+      <button id="btn-sit" class="touch-btn">SIT</button>
+      <button id="btn-view" class="touch-btn">1P/3P</button>
+      <button id="btn-swing" class="touch-btn btn-action">🔨 SWING BAT</button>
+    </div>
+  </div>
+
+  <!-- Game Scripts -->
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
