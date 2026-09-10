@@ -282,6 +282,27 @@ class GameRoom {
       if (dist <= BAT_RANGE) {
         const dot = (dx * swingDirX + dz * swingDirZ) / (dist || 1);
         if (dot > 0.05) {
+          // Check if runner is protected under the middle table
+          const isRunnerUnderTable = (
+            Math.abs(runner.position.x) <= 0.85 &&
+            Math.abs(runner.position.z) <= 1.35 &&
+            (runner.isCrawling || runner.isFlatFlop || (runner.position.y || 0) < 0.7)
+          );
+
+          if (isRunnerUnderTable) {
+            // Hitter cannot hit from top; hitter has to bend down (crouch/crawl, flat-flop, or duck with spinePitch)
+            const isHitterBending = (
+              hitter.isCrawling ||
+              hitter.isFlatFlop ||
+              (typeof hitter.spinePitch === 'number' && hitter.spinePitch <= -0.25)
+            );
+
+            if (!isHitterBending) {
+              // Tabletop blocks the hit!
+              continue;
+            }
+          }
+
           runner.hp = Math.max(0, runner.hp - BAT_DAMAGE);
           runner.isFlailing = true;
           runner.flailTimer = FLAIL_DURATION;
@@ -357,6 +378,13 @@ class GameRoom {
         const speed = BASE_SPEED * 0.85;
         bot.position.x += -Math.sin(bot.rotation.y) * speed * delta;
         bot.position.z += -Math.cos(bot.rotation.y) * speed * delta;
+
+        // Bend down if near the middle table to hit underneath
+        if (Math.abs(bot.position.x) < 2.0 && Math.abs(bot.position.z) < 2.6) {
+          bot.isCrawling = true;
+        } else {
+          bot.isCrawling = false;
+        }
 
         if (bot.botSwingCooldown <= 0) {
           bot.botSwingCooldown = 1.1 + Math.random() * 1.5;

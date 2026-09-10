@@ -437,6 +437,21 @@ class HittlersGame {
         }
       }
     }
+
+    // Hint when swinging while standing upright near the table
+    if (this.localPlayer.role === 'HITTER') {
+      const isStandingNearTable = (
+        Math.abs(this.localPlayer.root.position.x) < 2.2 &&
+        Math.abs(this.localPlayer.root.position.z) < 2.8 &&
+        !this.localPlayer.isCrawling &&
+        !this.localPlayer.isFlatFlop &&
+        this.localPlayer.spinePitch > -0.25
+      );
+      if (isStandingNearTable && now - (this.lastTableHintTime || 0) > 3500) {
+        this.lastTableHintTime = now;
+        this.showHitFeedNotice('🛡️ Tabletop blocks high swings! Bend down (Ctrl/Shift/Z) to hit underneath!');
+      }
+    }
   }
 
   handleRoomJoined(data) {
