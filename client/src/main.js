@@ -113,6 +113,7 @@ class HittlersGame {
       onPlayerSwungBat: (data) => this.handleRemoteBatSwing(data),
       onPlayerHit: (data) => this.handlePlayerHit(data),
       onThermalEchoPulsed: (data) => this.handleThermalEchoPulsed(data),
+      onPlayerCampRevealed: (data) => this.handlePlayerCampRevealed(data),
       onGameTick: (data) => this.handleGameTick(data)
     });
 
@@ -482,6 +483,21 @@ class HittlersGame {
     }
   }
 
+  handlePlayerCampRevealed(data) {
+    if (data.playerId === this.network.myId) {
+      this.localPlayer.triggerThermalReveal(data.duration || 1.0);
+      this.showHitFeedNotice('⚠️ You stayed still for 10s! Thermal ping revealed to Hunter!');
+    } else {
+      const remote = this.remotePlayers.get(data.playerId);
+      if (remote) remote.triggerThermalReveal(data.duration || 1.0);
+    }
+
+    if (this.localPlayer.role === 'HITTER') {
+      this.showHitFeedNotice(`👁️ Thermal Ping: ${data.playerName || 'Runner'} detected camping!`);
+      this.audio.playThermalEcho();
+    }
+  }
+
   handleGameTick(data) {
     this.domTimer.textContent = `${data.timer}s`;
 
@@ -641,12 +657,16 @@ class HittlersGame {
     const newY = this.physics.resolveVerticalPhysics(this.localPlayer, delta, isJumping);
 
     this.localPlayer.root.position.set(newPos.x, newY, newPos.z);
+
+    // Resolve Player-to-Player Pushing (Single-Occupant Push Physics under tables/beds)
+    this.physics.resolvePlayerPushing(this.localPlayer, this.remotePlayers, moveDir, isMoving, delta);
+
     this.localPlayer.updateAnimation(delta, isMoving);
 
     // 3. Sync Network Input
     if (this.network.connected) {
       this.network.sendInput({
-        position: { x: newPos.x, y: newY, z: newPos.z },
+        position: { x: this.localPlayer.root.position.x, y: newY, z: this.localPlayer.root.position.z },
         rotation: { y: this.localPlayer.root.rotation.y },
         spinePitch: this.localPlayer.spinePitch,
         isFlatFlop: this.localPlayer.isFlatFlop,
@@ -695,11 +715,25 @@ class HittlersGame {
       this.renderer.setClearColor(0x000000, 1.0);
       this.renderer.clear();
 
-      // Pass 3: Render Active Thermal Objects in the Top 85% Pitch Black Visor
+      // Pass 3: Render Active Thermal Objects & Camping Revealed Players in the Top 85% Pitch Black Visor
       const activeThermals = new Set();
       for (const [mesh, data] of this.apartment.thermalObjects.entries()) {
         if (data.timer > 0) {
           activeThermals.add(mesh);
+        }
+      }
+
+      // Include revealed camping players in thermal pass
+      if (this.localPlayer.isThermalRevealed || this.localPlayer.thermalTimer > 0) {
+        this.localPlayer.root.traverse((obj) => {
+          if (obj.isMesh) activeThermals.add(obj);
+        });
+      }
+      for (const remote of this.remotePlayers.values()) {
+        if (remote.isThermalRevealed || remote.thermalTimer > 0) {
+          remote.root.traverse((obj) => {
+            if (obj.isMesh) activeThermals.add(obj);
+          });
         }
       }
 

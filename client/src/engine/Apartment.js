@@ -86,14 +86,14 @@ export class Apartment {
     // --- Build Cluttered Apartment Furniture ---
     this.buildBunkBed(-7.0, -7.0, 0, 'bunk_1');
     this.buildBunkBed(-7.0, 7.0, 0, 'bunk_2');
-    this.buildDaybed(7.0, -7.0, Math.PI / 2, 'daybed_1');
+    this.buildDaybed(0, -7.0, 0, 'daybed_1');
 
-    this.buildDiningTable(-4.5, 0, 0, 'dining_table');
-    this.buildCoffeeTable(4.5, 2.0, Math.PI / 4, 'coffee_table_1');
-    this.buildCoffeeTable(0, 7.0, 0, 'coffee_table_2');
+    this.buildDiningTable(0, 0, 0, 'dining_table');
+    this.buildCoffeeTable(5.5, 5.5, Math.PI / 4, 'coffee_table_1');
+    this.buildCoffeeTable(-5.5, 5.5, -Math.PI / 4, 'coffee_table_2');
 
     this.buildCouch(6.5, 0, -Math.PI / 2, 'couch_1');
-    this.buildCouch(0, -7.5, 0, 'couch_2');
+    this.buildCouch(-6.5, 0, Math.PI / 2, 'couch_2');
 
     this.buildCardboardBoxes(7.5, 6.5, 'boxes_1');
     this.buildCardboardBoxes(-7.5, 0, 'boxes_2');
@@ -271,9 +271,9 @@ export class Apartment {
     const group = new THREE.Group();
     const woodMat = new THREE.MeshStandardMaterial({ color: 0x5d4037, roughness: 0.4 });
 
-    const width = 2.6;
-    const length = 4.2;
-    const height = 1.05;
+    const width = 2.8;
+    const length = 4.4;
+    const height = 1.30;
     const thickness = 0.1;
 
     // Tabletop
@@ -316,7 +316,7 @@ export class Apartment {
     tableBounds.max.y = height + thickness / 2;
     this.colliders.push({ box: tableBounds, mesh: top, type: 'dining_table' });
 
-    // Crawl volume under the table
+    // Crawl volume under the table (clearance 1.25m allows crawling and sleeping/flat-flop slides)
     this.crawlables.push({
       box: new THREE.Box3(
         new THREE.Vector3(tableBounds.min.x + 0.1, 0, tableBounds.min.z + 0.1),
@@ -418,9 +418,16 @@ export class Apartment {
     this.registerThermalObject(arm1, `${id}_arm1`, id);
     this.registerThermalObject(arm2, `${id}_arm2`, id);
 
-    const couchBounds = new THREE.Box3().setFromObject(group);
-    this.jumpables.push({ box: couchBounds, topY: 0.6, mesh: seat });
-    this.colliders.push({ box: couchBounds, mesh: seat, type: 'couch' });
+    const seatBox = new THREE.Box3().setFromObject(seat);
+    const backBox = new THREE.Box3().setFromObject(back);
+    const arm1Box = new THREE.Box3().setFromObject(arm1);
+    const arm2Box = new THREE.Box3().setFromObject(arm2);
+
+    this.jumpables.push({ box: seatBox, topY: 0.60, mesh: seat });
+    this.colliders.push({ box: seatBox, mesh: seat, type: 'couch_seat' });
+    this.colliders.push({ box: backBox, mesh: back, type: 'couch_back' });
+    this.colliders.push({ box: arm1Box, mesh: arm1, type: 'couch_arm' });
+    this.colliders.push({ box: arm2Box, mesh: arm2, type: 'couch_arm' });
   }
 
   // --- 6. Cardboard Boxes ---

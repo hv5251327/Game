@@ -263,4 +263,28 @@ export class AudioEngine {
       osc.stop(t + 0.65);
     });
   }
+
+  // High-tech sonar blip / thermal ping for camp reveal
+  playThermalEcho() {
+    this.ensureContext();
+    if (!this.ctx) return;
+
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, t);
+    osc.frequency.exponentialRampToValueAtTime(1760, t + 0.08);
+    osc.frequency.exponentialRampToValueAtTime(440, t + 0.35);
+
+    gain.gain.setValueAtTime(0.4, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+
+    osc.start(t);
+    osc.stop(t + 0.36);
+  }
 }

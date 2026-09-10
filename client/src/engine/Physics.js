@@ -146,7 +146,7 @@ export class Physics {
     for (const jumpable of this.apartment.jumpables) {
       const box = jumpable.box;
       if (posX >= box.min.x && posX <= box.max.x && posZ >= box.min.z && posZ <= box.max.z) {
-        if (currentY >= jumpable.topY - 0.2) {
+        if (currentY >= jumpable.topY - 0.35) {
           targetGroundY = Math.max(targetGroundY, jumpable.topY);
         }
       }
@@ -169,5 +169,62 @@ export class Physics {
     avatar.isOnGround = (newY <= targetGroundY + 0.05);
 
     return newY;
+  }
+
+  // Dynamic Player-to-Player Pushing (Single-Occupant Push Physics under tables/beds)
+  resolvePlayerPushing(localAvatar, remoteAvatars, moveDir, isMoving, delta) {
+    if (!localAvatar || !localAvatar.isAlive) return;
+
+    const localPos = localAvatar.root.position;
+    const isLocalFlat = localAvatar.isFlatFlop;
+    const isLocalCrawl = localAvatar.isCrawling;
+    const localMinRadius = (isLocalFlat || isLocalCrawl) ? 0.45 : 0.35;
+
+    for (const remote of remoteAvatars.values()) {
+      if (!remote.isAlive) continue;
+
+      const remotePos = remote.root.position;
+      const isRemoteFlat = remote.isFlatFlop;
+      const isRemoteCrawl = remote.isCrawling;
+      const remoteMinRadius = (isRemoteFlat || isRemoteCrawl) ? 0.45 : 0.35;
+
+      const minDist = localMinRadius + remoteMinRadius;
+
+      const dx = localPos.x - remotePos.x;
+      const dz = localPos.z - remotePos.z;
+      const dist = Math.hypot(dx, dz);
+
+      // Check vertical distance (only push if on roughly the same level)
+      const dy = Math.abs(localPos.y - remotePos.y);
+      if (dy > 1.0) continue;
+
+      if (dist < minDist && dist > 0.001) {
+        const nx = dx / dist;
+        const nz = dz / dist;
+        const overlap = minDist - dist;
+
+        // Resistance to being pushed when steering in the opposite direction
+        let pushResistance = 0;
+        if (isMoving && moveDir) {
+          // Dot product between moveDir and vector towards the pusher (-nx, -nz)
+          const againstPush = -(moveDir.x * nx + moveDir.z * nz);
+          if (againstPush > 0) {
+            pushResistance = againstPush; // Player is actively pushing back!
+          }
+        }
+
+        // Net push force on local player
+        const pushFactor = Math.max(0.12, 1.0 - pushResistance * 0.85);
+        const pushAmount = (overlap * 0.65) * pushFactor;
+
+        localPos.x += nx * pushAmount;
+        localPos.z += nz * pushAmount;
+
+        // Keep local player inside room bounds
+        const bounds = 10.5;
+        localPos.x = Math.max(-bounds, Math.min(bounds, localPos.x));
+        localPos.z = Math.max(-bounds, Math.min(bounds, localPos.z));
+      }
+    }
   }
 }

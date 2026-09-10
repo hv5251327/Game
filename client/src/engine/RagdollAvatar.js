@@ -541,6 +541,8 @@ export class RagdollAvatar {
     this.isDancing = false;
     this.verticalVelocity = 0;
     this.isOnGround = true;
+    this.thermalTimer = 0;
+    this.isThermalRevealed = false;
 
     this.buildBlobbyClayCharacter();
     this.scene.add(this.root);
@@ -716,6 +718,19 @@ export class RagdollAvatar {
     this.swingProgress = 0;
   }
 
+  triggerThermalReveal(duration = 1.0) {
+    this.thermalTimer = duration;
+    this.isThermalRevealed = true;
+    if (this.skinMat) {
+      this.skinMat.emissive = new THREE.Color(0x00ffff);
+      this.skinMat.emissiveIntensity = 2.5;
+    }
+    if (this.capMat) {
+      this.capMat.emissive = new THREE.Color(0x00ffff);
+      this.capMat.emissiveIntensity = 2.5;
+    }
+  }
+
   resetToBindPose() {
     const bind = CHARACTER_SPEC.bindPose;
     this.leftShoulder.rotation.set(bind.leftShoulder[0], bind.leftShoulder[1], bind.leftShoulder[2]);
@@ -735,6 +750,26 @@ export class RagdollAvatar {
   updateAnimation(delta, isMoving = false) {
     this.isMoving = isMoving;
     const bind = CHARACTER_SPEC.bindPose;
+
+    // Thermal Ping Timer Update
+    if (this.thermalTimer > 0) {
+      this.thermalTimer -= delta;
+      const intensity = Math.max(0, this.thermalTimer / 1.0);
+      if (this.skinMat) this.skinMat.emissiveIntensity = intensity * 2.5;
+      if (this.capMat) this.capMat.emissiveIntensity = intensity * 2.5;
+
+      if (this.thermalTimer <= 0) {
+        this.isThermalRevealed = false;
+        if (this.skinMat) {
+          this.skinMat.emissive.setHex(0x000000);
+          this.skinMat.emissiveIntensity = 0;
+        }
+        if (this.capMat) {
+          this.capMat.emissive.setHex(0x000000);
+          this.capMat.emissiveIntensity = 0;
+        }
+      }
+    }
 
     // Bat swing progression
     if (this.isSwingingBat) {

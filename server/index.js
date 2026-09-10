@@ -89,7 +89,9 @@ class GameRoom {
       score: 0,
       botWanderAngle: Math.random() * Math.PI * 2,
       botTurnTimer: Math.random() * 2.0,
-      botSwingCooldown: Math.random() * 2.0
+      botSwingCooldown: Math.random() * 2.0,
+      stationaryTimer: 0,
+      lastStationaryPos: { x: spawnX, y: 0, z: spawnZ }
     };
 
     this.players.set(socketId, player);
@@ -385,6 +387,40 @@ class GameRoom {
     }
 
     this.updateBots(delta);
+
+    // 10-Second Anti-Camp Stationary Detection for Runners -> 1.0s Thermal Reveal
+    if (this.state === 'HUNTING') {
+      for (const player of this.players.values()) {
+        if (player.role === 'RUNNER' && player.isAlive) {
+          if (!player.lastStationaryPos) {
+            player.lastStationaryPos = { ...player.position };
+            player.stationaryTimer = 0;
+          }
+
+          const distMoved = Math.hypot(
+            player.position.x - player.lastStationaryPos.x,
+            player.position.z - player.lastStationaryPos.z
+          );
+
+          if (distMoved < 0.35) {
+            player.stationaryTimer = (player.stationaryTimer || 0) + delta;
+            if (player.stationaryTimer >= 10.0) {
+              player.stationaryTimer = 0;
+              player.lastStationaryPos = { ...player.position };
+              io.to(this.code).emit('player_camp_revealed', {
+                playerId: player.id,
+                playerName: player.name,
+                duration: 1.0,
+                position: player.position
+              });
+            }
+          } else {
+            player.stationaryTimer = 0;
+            player.lastStationaryPos = { ...player.position };
+          }
+        }
+      }
+    }
 
     for (const player of this.players.values()) {
       if (player.isFlailing) {

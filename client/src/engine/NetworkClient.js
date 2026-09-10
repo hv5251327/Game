@@ -62,6 +62,10 @@ export class NetworkClient {
       this.callbacks.onThermalEchoPulsed?.(data);
     });
 
+    this.socket.on('player_camp_revealed', (data) => {
+      this.callbacks.onPlayerCampRevealed?.(data);
+    });
+
     this.socket.on('game_tick', (data) => {
       this.callbacks.onGameTick?.(data);
     });
