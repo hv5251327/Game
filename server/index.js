@@ -27,9 +27,9 @@ app.use('/node_modules', express.static(path.join(ROOT_DIR, 'node_modules')));
 const MAX_PLAYERS = 10;
 const ROUND_DURATION = 120; // 120 seconds
 const COUNTDOWN_DURATION = 3; // 3 seconds
-const ROUND_END_DURATION = 7; // 7 seconds
+const ROUND_END_DURATION = 6; // 6 seconds
 const BAT_DAMAGE = 25;
-const BAT_RANGE = 2.4;
+const BAT_RANGE = 2.6;
 const BASE_SPEED = 4.5;
 const FLAIL_DURATION = 3.0;
 
@@ -58,7 +58,7 @@ class GameRoom {
   addPlayer(socketId, name, color, isBot = false) {
     if (this.players.size >= MAX_PLAYERS) return null;
 
-    const spawnRadius = 2.0;
+    const spawnRadius = 2.4;
     const angle = (this.players.size / MAX_PLAYERS) * Math.PI * 2;
     const spawnX = Math.cos(angle) * spawnRadius;
     const spawnZ = Math.sin(angle) * spawnRadius;
@@ -98,8 +98,7 @@ class GameRoom {
     this.hitterHistory.delete(socketId);
 
     if (this.currentHitterId === socketId && (this.state === 'HUNTING' || this.state === 'COUNTDOWN')) {
-      // Hitter left during match - end round
-      this.endRound('RUNNERS', 'Hitter disconnected!');
+      this.endRound('RUNNERS', 'Hitter disconnected! Runners win!');
     } else if (this.players.size === 0) {
       this.stop();
       rooms.delete(this.code);
@@ -131,25 +130,30 @@ class GameRoom {
     this.botCount = this.bots.size;
   }
 
-  selectNextHitter() {
+  selectNextHitter(forcedPlayerId = null) {
     const playerList = Array.from(this.players.values());
     if (playerList.length === 0) return null;
 
-    // Filter candidates who have not been Hitter in the current cycle
-    let candidates = playerList.filter(p => !this.hitterHistory.has(p.id));
+    let chosen = null;
 
-    // If all players have taken a turn, reset rotation pool and pick from all
-    if (candidates.length === 0) {
-      this.hitterHistory.clear();
-      candidates = playerList;
+    if (forcedPlayerId && this.players.has(forcedPlayerId)) {
+      chosen = this.players.get(forcedPlayerId);
+    } else {
+      // Fair round-robin rotation pool
+      let candidates = playerList.filter(p => !this.hitterHistory.has(p.id));
+
+      if (candidates.length === 0) {
+        this.hitterHistory.clear();
+        candidates = playerList;
+      }
+
+      chosen = candidates[Math.floor(Math.random() * candidates.length)];
     }
 
-    // Pick random candidate from available pool
-    const chosen = candidates[Math.floor(Math.random() * candidates.length)];
     this.hitterHistory.add(chosen.id);
     this.currentHitterId = chosen.id;
 
-    // Assign roles to all players
+    // Assign roles
     for (const player of playerList) {
       player.role = (player.id === chosen.id) ? 'HITTER' : 'RUNNER';
       player.hp = 100;
@@ -164,20 +168,20 @@ class GameRoom {
     return chosen;
   }
 
-  startCountdown() {
+  startCountdown(forcedHitterId = null) {
     if (this.players.size < 1) return false;
 
-    this.selectNextHitter();
+    this.selectNextHitter(forcedHitterId);
     this.state = 'COUNTDOWN';
     this.timer = COUNTDOWN_DURATION;
     this.roundWinner = null;
 
-    // Spawn players in circle
+    // Circle spawn
     const playerList = Array.from(this.players.values());
     const count = playerList.length;
     playerList.forEach((player, idx) => {
       const angle = (idx / count) * Math.PI * 2;
-      const rad = 2.8;
+      const rad = 3.0;
       player.position = {
         x: Math.cos(angle) * rad,
         y: 0.9,
@@ -211,22 +215,22 @@ class GameRoom {
     this.roundWinner = winnerRole;
 
     io.to(this.code).emit('round_ended', {
-      winner: winnerRole, // 'RUNNERS' or 'HITTER'
+      winner: winnerRole,
       hitterId: this.currentHitterId,
-      hitterName: this.players.get(this.currentHitterId)?.name,
+      hitterName: this.players.get(this.currentHitterId)?.name || 'The Hitter',
       reason: reason
     });
   }
 
   handleBatSwing(hitterId) {
     const hitter = this.players.get(hitterId);
-    if (!hitter || hitter.role !== 'HITTER' || this.state !== 'HUNTING') return;
+    if (!hitter || hitter.role !== 'HITTER' || !hitter.isAlive) return;
 
     const now = Date.now();
-    if (now - hitter.lastSwingTime < 800) return; // 0.8s cooldown
+    if (now - hitter.lastSwingTime < 750) return; // 0.8s cooldown
     hitter.lastSwingTime = now;
 
-    // Broadcast swing animation to all clients
+    // Broadcast swing to all clients
     io.to(this.code).emit('player_swung_bat', { hitterId });
 
     // Check hit against runners
@@ -241,16 +245,16 @@ class GameRoom {
       const dist = Math.sqrt(dx * dx + dz * dz);
 
       if (dist <= BAT_RANGE) {
-        // Dot product to check if runner is in front of the swing arc
+        // Dot product to verify runner is in front arc
         const dot = (dx * swingDirX + dz * swingDirZ) / (dist || 1);
-        if (dot > 0.2) {
-          // HIT CONNECTED!
+        if (dot > 0.1) {
+          // HIT!
           runner.hp = Math.max(0, runner.hp - BAT_DAMAGE);
           runner.isFlailing = true;
           runner.flailTimer = FLAIL_DURATION;
 
-          // Knockback velocity
-          const knockbackMag = 6.0;
+          // Knockback impulse
+          const knockbackMag = 6.5;
           const kx = (dx / (dist || 1)) * knockbackMag;
           const kz = (dz / (dist || 1)) * knockbackMag;
           runner.velocity.x += kx;
@@ -275,7 +279,7 @@ class GameRoom {
             }
           });
 
-          // Check if all runners are knocked out
+          // Check if all living runners knocked out
           const livingRunners = Array.from(this.players.values()).filter(p => p.role === 'RUNNER' && p.isAlive);
           if (livingRunners.length === 0) {
             this.endRound('HITTER', 'All runners knocked flat out! Clean sweep!');
@@ -288,53 +292,47 @@ class GameRoom {
   updateBots(delta) {
     if (this.state !== 'HUNTING' && this.state !== 'LOBBY') return;
 
-    const roomBounds = 9.0;
+    const bounds = 9.5;
     const hitter = this.players.get(this.currentHitterId);
 
     for (const [botId, bot] of this.bots.entries()) {
       if (!bot.isAlive) continue;
 
-      // Handle panic flail timer
       if (bot.isFlailing) {
         bot.flailTimer -= delta;
-        if (bot.flailTimer <= 0) {
-          bot.isFlailing = false;
-        }
+        if (bot.flailTimer <= 0) bot.isFlailing = false;
       }
 
       if (bot.role === 'HITTER' && this.state === 'HUNTING') {
-        // AI Hitter logic: wanders around, occasionally swings, charges nearest runner
-        let targetRunner = null;
+        // AI Hitter charges nearest alive runner
+        let target = null;
         let minDist = Infinity;
 
         for (const runner of this.players.values()) {
           if (runner.role === 'RUNNER' && runner.isAlive) {
-            const dx = runner.position.x - bot.position.x;
-            const dz = runner.position.z - bot.position.z;
-            const d = Math.hypot(dx, dz);
+            const d = Math.hypot(runner.position.x - bot.position.x, runner.position.z - bot.position.z);
             if (d < minDist) {
               minDist = d;
-              targetRunner = runner;
+              target = runner;
             }
           }
         }
 
-        if (targetRunner) {
-          const dx = targetRunner.position.x - bot.position.x;
-          const dz = targetRunner.position.z - bot.position.z;
+        if (target) {
+          const dx = target.position.x - bot.position.x;
+          const dz = target.position.z - bot.position.z;
           const angle = Math.atan2(-dx, -dz);
           bot.rotation.y = angle;
 
-          const speed = BASE_SPEED;
-          bot.position.x += -Math.sin(angle) * speed * delta;
-          bot.position.z += -Math.cos(angle) * speed * delta;
+          bot.position.x += -Math.sin(angle) * BASE_SPEED * delta;
+          bot.position.z += -Math.cos(angle) * BASE_SPEED * delta;
 
-          if (minDist <= BAT_RANGE && Math.random() < 0.1) {
+          if (minDist <= BAT_RANGE && Math.random() < 0.15) {
             this.handleBatSwing(botId);
           }
         }
       } else if (bot.role === 'RUNNER') {
-        // AI Runner logic: flee from Hitter or wander playfully
+        // AI Runner: flee from Hitter or wander around
         let vx = 0;
         let vz = 0;
 
@@ -343,38 +341,32 @@ class GameRoom {
           const dz = bot.position.z - hitter.position.z;
           const dist = Math.hypot(dx, dz);
 
-          if (dist < 7.0) {
+          if (dist < 7.5) {
             // Flee away from Hitter!
             vx = (dx / (dist || 1)) * BASE_SPEED;
             vz = (dz / (dist || 1)) * BASE_SPEED;
             bot.rotation.y = Math.atan2(vx, vz);
           } else {
-            // Idle wander / crawl under table / hop on bed
-            if (Math.random() < 0.02) {
-              bot.rotation.y += (Math.random() - 0.5) * 2;
+            if (Math.random() < 0.03) {
+              bot.rotation.y += (Math.random() - 0.5) * 1.5;
             }
-            vx = -Math.sin(bot.rotation.y) * (BASE_SPEED * 0.5);
-            vz = -Math.cos(bot.rotation.y) * (BASE_SPEED * 0.5);
+            vx = -Math.sin(bot.rotation.y) * (BASE_SPEED * 0.4);
+            vz = -Math.cos(bot.rotation.y) * (BASE_SPEED * 0.4);
           }
         }
 
         bot.position.x += vx * delta;
         bot.position.z += vz * delta;
 
-        // Occasional flop or crawl under table
-        if (Math.random() < 0.005) {
-          bot.isCrawling = !bot.isCrawling;
-        }
+        if (Math.random() < 0.005) bot.isCrawling = !bot.isCrawling;
       }
 
-      // Constrain inside room
-      bot.position.x = Math.max(-roomBounds, Math.min(roomBounds, bot.position.x));
-      bot.position.z = Math.max(-roomBounds, Math.min(roomBounds, bot.position.z));
+      bot.position.x = Math.max(-bounds, Math.min(bounds, bot.position.x));
+      bot.position.z = Math.max(-bounds, Math.min(bounds, bot.position.z));
     }
   }
 
   update(delta) {
-    // Update match timer
     if (this.state === 'COUNTDOWN') {
       this.timer -= delta;
       if (this.timer <= 0) {
@@ -388,23 +380,17 @@ class GameRoom {
     } else if (this.state === 'ROUND_END') {
       this.timer -= delta;
       if (this.timer <= 0) {
-        // Next round
         this.startCountdown();
       }
     }
 
-    // Update bots
     this.updateBots(delta);
 
-    // Update flail timers for real players
     for (const player of this.players.values()) {
       if (player.isFlailing) {
         player.flailTimer -= delta;
-        if (player.flailTimer <= 0) {
-          player.isFlailing = false;
-        }
+        if (player.flailTimer <= 0) player.isFlailing = false;
       }
-      // Apply friction to knockback velocity
       player.velocity.x *= 0.88;
       player.velocity.z *= 0.88;
       player.position.x += player.velocity.x * delta;
@@ -420,7 +406,6 @@ class GameRoom {
 
       this.update(delta);
 
-      // Broadcast game state
       const playersArray = Array.from(this.players.values()).map(p => ({
         id: p.id,
         name: p.name,
@@ -446,7 +431,7 @@ class GameRoom {
         players: playersArray,
         roundWinner: this.roundWinner
       });
-    }, 1000 / 30); // 30Hz network sync
+    }, 1000 / 30);
   }
 
   stop() {
@@ -461,7 +446,7 @@ class GameRoom {
 io.on('connection', (socket) => {
   let currentRoomCode = null;
 
-  socket.on('join_room', ({ roomCode, nickname, color, botCount }) => {
+  socket.on('join_room', ({ roomCode, nickname, color, botCount, autoStart, forceHitter }) => {
     const code = (roomCode || 'LOBBY-1').toUpperCase();
     socket.join(code);
     currentRoomCode = code;
@@ -484,13 +469,36 @@ io.on('connection', (socket) => {
       state: room.state,
       hitterId: room.currentHitterId
     });
+
+    if (autoStart) {
+      setTimeout(() => {
+        room.startCountdown(forceHitter ? socket.id : null);
+      }, 400);
+    }
   });
 
-  socket.on('start_game', () => {
+  socket.on('start_game', ({ forceHitter } = {}) => {
     if (!currentRoomCode) return;
     const room = rooms.get(currentRoomCode);
-    if (room && room.state === 'LOBBY') {
-      room.startCountdown();
+    if (room) {
+      room.startCountdown(forceHitter ? socket.id : null);
+    }
+  });
+
+  socket.on('switch_role', ({ role }) => {
+    if (!currentRoomCode) return;
+    const room = rooms.get(currentRoomCode);
+    if (!room) return;
+
+    const player = room.players.get(socket.id);
+    if (player) {
+      player.role = role;
+      if (role === 'HITTER') {
+        room.currentHitterId = socket.id;
+        for (const [id, p] of room.players.entries()) {
+          if (id !== socket.id) p.role = 'RUNNER';
+        }
+      }
     }
   });
 
@@ -510,7 +518,6 @@ io.on('connection', (socket) => {
     const player = room.players.get(socket.id);
     if (!player || !player.isAlive) return;
 
-    // Apply movement & state from player
     if (inputData.position) {
       player.position.x = inputData.position.x;
       player.position.y = inputData.position.y;
@@ -536,7 +543,6 @@ io.on('connection', (socket) => {
 
   socket.on('thermal_echo_trigger', ({ objectId, hitPos }) => {
     if (!currentRoomCode) return;
-    // Broadcast thermal echo outline pulse to all clients (especially Hitter)
     io.to(currentRoomCode).emit('thermal_echo_pulsed', {
       objectId,
       hitPos,

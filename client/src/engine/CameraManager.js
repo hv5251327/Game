@@ -7,7 +7,7 @@ export class CameraManager {
 
     this.mode = 'THIRD_PERSON'; // 'FIRST_PERSON', 'THIRD_PERSON', or 'HITTER_PEEP'
     this.yaw = 0;
-    this.pitch = 0;
+    this.pitch = 0.15;
     this.isPointerLocked = false;
     this.headBobTimer = 0;
 
@@ -15,9 +15,10 @@ export class CameraManager {
   }
 
   initControls() {
-    // Pointer lock for desktop mouse aim
-    this.domElement.addEventListener('click', () => {
-      if (!this.isPointerLocked && document.pointerLockElement !== this.domElement) {
+    // Click on canvas to request pointer lock
+    this.domElement.addEventListener('mousedown', (e) => {
+      // Only lock on left click or middle click if not clicking UI
+      if (document.pointerLockElement !== this.domElement) {
         this.domElement.requestPointerLock?.();
       }
     });
@@ -32,12 +33,12 @@ export class CameraManager {
         this.yaw -= e.movementX * sensitivity;
         this.pitch -= e.movementY * sensitivity;
 
-        // Clamp pitch to prevent flipping
-        this.pitch = Math.max(-Math.PI / 2.5, Math.min(Math.PI / 2.5, this.pitch));
+        // Clamp pitch so camera doesn't flip
+        this.pitch = Math.max(-Math.PI / 2.6, Math.min(Math.PI / 2.6, this.pitch));
       }
     });
 
-    // Touch look drag for mobile
+    // Touch look drag for mobile devices
     let touchStartX = 0;
     let touchStartY = 0;
     this.domElement.addEventListener('touchstart', (e) => {
@@ -59,7 +60,7 @@ export class CameraManager {
         const sensitivity = 0.004;
         this.yaw -= dx * sensitivity;
         this.pitch -= dy * sensitivity;
-        this.pitch = Math.max(-Math.PI / 2.5, Math.min(Math.PI / 2.5, this.pitch));
+        this.pitch = Math.max(-Math.PI / 2.6, Math.min(Math.PI / 2.6, this.pitch));
       }
     }, { passive: true });
   }
@@ -67,7 +68,7 @@ export class CameraManager {
   togglePerspective() {
     if (this.mode === 'THIRD_PERSON') {
       this.mode = 'FIRST_PERSON';
-    } else if (this.mode === 'FIRST_PERSON') {
+    } else {
       this.mode = 'THIRD_PERSON';
     }
     return this.mode;
@@ -95,8 +96,8 @@ export class CameraManager {
     const bob = Math.sin(this.headBobTimer) * 0.04;
 
     if (this.mode === 'FIRST_PERSON') {
-      // First-person eye level
-      const eyeHeight = (avatar.isCrawling ? 0.6 : (avatar.isFlatFlop ? 0.25 : 1.45)) + bob;
+      // First-Person eye level
+      const eyeHeight = (avatar.isCrawling ? 0.55 : (avatar.isFlatFlop ? 0.22 : 1.45)) + bob;
       this.camera.position.set(targetPos.x, targetPos.y + eyeHeight, targetPos.z);
 
       const lookTarget = new THREE.Vector3(
@@ -107,32 +108,33 @@ export class CameraManager {
       this.camera.lookAt(lookTarget);
 
     } else if (this.mode === 'HITTER_PEEP') {
-      // Low-angle strip tracking camera for the Hitter
-      const camDist = 2.0;
-      const camHeight = 0.55;
+      // Low-angle strip tracking camera for the Hitter (matching the bottom 15% strip view)
+      const camDist = 2.4;
+      const camHeight = 0.7;
       const camX = targetPos.x + Math.sin(this.yaw) * camDist;
       const camZ = targetPos.z + Math.cos(this.yaw) * camDist;
 
       this.camera.position.set(camX, targetPos.y + camHeight, camZ);
       const lookTarget = new THREE.Vector3(
-        targetPos.x - Math.sin(this.yaw) * 3,
-        targetPos.y + 0.1, // Look down towards floor/feet and bat tip
-        targetPos.z - Math.cos(this.yaw) * 3
+        targetPos.x - Math.sin(this.yaw) * 4,
+        targetPos.y + 0.15, // Aligned towards floor, feet, and swinging bat
+        targetPos.z - Math.cos(this.yaw) * 4
       );
       this.camera.lookAt(lookTarget);
 
     } else {
-      // Default: Third-person over the shoulder
+      // Default: Third-Person over the shoulder
       const camDist = 3.6;
       const camHeight = (avatar.isCrawling ? 1.2 : 2.0);
-      const camX = targetPos.x + Math.sin(this.yaw) * camDist;
-      const camZ = targetPos.z + Math.cos(this.yaw) * camDist;
+      const camX = targetPos.x + Math.sin(this.yaw) * Math.cos(this.pitch * 0.5) * camDist;
+      const camY = targetPos.y + camHeight + Math.sin(this.pitch) * camDist * 0.6;
+      const camZ = targetPos.z + Math.cos(this.yaw) * Math.cos(this.pitch * 0.5) * camDist;
 
-      this.camera.position.set(camX, targetPos.y + camHeight, camZ);
+      this.camera.position.set(camX, Math.max(0.3, camY), camZ);
 
       const lookTarget = new THREE.Vector3(
         targetPos.x,
-        targetPos.y + (avatar.isCrawling ? 0.4 : 1.0),
+        targetPos.y + (avatar.isCrawling ? 0.45 : 1.05),
         targetPos.z
       );
       this.camera.lookAt(lookTarget);

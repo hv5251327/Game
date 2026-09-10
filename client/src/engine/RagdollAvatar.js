@@ -7,7 +7,7 @@ export class RagdollAvatar {
     this.isLocal = isLocal;
     this.role = 'RUNNER'; // 'RUNNER' or 'HITTER'
 
-    // Hierarchy nodes
+    // Hierarchy nodes for procedural ragdoll physics & spine bending
     this.root = new THREE.Group();
     this.pelvis = new THREE.Group();
     this.spineLower = new THREE.Group();
@@ -19,16 +19,23 @@ export class RagdollAvatar {
     // Limbs
     this.leftUpperArm = new THREE.Group();
     this.leftForearm = new THREE.Group();
+    this.leftHand = new THREE.Group();
+
     this.rightUpperArm = new THREE.Group();
     this.rightForearm = new THREE.Group();
+    this.rightHand = new THREE.Group();
 
     this.leftThigh = new THREE.Group();
     this.leftCalf = new THREE.Group();
+    this.leftFoot = new THREE.Group();
+
     this.rightThigh = new THREE.Group();
     this.rightCalf = new THREE.Group();
+    this.rightFoot = new THREE.Group();
 
-    // Bat prop
-    this.batMesh = null;
+    // Weapon / Stick prop
+    this.stickMesh = null;
+    this.materials = [];
 
     // State
     this.hp = 100;
@@ -41,185 +48,216 @@ export class RagdollAvatar {
     this.isGrabbing = false;
     this.isSwingingBat = false;
     this.swingProgress = 0;
-    this.spinePitch = 0; // -1 (lean back) to +1 (lean forward / duck)
+    this.spinePitch = 0; // -1 (lean back) to +1 (duck forward)
     this.walkCycle = 0;
     this.isMoving = false;
     this.isDancing = false;
+    this.verticalVelocity = 0;
+    this.isOnGround = true;
 
-    this.buildRagdollMesh();
+    this.buildSmoothHumanFallFlatMesh();
     this.scene.add(this.root);
   }
 
-  buildRagdollMesh() {
+  buildSmoothHumanFallFlatMesh() {
+    // Human: Fall Flat style smooth rubbery/marshmallow material
     const skinMat = new THREE.MeshStandardMaterial({
       color: this.colorHex,
-      roughness: 0.5,
+      roughness: 0.35,
       metalness: 0.05
     });
+    this.skinMat = skinMat;
+    this.materials.push(skinMat);
 
-    const eyeWhiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-    const pupilMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
-    const shoeMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 });
-    const woodMat = new THREE.MeshStandardMaterial({ color: 0x8d6e63, roughness: 0.4 });
+    const eyeMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+    const woodMat = new THREE.MeshStandardMaterial({ color: 0x8d5b36, roughness: 0.5 });
+    const tapeMat = new THREE.MeshStandardMaterial({ color: 0xe0e0e0, roughness: 0.8 });
 
-    // --- 1. Pelvis / Hips ---
-    const pelvisMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.2, 0.22, 16), skinMat);
+    // Helper for smooth capsules
+    const createCapsule = (radius, length, mat) => {
+      const geo = new THREE.CapsuleGeometry(radius, length, 12, 16);
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      return mesh;
+    };
+
+    // Helper for smooth spheres
+    const createSphere = (radius, mat) => {
+      const geo = new THREE.SphereGeometry(radius, 20, 20);
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      return mesh;
+    };
+
+    // --- 1. Pelvis / Hips (Root body base) ---
+    const pelvisMesh = createSphere(0.26, skinMat);
+    pelvisMesh.scale.set(1.1, 0.9, 1.0);
     this.pelvis.add(pelvisMesh);
-    this.pelvis.position.y = 0.85;
+    this.pelvis.position.y = 0.88;
     this.root.add(this.pelvis);
 
-    // --- 2. Spine Lower ---
-    const spineLowerMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.24, 0.2, 16), skinMat);
+    // --- 2. Lower Spine (Flexible jelly joint) ---
+    const spineLowerMesh = createCapsule(0.22, 0.16, skinMat);
     this.spineLower.add(spineLowerMesh);
-    this.spineLower.position.y = 0.18;
+    this.spineLower.position.y = 0.22;
     this.pelvis.add(this.spineLower);
 
-    // --- 3. Spine Upper & Chest ---
-    const chestMesh = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.3, 0.28), skinMat);
+    // --- 3. Chest / Torso ---
+    const chestMesh = createCapsule(0.26, 0.26, skinMat);
+    chestMesh.scale.set(1.15, 1.0, 0.95);
     this.chest.add(chestMesh);
-    this.chest.position.y = 0.24;
+    this.chest.position.y = 0.26;
     this.spineLower.add(this.chest);
 
-    // --- 4. Neck & Comical Head ---
-    const neckMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 0.12, 12), skinMat);
+    // --- 4. Neck & Smooth Marshmallow Head ---
+    const neckMesh = createCapsule(0.1, 0.08, skinMat);
     this.neck.add(neckMesh);
     this.neck.position.y = 0.22;
     this.chest.add(this.neck);
 
-    const headGeo = new THREE.SphereGeometry(0.26, 16, 16);
-    const headMesh = new THREE.Mesh(headGeo, skinMat);
+    // Iconic round Human: Fall Flat head
+    const headMesh = createSphere(0.28, skinMat);
+    headMesh.scale.set(1.0, 1.08, 1.0);
     this.head.add(headMesh);
-    this.head.position.y = 0.2;
+    this.head.position.y = 0.24;
     this.neck.add(this.head);
 
-    // Googly Eyes (Slapstick cartoon eyes)
-    const eyeGeo = new THREE.SphereGeometry(0.07, 12, 12);
-    const pupilGeo = new THREE.SphereGeometry(0.035, 12, 12);
-
-    const leftEye = new THREE.Mesh(eyeGeo, eyeWhiteMat);
-    leftEye.position.set(-0.09, 0.05, 0.22);
-    const leftPupil = new THREE.Mesh(pupilGeo, pupilMat);
-    leftPupil.position.set(0, 0, 0.05);
-    leftEye.add(leftPupil);
+    // Cute Googly Eyes
+    const eyeGeo = new THREE.SphereGeometry(0.045, 12, 12);
+    const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+    leftEye.position.set(-0.1, 0.04, 0.24);
     this.head.add(leftEye);
 
-    const rightEye = new THREE.Mesh(eyeGeo, eyeWhiteMat);
-    rightEye.position.set(0.09, 0.05, 0.22);
-    const rightPupil = new THREE.Mesh(pupilGeo, pupilMat);
-    rightPupil.position.set(0, 0, 0.05);
-    rightEye.add(rightPupil);
+    const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+    rightEye.position.set(0.1, 0.04, 0.24);
     this.head.add(rightEye);
 
-    // --- 5. Rubbery Floppy Arms ---
-    const armGeo = new THREE.CylinderGeometry(0.07, 0.065, 0.32, 12);
-    const handGeo = new THREE.SphereGeometry(0.08, 12, 12);
+    // --- 5. Rubbery Arms & Hands ---
+    const armRadius = 0.08;
+    const armLength = 0.22;
 
     // Left Arm
-    const leftUpperMesh = new THREE.Mesh(armGeo, skinMat);
-    leftUpperMesh.position.y = -0.16;
-    this.leftUpperArm.add(leftUpperMesh);
-    this.leftUpperArm.position.set(-0.32, 0.1, 0);
+    const leftUpper = createCapsule(armRadius, armLength, skinMat);
+    leftUpper.position.y = -armLength / 2;
+    this.leftUpperArm.add(leftUpper);
+    this.leftUpperArm.position.set(-0.35, 0.12, 0);
     this.chest.add(this.leftUpperArm);
 
-    const leftForeMesh = new THREE.Mesh(armGeo, skinMat);
-    leftForeMesh.position.y = -0.16;
-    this.leftForearm.add(leftForeMesh);
-    const leftHand = new THREE.Mesh(handGeo, skinMat);
-    leftHand.position.y = -0.32;
-    this.leftForearm.add(leftHand);
-    this.leftForearm.position.y = -0.32;
+    const leftFore = createCapsule(armRadius * 0.9, armLength, skinMat);
+    leftFore.position.y = -armLength / 2;
+    this.leftForearm.add(leftFore);
+    this.leftForearm.position.y = -armLength;
     this.leftUpperArm.add(this.leftForearm);
 
+    const leftHandMesh = createSphere(0.09, skinMat);
+    this.leftHand.add(leftHandMesh);
+    this.leftHand.position.y = -armLength;
+    this.leftForearm.add(this.leftHand);
+
     // Right Arm
-    const rightUpperMesh = new THREE.Mesh(armGeo, skinMat);
-    rightUpperMesh.position.y = -0.16;
-    this.rightUpperArm.add(rightUpperMesh);
-    this.rightUpperArm.position.set(0.32, 0.1, 0);
+    const rightUpper = createCapsule(armRadius, armLength, skinMat);
+    rightUpper.position.y = -armLength / 2;
+    this.rightUpperArm.add(rightUpper);
+    this.rightUpperArm.position.set(0.35, 0.12, 0);
     this.chest.add(this.rightUpperArm);
 
-    const rightForeMesh = new THREE.Mesh(armGeo, skinMat);
-    rightForeMesh.position.y = -0.16;
-    this.rightForearm.add(rightForeMesh);
-    const rightHand = new THREE.Mesh(handGeo, skinMat);
-    rightHand.position.y = -0.32;
-    this.rightForearm.add(rightHand);
-    this.rightForearm.position.y = -0.32;
+    const rightFore = createCapsule(armRadius * 0.9, armLength, skinMat);
+    rightFore.position.y = -armLength / 2;
+    this.rightForearm.add(rightFore);
+    this.rightForearm.position.y = -armLength;
     this.rightUpperArm.add(this.rightForearm);
 
-    // --- 6. Wooden Baseball Bat (attached to Right Hand for Hitter) ---
-    const batGroup = new THREE.Group();
-    const handleGeo = new THREE.CylinderGeometry(0.03, 0.035, 0.3, 12);
-    const handle = new THREE.Mesh(handleGeo, woodMat);
-    handle.position.y = 0.15;
-    batGroup.add(handle);
+    const rightHandMesh = createSphere(0.09, skinMat);
+    this.rightHand.add(rightHandMesh);
+    this.rightHand.position.y = -armLength;
+    this.rightForearm.add(this.rightHand);
 
-    const barrelGeo = new THREE.CylinderGeometry(0.065, 0.035, 0.8, 12);
-    const barrel = new THREE.Mesh(barrelGeo, woodMat);
-    barrel.position.y = 0.7;
-    barrel.castShadow = true;
-    batGroup.add(barrel);
+    // --- 6. Wooden Baseball Bat / Stick Weapon ---
+    const stickGroup = new THREE.Group();
 
-    batGroup.position.set(0, -0.32, 0.05);
-    batGroup.rotation.x = Math.PI / 2;
-    batGroup.rotation.z = -0.2;
-    this.rightForearm.add(batGroup);
-    this.batMesh = batGroup;
-    this.batMesh.visible = false; // Hidden until Hitter role assigned
+    // Handle with grip tape
+    const handleMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.036, 0.32, 16), tapeMat);
+    handleMesh.position.y = 0.16;
+    stickGroup.add(handleMesh);
 
-    // --- 7. Legs & Shoes ---
-    const legGeo = new THREE.CylinderGeometry(0.085, 0.075, 0.4, 12);
-    const shoeGeo = new THREE.BoxGeometry(0.14, 0.1, 0.24);
+    // Barrel / Thick Wooden Bat Body
+    const barrelMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.038, 0.85, 16), woodMat);
+    barrelMesh.position.y = 0.72;
+    barrelMesh.castShadow = true;
+    stickGroup.add(barrelMesh);
+
+    // Bat knob end
+    const knobMesh = new THREE.Mesh(new THREE.SphereGeometry(0.045, 12, 12), woodMat);
+    knobMesh.position.y = 0.0;
+    stickGroup.add(knobMesh);
+
+    // Attach stick securely to right hand
+    stickGroup.position.set(0.04, -0.05, 0.08);
+    stickGroup.rotation.x = Math.PI / 2.2;
+    stickGroup.rotation.z = -0.3;
+    this.rightHand.add(stickGroup);
+    this.stickMesh = stickGroup;
+    this.stickMesh.visible = false; // Visible only when role is HITTER
+
+    // --- 7. Rubbery Legs & Feet ---
+    const legRadius = 0.095;
+    const legLength = 0.28;
 
     // Left Leg
-    const leftThighMesh = new THREE.Mesh(legGeo, skinMat);
-    leftThighMesh.position.y = -0.2;
+    const leftThighMesh = createCapsule(legRadius, legLength, skinMat);
+    leftThighMesh.position.y = -legLength / 2;
     this.leftThigh.add(leftThighMesh);
     this.leftThigh.position.set(-0.16, -0.1, 0);
     this.pelvis.add(this.leftThigh);
 
-    const leftCalfMesh = new THREE.Mesh(legGeo, skinMat);
-    leftCalfMesh.position.y = -0.2;
+    const leftCalfMesh = createCapsule(legRadius * 0.88, legLength, skinMat);
+    leftCalfMesh.position.y = -legLength / 2;
     this.leftCalf.add(leftCalfMesh);
-    const leftShoe = new THREE.Mesh(shoeGeo, shoeMat);
-    leftShoe.position.set(0, -0.42, 0.05);
-    this.leftCalf.add(leftShoe);
-    this.leftCalf.position.y = -0.4;
+    this.leftCalf.position.y = -legLength;
     this.leftThigh.add(this.leftCalf);
 
+    const leftFootMesh = createSphere(0.1, skinMat);
+    leftFootMesh.scale.set(1.0, 0.7, 1.4);
+    leftFootMesh.position.set(0, -0.06, 0.06);
+    this.leftFoot.add(leftFootMesh);
+    this.leftFoot.position.y = -legLength;
+    this.leftCalf.add(this.leftFoot);
+
     // Right Leg
-    const rightThighMesh = new THREE.Mesh(legGeo, skinMat);
-    rightThighMesh.position.y = -0.2;
+    const rightThighMesh = createCapsule(legRadius, legLength, skinMat);
+    rightThighMesh.position.y = -legLength / 2;
     this.rightThigh.add(rightThighMesh);
     this.rightThigh.position.set(0.16, -0.1, 0);
     this.pelvis.add(this.rightThigh);
 
-    const rightCalfMesh = new THREE.Mesh(legGeo, skinMat);
-    rightCalfMesh.position.y = -0.2;
+    const rightCalfMesh = createCapsule(legRadius * 0.88, legLength, skinMat);
+    rightCalfMesh.position.y = -legLength / 2;
     this.rightCalf.add(rightCalfMesh);
-    const rightShoe = new THREE.Mesh(shoeGeo, shoeMat);
-    rightShoe.position.set(0, -0.42, 0.05);
-    this.rightCalf.add(rightShoe);
-    this.rightCalf.position.y = -0.4;
+    this.rightCalf.position.y = -legLength;
     this.rightThigh.add(this.rightCalf);
+
+    const rightFootMesh = createSphere(0.1, skinMat);
+    rightFootMesh.scale.set(1.0, 0.7, 1.4);
+    rightFootMesh.position.set(0, -0.06, 0.06);
+    this.rightFoot.add(rightFootMesh);
+    this.rightFoot.position.y = -legLength;
+    this.rightCalf.add(this.rightFoot);
   }
 
   setRole(role) {
     this.role = role;
-    if (this.batMesh) {
-      this.batMesh.visible = (role === 'HITTER');
+    if (this.stickMesh) {
+      this.stickMesh.visible = (role === 'HITTER');
     }
   }
 
   setColor(colorHex) {
     this.colorHex = colorHex;
-    this.root.traverse(child => {
-      if (child.isMesh && child.material && child.material.color && child !== this.batMesh) {
-        // Keep eyes & shoes separate
-        if (child.geometry && child.geometry.type === 'BoxGeometry' && child.position.y === -0.42) return;
-        if (child.material.color.getHex() === 0xffffff || child.material.color.getHex() === 0x111111) return;
-        child.material.color.set(colorHex);
-      }
-    });
+    if (this.skinMat) {
+      this.skinMat.color.set(colorHex);
+    }
   }
 
   triggerBatSwing() {
@@ -233,47 +271,47 @@ export class RagdollAvatar {
 
     // Handle bat swing animation
     if (this.isSwingingBat) {
-      this.swingProgress += delta * 4.5; // Fast slapstick swing
+      this.swingProgress += delta * 6.5; // High speed responsive slapstick swing
       if (this.swingProgress >= Math.PI) {
         this.isSwingingBat = false;
         this.swingProgress = 0;
       }
     }
 
-    // --- State Poses ---
+    // --- Action Poses & States ---
 
     // 1. Wipeout / Knocked Out (0 HP)
     if (!this.isAlive) {
-      this.pelvis.position.y = 0.15;
+      this.pelvis.position.y = 0.14;
       this.pelvis.rotation.x = -Math.PI / 2;
       this.spineLower.rotation.x = 0.2;
-      this.chest.rotation.z = 0.3;
-      this.leftUpperArm.rotation.set(0.5, 0, 1.2);
-      this.rightUpperArm.rotation.set(0.5, 0, -1.2);
-      this.leftThigh.rotation.set(0.2, 0, 0.5);
-      this.rightThigh.rotation.set(0.2, 0, -0.5);
+      this.chest.rotation.z = 0.35;
+      this.leftUpperArm.rotation.set(0.6, 0, 1.3);
+      this.rightUpperArm.rotation.set(0.6, 0, -1.3);
+      this.leftThigh.rotation.set(0.2, 0, 0.6);
+      this.rightThigh.rotation.set(0.2, 0, -0.6);
       return;
     }
 
-    // 2. Sleep / Flat Flop ('F' key - full belly flop on ground/mattress)
+    // 2. Sleep / Flat Flop ('F' key - belly flop to slide under beds)
     if (this.isFlatFlop) {
       this.pelvis.position.y = 0.12;
       this.pelvis.rotation.x = -Math.PI / 2;
       this.spineLower.rotation.x = 0;
       this.chest.rotation.x = 0;
-      this.head.rotation.x = 0.3;
-      this.leftUpperArm.rotation.set(Math.PI - 0.2, 0, 0.3);
-      this.rightUpperArm.rotation.set(Math.PI - 0.2, 0, -0.3);
-      this.leftThigh.rotation.set(0, 0, 0.2);
-      this.rightThigh.rotation.set(0, 0, -0.2);
+      this.head.rotation.x = 0.35;
+      this.leftUpperArm.rotation.set(Math.PI - 0.2, 0, 0.4);
+      this.rightUpperArm.rotation.set(Math.PI - 0.2, 0, -0.4);
+      this.leftThigh.rotation.set(0, 0, 0.25);
+      this.rightThigh.rotation.set(0, 0, -0.25);
       return;
     }
 
     // 3. Sit ('C' key)
     if (this.isSitting) {
-      this.pelvis.position.y = 0.45;
+      this.pelvis.position.y = 0.46;
       this.pelvis.rotation.x = 0;
-      this.spineLower.rotation.x = 0.1;
+      this.spineLower.rotation.x = 0.12;
       this.leftThigh.rotation.x = -Math.PI / 2;
       this.rightThigh.rotation.x = -Math.PI / 2;
       this.leftCalf.rotation.x = Math.PI / 2;
@@ -283,67 +321,67 @@ export class RagdollAvatar {
       return;
     }
 
-    // 4. Crawl / Crouch (Lowers spine & pelvis under tables)
+    // 4. Crawl / Crouch (Lowers spine & pelvis to slide under dining/coffee tables)
     if (this.isCrawling) {
       this.pelvis.position.y = 0.42;
-      this.pelvis.rotation.x = 0.4;
-      this.spineLower.rotation.x = 0.5 + this.spinePitch * 0.4;
-      this.leftThigh.rotation.x = -0.8;
-      this.rightThigh.rotation.x = -0.8;
-      this.leftCalf.rotation.x = 1.0;
-      this.rightCalf.rotation.x = 1.0;
+      this.pelvis.rotation.x = 0.45;
+      this.spineLower.rotation.x = 0.6 + this.spinePitch * 0.4;
+      this.leftThigh.rotation.x = -0.85;
+      this.rightThigh.rotation.x = -0.85;
+      this.leftCalf.rotation.x = 1.05;
+      this.rightCalf.rotation.x = 1.05;
 
       if (isMoving) {
-        this.walkCycle += delta * 7.0;
+        this.walkCycle += delta * 7.5;
         const crawlArm = Math.sin(this.walkCycle);
-        this.leftUpperArm.rotation.x = crawlArm * 0.6 + 0.5;
-        this.rightUpperArm.rotation.x = -crawlArm * 0.6 + 0.5;
+        this.leftUpperArm.rotation.x = crawlArm * 0.7 + 0.5;
+        this.rightUpperArm.rotation.x = -crawlArm * 0.7 + 0.5;
       }
       return;
     }
 
     // 5. Victory Dance
     if (this.isDancing) {
-      this.walkCycle += delta * 8.0;
-      this.pelvis.position.y = 0.85 + Math.abs(Math.sin(this.walkCycle)) * 0.15;
-      this.spineLower.rotation.z = Math.sin(this.walkCycle) * 0.3;
+      this.walkCycle += delta * 9.0;
+      this.pelvis.position.y = 0.88 + Math.abs(Math.sin(this.walkCycle)) * 0.16;
+      this.spineLower.rotation.z = Math.sin(this.walkCycle) * 0.35;
       this.leftUpperArm.rotation.set(Math.PI - 0.4, 0, 0.6 + Math.sin(this.walkCycle) * 0.4);
       this.rightUpperArm.rotation.set(Math.PI - 0.4, 0, -0.6 - Math.sin(this.walkCycle) * 0.4);
       return;
     }
 
     // 6. Normal Standing & Spine Physics
-    this.pelvis.position.y = 0.85;
+    this.pelvis.position.y = 0.88;
     this.pelvis.rotation.x = 0;
 
-    // Apply Spine Pitch / Tilt (duck forward or lean backward)
-    this.spineLower.rotation.x = this.spinePitch * 0.6;
-    this.chest.rotation.x = this.spinePitch * 0.4;
+    // Apply Spine Pitch / Tilt (Duck forward or bend backwards awkwardly)
+    this.spineLower.rotation.x = this.spinePitch * 0.7;
+    this.chest.rotation.x = this.spinePitch * 0.5;
 
     // 7. Panic Sprint Flail Animation (When hit by bat)
     if (this.isFlailing) {
-      this.walkCycle += delta * 14.0; // High speed frantic flapping
+      this.walkCycle += delta * 15.0; // Rapid wild arm flapping
       const flailPhase = Math.sin(this.walkCycle);
       const flailSide = Math.cos(this.walkCycle * 0.8);
 
       // Arms flapped high into the air
-      this.leftUpperArm.rotation.x = Math.PI - 0.2 + flailPhase * 0.5;
+      this.leftUpperArm.rotation.x = Math.PI - 0.2 + flailPhase * 0.6;
       this.leftUpperArm.rotation.z = 0.5 + flailSide * 0.6;
-      this.leftForearm.rotation.x = flailPhase * 0.8;
+      this.leftForearm.rotation.x = flailPhase * 0.9;
 
-      this.rightUpperArm.rotation.x = Math.PI - 0.2 - flailPhase * 0.5;
+      this.rightUpperArm.rotation.x = Math.PI - 0.2 - flailPhase * 0.6;
       this.rightUpperArm.rotation.z = -0.5 - flailSide * 0.6;
-      this.rightForearm.rotation.x = -flailPhase * 0.8;
+      this.rightForearm.rotation.x = -flailPhase * 0.9;
 
-      this.head.rotation.y = Math.sin(this.walkCycle * 1.5) * 0.4;
+      this.head.rotation.y = Math.sin(this.walkCycle * 1.5) * 0.5;
       this.head.rotation.x = -0.3;
     }
     // 8. Bat Swing Action (Hitter)
     else if (this.isSwingingBat) {
       const swing = Math.sin(this.swingProgress);
-      this.rightUpperArm.rotation.set(0.4, -swing * 1.8 + 0.5, -swing * 1.2);
-      this.rightForearm.rotation.set(0, -swing * 1.4, 0);
-      this.chest.rotation.y = -swing * 0.8;
+      this.rightUpperArm.rotation.set(0.3, -swing * 2.2 + 0.6, -swing * 1.4);
+      this.rightForearm.rotation.set(0, -swing * 1.6, 0);
+      this.chest.rotation.y = -swing * 0.9;
       this.leftUpperArm.rotation.set(-0.3, 0, 0.4);
     }
     // 9. Grab / Reach forward ('E' key)
@@ -359,35 +397,47 @@ export class RagdollAvatar {
       const legPhase = Math.sin(this.walkCycle);
       const armPhase = -legPhase;
 
-      // Squishy bouncy walk
-      this.pelvis.position.y = 0.85 + Math.abs(Math.sin(this.walkCycle)) * 0.06;
-      this.pelvis.rotation.y = legPhase * 0.1;
+      // Squishy rubbery walk bounce
+      this.pelvis.position.y = 0.88 + Math.abs(Math.sin(this.walkCycle)) * 0.07;
+      this.pelvis.rotation.y = legPhase * 0.12;
 
       // Legs swing
-      this.leftThigh.rotation.x = legPhase * 0.7;
-      this.rightThigh.rotation.x = -legPhase * 0.7;
-      this.leftCalf.rotation.x = Math.max(0, -legPhase * 0.8);
-      this.rightCalf.rotation.x = Math.max(0, legPhase * 0.8);
+      this.leftThigh.rotation.x = legPhase * 0.75;
+      this.rightThigh.rotation.x = -legPhase * 0.75;
+      this.leftCalf.rotation.x = Math.max(0, -legPhase * 0.85);
+      this.rightCalf.rotation.x = Math.max(0, legPhase * 0.85);
 
       // Floppy arms swing
-      this.leftUpperArm.rotation.set(armPhase * 0.6, 0, 0.15);
-      this.rightUpperArm.rotation.set(-armPhase * 0.6, 0, -0.15);
+      this.leftUpperArm.rotation.set(armPhase * 0.65, 0, 0.15);
+      if (this.role === 'HITTER') {
+        // Carry bat in right hand with ready stance
+        this.rightUpperArm.rotation.set(0.5, -0.3, -0.2);
+        this.rightForearm.rotation.set(-0.4, 0, 0);
+      } else {
+        this.rightUpperArm.rotation.set(-armPhase * 0.65, 0, -0.15);
+        this.rightForearm.rotation.x = Math.max(0, -armPhase * 0.4);
+      }
       this.leftForearm.rotation.x = Math.max(0, armPhase * 0.4);
-      this.rightForearm.rotation.x = Math.max(0, -armPhase * 0.4);
     } else {
-      // Idle breathing wobble
-      this.walkCycle += delta * 2.0;
+      // Idle marshmallow breathing wobble
+      this.walkCycle += delta * 2.5;
       const breathe = Math.sin(this.walkCycle) * 0.03;
-      this.pelvis.position.y = 0.85 + breathe;
-      this.leftThigh.rotation.set(0, 0, 0.05);
-      this.rightThigh.rotation.set(0, 0, -0.05);
+      this.pelvis.position.y = 0.88 + breathe;
+      this.leftThigh.rotation.set(0, 0, 0.06);
+      this.rightThigh.rotation.set(0, 0, -0.06);
       this.leftCalf.rotation.set(0, 0, 0);
       this.rightCalf.rotation.set(0, 0, 0);
 
-      this.leftUpperArm.rotation.set(0.1, 0, 0.15);
-      this.rightUpperArm.rotation.set(0.1, 0, -0.15);
+      this.leftUpperArm.rotation.set(0.12, 0, 0.18);
+      if (this.role === 'HITTER') {
+        // Ready stance holding bat
+        this.rightUpperArm.rotation.set(0.5, -0.3, -0.2);
+        this.rightForearm.rotation.set(-0.4, 0, 0);
+      } else {
+        this.rightUpperArm.rotation.set(0.12, 0, -0.18);
+        this.rightForearm.rotation.set(0.1, 0, 0);
+      }
       this.leftForearm.rotation.set(0.1, 0, 0);
-      this.rightForearm.rotation.set(0.1, 0, 0);
     }
   }
 
