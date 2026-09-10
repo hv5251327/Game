@@ -5,6 +5,7 @@ import { RagdollAvatar } from './engine/RagdollAvatar.js';
 import { Physics } from './engine/Physics.js';
 import { CameraManager } from './engine/CameraManager.js';
 import { NetworkClient } from './engine/NetworkClient.js';
+import { supabaseService } from './engine/SupabaseService.js';
 
 class HittlersGame {
   constructor() {
@@ -17,6 +18,7 @@ class HittlersGame {
     this.physics = null;
     this.cameraManager = null;
     this.network = null;
+    this.supabase = supabaseService;
 
     this.localPlayer = null;
     this.remotePlayers = new Map(); // id -> RagdollAvatar
@@ -42,6 +44,8 @@ class HittlersGame {
     this.domEndSubtitle = document.getElementById('end-subtitle');
     this.domFlailAlert = document.getElementById('flail-alert');
     this.domHitFeed = document.getElementById('hit-feed');
+    this.domLeaderboardModal = document.getElementById('leaderboard-modal');
+    this.domLeaderboardList = document.getElementById('leaderboard-list');
 
     this.init();
   }
@@ -288,6 +292,39 @@ class HittlersGame {
       this.audio.ensureContext();
       this.network.startGame();
     });
+
+    // Leaderboard Modal
+    document.getElementById('btn-show-leaderboard')?.addEventListener('click', async () => {
+      this.domLeaderboardModal?.classList.remove('hidden');
+      this.loadLeaderboardData();
+    });
+
+    document.getElementById('btn-close-leaderboard')?.addEventListener('click', () => {
+      this.domLeaderboardModal?.classList.add('hidden');
+    });
+  }
+
+  async loadLeaderboardData() {
+    if (!this.domLeaderboardList) return;
+    this.domLeaderboardList.innerHTML = '<div style="color:#aaa; padding:20px;">Loading Supabase leaderboard...</div>';
+
+    const scores = await this.supabase.getLeaderboard(10);
+    if (!scores || scores.length === 0) {
+      this.domLeaderboardList.innerHTML = `
+        <div style="color:#888; padding:20px;">
+          No match records yet. Play a match to climb the Supabase Leaderboard!
+        </div>`;
+      return;
+    }
+
+    this.domLeaderboardList.innerHTML = scores.map((s, idx) => `
+      <div class="leaderboard-item">
+        <span class="lb-rank">#${idx + 1}</span>
+        <span class="lb-name" style="color: ${s.avatar_color || '#fff'}">${s.username || 'Hero'}</span>
+        <span class="lb-stat">🏃 Escapes: ${s.runner_escapes || 0}</span>
+        <span class="lb-stat">🔨 Sweeps: ${s.hitter_clean_sweeps || 0}</span>
+      </div>
+    `).join('');
   }
 
   bindTouchButton(id, callback) {
@@ -364,6 +401,15 @@ class HittlersGame {
       this.domEndSubtitle.textContent = data.reason || 'All runners were knocked flat out!';
       this.audio.playVictoryFanfare();
     }
+
+    // Record match to Supabase
+    this.supabase.recordMatch({
+      roomCode: this.network.roomCode,
+      hitterName: data.hitterName,
+      winner: data.winner,
+      duration: 120,
+      totalRunners: this.remotePlayers.size + 1
+    });
   }
 
   handleRemoteBatSwing(data) {

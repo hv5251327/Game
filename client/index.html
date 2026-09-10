@@ -55,6 +55,19 @@
 
       <button id="btn-join-room" class="btn-primary">🎮 JOIN / HOST ROOM</button>
       <button id="btn-solo-test" class="btn-primary btn-solo">⚡ SOLO TEST (9 AI BOTS)</button>
+      <button id="btn-show-leaderboard" class="btn-primary btn-secondary">🏆 GLOBAL LEADERBOARD</button>
+    </div>
+  </div>
+
+  <!-- Leaderboard Modal -->
+  <div id="leaderboard-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h2 class="modal-title">🏆 GLOBAL LEADERBOARD</h2>
+      <p style="color:#a4b0be; font-size:0.85rem; margin-bottom:16px;">Powered by Supabase Live Database</p>
+      <div id="leaderboard-list" class="leaderboard-list">
+        <div style="color:#aaa; padding:20px;">Loading scores...</div>
+      </div>
+      <button id="btn-close-leaderboard" class="btn-primary" style="margin-top:16px;">Close</button>
     </div>
   </div>
 
