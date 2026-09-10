@@ -52,6 +52,14 @@ class HittlersGame {
     this.domLeaderboardModal = document.getElementById('leaderboard-modal');
     this.domLeaderboardList = document.getElementById('leaderboard-list');
 
+    this.domInputRoomCode = document.getElementById('input-room-code');
+    this.domBtnRandRoom = document.getElementById('btn-rand-room');
+    this.domHudRoomBadge = document.getElementById('hud-room-badge');
+    this.domHudRoomCode = document.getElementById('hud-room-code');
+    this.domBtnCopyRoom = document.getElementById('btn-copy-room');
+    this.domSelectLobbyHunterCount = document.getElementById('select-lobby-hunter-count');
+    this.domSelectHostHunterCount = document.getElementById('select-host-hunter-count');
+
     this.init();
   }
 
@@ -259,17 +267,58 @@ class HittlersGame {
       }
     });
 
+    // Room Code from URL query (?room=CODE)
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const roomParam = urlParams.get('room');
+      if (roomParam && this.domInputRoomCode) {
+        this.domInputRoomCode.value = roomParam.trim().toUpperCase();
+      }
+    } catch (e) {}
+
+    // Random Room Code Generator
+    this.domBtnRandRoom?.addEventListener('click', () => {
+      if (this.domInputRoomCode) {
+        const randCode = `ROOM-${Math.floor(1000 + Math.random() * 9000)}`;
+        this.domInputRoomCode.value = randCode;
+        this.showHitFeedNotice(`Generated new Room Code: ${randCode}`);
+      }
+    });
+
+    // Copy Room Code / Invite Link Button
+    this.domBtnCopyRoom?.addEventListener('click', () => {
+      const code = this.network.roomCode || this.domInputRoomCode?.value || 'LOBBY-1';
+      const inviteUrl = `${window.location.origin}${window.location.pathname}?room=${encodeURIComponent(code)}`;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(inviteUrl).then(() => {
+          this.showHitFeedNotice(`📋 Room invite link copied! Send to friends: ${code}`);
+        }).catch(() => {
+          prompt('Copy room code to share:', code);
+        });
+      } else {
+        prompt('Copy room code to share:', code);
+      }
+    });
+
+    // Host Hunter Count Selector inside Match
+    this.domSelectHostHunterCount?.addEventListener('change', (e) => {
+      const count = parseInt(e.target.value, 10) || 1;
+      this.network.setHunterCount(count);
+      this.showHitFeedNotice(`🪓 Host set Hunter count to ${count} (Max 3)`);
+    });
+
     // Lobby Join Button
     document.getElementById('btn-join-room')?.addEventListener('click', () => {
-      const roomCode = document.getElementById('input-room-code').value.trim() || 'LOBBY-1';
-      const nickname = document.getElementById('input-nickname').value.trim() || 'Bob';
-      const color = document.getElementById('input-color').value || '#f0f0f0';
-      const botCount = parseInt(document.getElementById('input-bots').value, 10);
+      const roomCode = (document.getElementById('input-room-code')?.value.trim() || 'LOBBY-1').toUpperCase();
+      const nickname = document.getElementById('input-nickname')?.value.trim() || 'Bob';
+      const color = document.getElementById('input-color')?.value || '#f0f0f0';
+      const botCount = parseInt(document.getElementById('input-bots')?.value, 10);
       const preferredRole = document.getElementById('select-role')?.value || 'RANDOM';
+      const hunterCount = parseInt(this.domSelectLobbyHunterCount?.value, 10) || 1;
 
       this.audio.ensureContext();
       this.localPlayer.setColor(color);
-      this.network.joinRoom(roomCode, nickname, color, isNaN(botCount) ? 9 : botCount, preferredRole, false);
+      this.network.joinRoom(roomCode, nickname, color, isNaN(botCount) ? 9 : botCount, preferredRole, false, hunterCount);
       this.domLobby.classList.add('hidden');
       this.domHud.classList.remove('hidden');
     });
@@ -295,10 +344,10 @@ class HittlersGame {
     });
   }
 
-  setRole(role) {
+  setRole(role, hunterCount = 1) {
     this.localPlayer.setRole(role);
     this.cameraManager.setRole(role);
-    this.updateRoleUi(role);
+    this.updateRoleUi(role, hunterCount);
 
     if (this.ambientLight) this.ambientLight.intensity = 0.75;
     if (this.dirLight) this.dirLight.intensity = 1.35;
@@ -392,8 +441,14 @@ class HittlersGame {
 
   handleRoomJoined(data) {
     console.log('Joined room:', data);
+    if (this.domHudRoomCode) {
+      this.domHudRoomCode.textContent = data.roomCode;
+    }
+    if (this.domSelectHostHunterCount && data.hunterCount) {
+      this.domSelectHostHunterCount.value = data.hunterCount;
+    }
     if (data.isHost) {
-      this.showHitFeedNotice(`👑 You are the HOST of ${data.roomCode}! Click Start Match when ready.`);
+      this.showHitFeedNotice(`👑 You are the HOST of ${data.roomCode}! Choose number of hunters and start match.`);
     } else {
       this.showHitFeedNotice(`Joined ${data.roomCode}! Waiting for Host to start match.`);
     }
@@ -402,11 +457,13 @@ class HittlersGame {
   handleCountdownStarted(data) {
     this.audio.playBuzzer();
     this.domEndOverlay.classList.add('hidden');
-    this.showHitFeedNotice(`🚨 Selection: ${data.hitterName} is THE HITTER! Round starting in 3s!`);
+    const hCount = data.hunterCount || (data.hitterIds ? data.hitterIds.length : 1);
+    this.showHitFeedNotice(`🚨 Selection: ${data.hitterName || 'The Hunters'} are HUNTING (${hCount} Hunter${hCount > 1 ? 's' : ''})! Round starting in 3s!`);
   }
 
   handleRoundStarted(data) {
-    this.showHitFeedNotice(`⚡ ROUND STARTED! SURVIVE 120 SECONDS!`);
+    const hCount = data.hunterCount || (data.hitterIds ? data.hitterIds.length : 1);
+    this.showHitFeedNotice(`⚡ ROUND STARTED! SURVIVE 120 SECONDS (${hCount} Hunter${hCount > 1 ? 's' : ''})!`);
   }
 
   handleRoundEnded(data) {
@@ -422,7 +479,7 @@ class HittlersGame {
         this.localPlayer.isDancing = true;
       }
     } else {
-      this.domEndTitle.textContent = '🔨 HITTER CLEAN SWEEP!';
+      this.domEndTitle.textContent = '🔨 HUNTERS CLEAN SWEEP!';
       this.domEndTitle.style.color = '#ff4757';
       this.domEndSubtitle.textContent = data.reason || 'All runners were knocked flat out!';
       this.audio.playVictoryFanfare();
@@ -501,6 +558,10 @@ class HittlersGame {
   handleGameTick(data) {
     this.domTimer.textContent = `${data.timer}s`;
 
+    if (this.domHudRoomCode && this.network.roomCode) {
+      this.domHudRoomCode.textContent = this.network.roomCode;
+    }
+
     // Host UI Controls Synchronization
     const isHost = (data.hostId === this.network.myId);
     if (this.domHostControls) {
@@ -519,14 +580,19 @@ class HittlersGame {
       }
     }
 
+    if (this.domSelectHostHunterCount && document.activeElement !== this.domSelectHostHunterCount && data.hunterCount) {
+      this.domSelectHostHunterCount.value = data.hunterCount;
+    }
+
     const activeIds = new Set();
+    const hunterCount = data.hunterCount || (data.hitterIds ? data.hitterIds.length : 1);
 
     for (const p of data.players) {
       activeIds.add(p.id);
 
       if (p.id === this.network.myId) {
         if (this.localPlayer.role !== p.role) {
-          this.setRole(p.role);
+          this.setRole(p.role, hunterCount);
         }
         if (!p.isAlive) {
           this.localPlayer.isAlive = false;
@@ -561,17 +627,21 @@ class HittlersGame {
     }
   }
 
-  updateRoleUi(role) {
+  updateRoleUi(role, hunterCount = 1) {
     if (role === 'HITTER') {
-      this.domRoleBadge.textContent = '🔨 THE HITTER';
+      this.domRoleBadge.textContent = (hunterCount > 1) ? `🔨 THE HUNTER (1 of ${hunterCount})` : '🔨 THE HUNTER';
       this.domRoleBadge.className = 'role-badge hitter';
-      this.domRoleDesc.textContent = '85% Blind! Press X or Click to Swing Bat. Hit objects to trigger Thermal Echoes!';
+      this.domRoleDesc.textContent = (hunterCount > 1)
+        ? `85% Blind! You are 1 of ${hunterCount} Hunters! Press X or Click to Swing Bat. Knock out all runners!`
+        : '85% Blind! Press X or Click to Swing Bat. Hit objects to trigger Thermal Echoes!';
       this.domPeepDarkness.classList.remove('hidden');
       this.domHpBar.classList.add('hidden');
     } else {
       this.domRoleBadge.textContent = '🏃 RUNNER';
       this.domRoleBadge.className = 'role-badge runner';
-      this.domRoleDesc.textContent = 'Survive 120s! Crawl under tables, jump on beds, toggle 1st/3rd view with V!';
+      this.domRoleDesc.textContent = (hunterCount > 1)
+        ? `Survive 120s against ${hunterCount} Hunters! Crawl under tables, jump on beds, toggle view with V!`
+        : 'Survive 120s! Crawl under tables, jump on beds, toggle 1st/3rd view with V!';
       this.domPeepDarkness.classList.add('hidden');
       this.domHpBar.classList.remove('hidden');
       this.updateHpUi();

@@ -37,6 +37,8 @@ class GameRoom {
     this.players = new Map();
     this.hitterHistory = new Set();
     this.currentHitterId = null;
+    this.currentHitterIds = new Set();
+    this.hunterCount = 1; // Host selectable 1 - 3 hunters (max 3)
     this.hostId = null; // First player who creates/joins becomes Host
     this.state = 'LOBBY';
     this.timer = 0;
@@ -104,14 +106,16 @@ class GameRoom {
     this.players.delete(socketId);
     this.bots.delete(socketId);
     this.hitterHistory.delete(socketId);
+    this.currentHitterIds.delete(socketId);
 
     if (this.hostId === socketId) {
       const nextRealPlayer = Array.from(this.players.values()).find(p => !p.isBot && p.id !== socketId);
       this.hostId = nextRealPlayer ? nextRealPlayer.id : null;
     }
 
-    if (this.currentHitterId === socketId && (this.state === 'HUNTING' || this.state === 'COUNTDOWN')) {
-      this.endRound('RUNNERS', 'The Hitter disconnected! Runners win!');
+    const remainingHunters = Array.from(this.currentHitterIds).filter(id => this.players.has(id));
+    if (remainingHunters.length === 0 && (this.state === 'HUNTING' || this.state === 'COUNTDOWN')) {
+      this.endRound('RUNNERS', 'All Hitters disconnected! Runners win!');
     } else if (this.players.size === 0) {
       this.stop();
       rooms.delete(this.code);
@@ -143,34 +147,46 @@ class GameRoom {
     const playerList = Array.from(this.players.values());
     if (playerList.length === 0) return null;
 
-    let chosen = null;
+    // Number of hunters: host selection (1..3), clamped by available players
+    const maxRequested = Math.min(3, Math.max(1, this.hunterCount || 1));
+    const targetCount = (playerList.length === 1) ? 1 : Math.min(maxRequested, Math.max(1, playerList.length - 1));
+
+    const chosen = [];
+
+    // 1. Force requested hitter first if specified (e.g. Test as Hunter button)
     if (forcedPlayerId && this.players.has(forcedPlayerId)) {
-      chosen = this.players.get(forcedPlayerId);
-    } else {
-      // Prioritize human players who requested to play as Hunter / Hitter
-      const hunterRequesters = playerList.filter(p => !p.isBot && p.preferredRole === 'HITTER');
-      if (hunterRequesters.length > 0) {
-        let candidates = hunterRequesters.filter(p => !this.hitterHistory.has(p.id));
-        if (candidates.length === 0) {
-          this.hitterHistory.clear();
-          candidates = hunterRequesters;
-        }
-        chosen = candidates[Math.floor(Math.random() * candidates.length)];
-      } else {
-        let candidates = playerList.filter(p => !this.hitterHistory.has(p.id));
-        if (candidates.length === 0) {
-          this.hitterHistory.clear();
-          candidates = playerList;
-        }
-        chosen = candidates[Math.floor(Math.random() * candidates.length)];
-      }
+      chosen.push(forcedPlayerId);
     }
 
-    this.hitterHistory.add(chosen.id);
-    this.currentHitterId = chosen.id;
+    // 2. Add players who preferred HITTER
+    const hunterRequesters = playerList.filter(p => !p.isBot && p.preferredRole === 'HITTER' && !chosen.includes(p.id));
+    for (const p of hunterRequesters) {
+      if (chosen.length >= targetCount) break;
+      chosen.push(p.id);
+    }
+
+    // 3. Fill remaining hunter slots using fair round-robin history
+    while (chosen.length < targetCount) {
+      let candidates = playerList.filter(p => !chosen.includes(p.id) && !this.hitterHistory.has(p.id));
+      if (candidates.length === 0) {
+        this.hitterHistory.clear();
+        candidates = playerList.filter(p => !chosen.includes(p.id));
+        if (candidates.length === 0) break;
+      }
+      const pick = candidates[Math.floor(Math.random() * candidates.length)];
+      chosen.push(pick.id);
+      this.hitterHistory.add(pick.id);
+    }
+
+    for (const id of chosen) {
+      this.hitterHistory.add(id);
+    }
+
+    this.currentHitterIds = new Set(chosen);
+    this.currentHitterId = chosen[0] || null;
 
     for (const player of playerList) {
-      player.role = (player.id === chosen.id) ? 'HITTER' : 'RUNNER';
+      player.role = this.currentHitterIds.has(player.id) ? 'HITTER' : 'RUNNER';
       player.hp = 100;
       player.isAlive = true;
       player.isFlailing = false;
@@ -202,9 +218,14 @@ class GameRoom {
       player.rotation.y = angle + Math.PI;
     });
 
+    const hitterNames = Array.from(this.currentHitterIds).map(id => this.players.get(id)?.name || 'Hitter');
+
     io.to(this.code).emit('round_countdown_started', {
       hitterId: this.currentHitterId,
-      hitterName: this.players.get(this.currentHitterId)?.name || 'The Hitter',
+      hitterIds: Array.from(this.currentHitterIds),
+      hitterNames: hitterNames,
+      hitterName: hitterNames.join(' & ') || 'The Hunter(s)',
+      hunterCount: this.currentHitterIds.size,
       duration: COUNTDOWN_DURATION
     });
 
@@ -216,6 +237,8 @@ class GameRoom {
     this.timer = ROUND_DURATION;
     io.to(this.code).emit('round_started', {
       hitterId: this.currentHitterId,
+      hitterIds: Array.from(this.currentHitterIds),
+      hunterCount: this.currentHitterIds.size,
       duration: ROUND_DURATION
     });
   }
@@ -225,10 +248,13 @@ class GameRoom {
     this.timer = ROUND_END_DURATION;
     this.roundWinner = winnerRole;
 
+    const hitterNames = Array.from(this.currentHitterIds).map(id => this.players.get(id)?.name || 'Hitter');
+
     io.to(this.code).emit('round_ended', {
       winner: winnerRole,
       hitterId: this.currentHitterId,
-      hitterName: this.players.get(this.currentHitterId)?.name || 'The Hitter',
+      hitterIds: Array.from(this.currentHitterIds),
+      hitterName: hitterNames.join(' & ') || 'The Hunters',
       reason: reason
     });
   }
@@ -247,7 +273,7 @@ class GameRoom {
     const swingDirZ = -Math.cos(hitter.rotation.y);
 
     for (const [id, runner] of this.players.entries()) {
-      if (id === hitterId || !runner.isAlive) continue;
+      if (id === hitterId || runner.role === 'HITTER' || !runner.isAlive) continue;
 
       const dx = runner.position.x - hitter.position.x;
       const dz = runner.position.z - hitter.position.z;
@@ -294,7 +320,6 @@ class GameRoom {
     if (this.state !== 'HUNTING' && this.state !== 'LOBBY') return;
 
     const bounds = 9.5;
-    const hitter = this.players.get(this.currentHitterId);
 
     if (this.soundInvestigateTimer > 0) {
       this.soundInvestigateTimer -= delta;
@@ -341,20 +366,30 @@ class GameRoom {
         let vx = 0;
         let vz = 0;
 
-        if (hitter && this.state === 'HUNTING') {
-          const dx = bot.position.x - hitter.position.x;
-          const dz = bot.position.z - hitter.position.z;
-          const dist = Math.hypot(dx, dz);
-
-          if (dist < 6.5) {
-            vx = (dx / (dist || 1)) * BASE_SPEED;
-            vz = (dz / (dist || 1)) * BASE_SPEED;
-            bot.rotation.y = Math.atan2(vx, vz);
-          } else {
-            if (Math.random() < 0.03) bot.rotation.y += (Math.random() - 0.5) * 1.5;
-            vx = -Math.sin(bot.rotation.y) * (BASE_SPEED * 0.4);
-            vz = -Math.cos(bot.rotation.y) * (BASE_SPEED * 0.4);
+        // Flee from the nearest active hunter
+        let nearestHitter = null;
+        let minDist = Infinity;
+        for (const hid of this.currentHitterIds) {
+          const h = this.players.get(hid);
+          if (h && h.isAlive) {
+            const d = Math.hypot(bot.position.x - h.position.x, bot.position.z - h.position.z);
+            if (d < minDist) {
+              minDist = d;
+              nearestHitter = h;
+            }
           }
+        }
+
+        if (nearestHitter && this.state === 'HUNTING' && minDist < 6.5) {
+          const dx = bot.position.x - nearestHitter.position.x;
+          const dz = bot.position.z - nearestHitter.position.z;
+          vx = (dx / (minDist || 1)) * BASE_SPEED;
+          vz = (dz / (minDist || 1)) * BASE_SPEED;
+          bot.rotation.y = Math.atan2(vx, vz);
+        } else {
+          if (Math.random() < 0.03) bot.rotation.y += (Math.random() - 0.5) * 1.5;
+          vx = -Math.sin(bot.rotation.y) * (BASE_SPEED * 0.4);
+          vz = -Math.cos(bot.rotation.y) * (BASE_SPEED * 0.4);
         }
 
         bot.position.x += vx * delta;
@@ -464,6 +499,8 @@ class GameRoom {
         state: this.state,
         timer: Math.ceil(this.timer),
         hitterId: this.currentHitterId,
+        hitterIds: Array.from(this.currentHitterIds),
+        hunterCount: this.hunterCount,
         hostId: this.hostId,
         players: playersArray,
         roundWinner: this.roundWinner
@@ -482,7 +519,7 @@ class GameRoom {
 io.on('connection', (socket) => {
   let currentRoomCode = null;
 
-  socket.on('join_room', ({ roomCode, nickname, color, botCount, autoStart, preferredRole, forceHitter }) => {
+  socket.on('join_room', ({ roomCode, nickname, color, botCount, autoStart, preferredRole, forceHitter, hunterCount }) => {
     const code = (roomCode || 'LOBBY-1').toUpperCase();
     socket.join(code);
     currentRoomCode = code;
@@ -491,6 +528,10 @@ io.on('connection', (socket) => {
     if (!room) {
       room = new GameRoom(code);
       rooms.set(code, room);
+    }
+
+    if (typeof hunterCount === 'number') {
+      room.hunterCount = Math.min(3, Math.max(1, parseInt(hunterCount) || 1));
     }
 
     const rolePref = forceHitter ? 'HITTER' : (preferredRole || 'RANDOM');
@@ -507,6 +548,8 @@ io.on('connection', (socket) => {
       player: player,
       state: room.state,
       hitterId: room.currentHitterId,
+      hitterIds: Array.from(room.currentHitterIds),
+      hunterCount: room.hunterCount,
       hostId: room.hostId,
       isHost: isHost
     });
@@ -530,6 +573,22 @@ io.on('connection', (socket) => {
       }
       const shouldForce = forceHitter || (preferredRole === 'HITTER');
       room.startCountdown(shouldForce ? socket.id : null);
+    }
+  });
+
+  socket.on('set_hunter_count', ({ count }) => {
+    if (!currentRoomCode) return;
+    const room = rooms.get(currentRoomCode);
+    if (room) {
+      // ONLY the room host can configure hunter count
+      if (room.hostId && socket.id !== room.hostId) {
+        socket.emit('room_error', { message: 'Only the room host can change hunter count.' });
+        return;
+      }
+      room.hunterCount = Math.min(3, Math.max(1, parseInt(count) || 1));
+      io.to(currentRoomCode).emit('room_hunter_count_updated', {
+        hunterCount: room.hunterCount
+      });
     }
   });
 

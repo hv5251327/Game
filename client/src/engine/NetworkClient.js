@@ -76,7 +76,7 @@ export class NetworkClient {
     });
   }
 
-  joinRoom(roomCode, nickname, color, botCount = 0, preferredRole = 'RANDOM', autoStart = false) {
+  joinRoom(roomCode, nickname, color, botCount = 0, preferredRole = 'RANDOM', autoStart = false, hunterCount = 1) {
     if (!this.socket) this.connect();
     this.socket.emit('join_room', {
       roomCode,
@@ -85,7 +85,8 @@ export class NetworkClient {
       botCount,
       preferredRole,
       forceHitter: (preferredRole === 'HITTER'),
-      autoStart
+      autoStart,
+      hunterCount
     });
   }
 
@@ -94,6 +95,10 @@ export class NetworkClient {
       forceHitter,
       preferredRole: forceHitter ? 'HITTER' : 'RANDOM'
     });
+  }
+
+  setHunterCount(count) {
+    this.socket?.emit('set_hunter_count', { count });
   }
 
   setBots(count) {

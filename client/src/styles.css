@@ -303,6 +303,61 @@ body, html {
   text-align: center;
 }
 
+.room-code-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(15, 18, 28, 0.88);
+  border: 1px solid rgba(46, 213, 115, 0.4);
+  padding: 5px 14px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  color: #f1f2f6;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  pointer-events: auto;
+}
+
+.btn-copy-code {
+  background: rgba(46, 213, 115, 0.2);
+  border: 1px solid #2ed573;
+  color: #2ed573;
+  border-radius: 8px;
+  padding: 3px 10px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  pointer-events: auto;
+}
+
+.btn-copy-code:hover {
+  background: #2ed573;
+  color: #111;
+  transform: scale(1.05);
+}
+
+.host-hunter-wrapper {
+  display: flex;
+  align-items: center;
+  background: rgba(15, 18, 28, 0.88);
+  border: 1px solid rgba(255, 165, 2, 0.5);
+  padding: 4px 10px;
+  border-radius: 10px;
+  pointer-events: auto;
+}
+
+.host-select {
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #ffa502;
+  font-weight: 700;
+  font-size: 0.82rem;
+  padding: 4px 8px;
+  border-radius: 6px;
+  outline: none;
+  cursor: pointer;
+}
+
 /* Health Bar */
 .hp-container {
   position: absolute;
