@@ -815,7 +815,11 @@ class HittlersGame {
     for (const [id, remote] of this.remotePlayers.entries()) {
       const data = this.remoteData.get(id);
       if (data) {
-        remote.root.position.lerp(new THREE.Vector3(data.position.x, data.position.y || 0, data.position.z), 0.35);
+        const targetPos = new THREE.Vector3(data.position.x, data.position.y || 0, data.position.z);
+        const distToTarget = Math.hypot(targetPos.x - remote.root.position.x, targetPos.z - remote.root.position.z);
+        const isRemoteMoving = (distToTarget > 0.005);
+
+        remote.root.position.lerp(targetPos, 0.35);
         remote.root.rotation.y = data.rotation.y;
         remote.spinePitch = (typeof data.spinePitch === 'number') ? data.spinePitch : 0;
         remote.isCrawling = !!data.isCrawling;
@@ -824,7 +828,6 @@ class HittlersGame {
         remote.isFlailing = !!data.isFlailing;
         remote.isAlive = (data.isAlive !== false);
 
-        const isRemoteMoving = (Math.hypot(data.position.x - remote.root.position.x, data.position.z - remote.root.position.z) > 0.012);
         remote.updateAnimation(delta, isRemoteMoving);
       }
     }

@@ -432,7 +432,7 @@ class GameRoom {
           // Flee directly away from nearest hunter
           const dx = bot.position.x - nearestHitter.position.x;
           const dz = bot.position.z - nearestHitter.position.z;
-          bot.rotation.y = Math.atan2(dx, dz);
+          bot.rotation.y = Math.atan2(-dx, -dz);
           speed = BASE_SPEED * 0.95;
 
           if (Math.abs(bot.position.x) < 1.4 && Math.abs(bot.position.z) < 1.8) {
@@ -455,13 +455,15 @@ class GameRoom {
 
       if (Math.abs(bot.position.x) > bounds) {
         bot.position.x = Math.sign(bot.position.x) * bounds;
-        bot.botWanderAngle = Math.random() * Math.PI * 2;
-        bot.botTurnTimer = 0.5;
+        bot.botWanderAngle = Math.PI - bot.rotation.y + (Math.random() - 0.5);
+        bot.rotation.y = bot.botWanderAngle;
+        bot.botTurnTimer = 1.0;
       }
       if (Math.abs(bot.position.z) > bounds) {
         bot.position.z = Math.sign(bot.position.z) * bounds;
-        bot.botWanderAngle = Math.random() * Math.PI * 2;
-        bot.botTurnTimer = 0.5;
+        bot.botWanderAngle = -bot.rotation.y + (Math.random() - 0.5);
+        bot.rotation.y = bot.botWanderAngle;
+        bot.botTurnTimer = 1.0;
       }
     }
   }
