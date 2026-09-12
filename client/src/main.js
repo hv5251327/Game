@@ -51,6 +51,9 @@ class CricketGame {
     this.vrMouseOffsetX = 0;
     this.vrMouseOffsetY = 0;
 
+    // Pitch Targeting Marker
+    this.pitchTargetGroup = null;
+
     this._setupDOM();
     this._initThree();
     this._initAudio();
@@ -185,6 +188,8 @@ class CricketGame {
     this.bowlingUI = new BowlingUI(this.domControlsContainer);
 
     this._setupDefaultCharacters();
+    this._initPitchTargetMarker();
+    this._setupPitchScreenPicker();
 
     // Bat Controller Swing Hook
     this.battingUI.onSwing = (command) => {
@@ -203,8 +208,93 @@ class CricketGame {
     };
 
     this.bowlingUI.onBowl = (data) => {
+      if (this.pitchTargetGroup) this.pitchTargetGroup.visible = false;
       this.network.bowl(data);
     };
+  }
+
+  _initPitchTargetMarker() {
+    this.pitchTargetGroup = new THREE.Group();
+
+    // 1. Outer reticle ring
+    const ringGeo = new THREE.RingGeometry(0.25, 0.33, 32);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xff3838,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.9
+    });
+    const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+    ringMesh.rotation.x = -Math.PI / 2;
+    this.pitchTargetGroup.add(ringMesh);
+
+    // 2. Inner target dot
+    const dotGeo = new THREE.CircleGeometry(0.07, 16);
+    const dotMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      side: THREE.DoubleSide
+    });
+    const dotMesh = new THREE.Mesh(dotGeo, dotMat);
+    dotMesh.rotation.x = -Math.PI / 2;
+    this.pitchTargetGroup.add(dotMesh);
+
+    // 3. Crosshair markers
+    const crossMat = new THREE.MeshBasicMaterial({ color: 0xffd32a, side: THREE.DoubleSide });
+    const c1 = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 0.035), crossMat);
+    c1.rotation.x = -Math.PI / 2;
+    c1.position.x = -0.42;
+    const c2 = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 0.035), crossMat);
+    c2.rotation.x = -Math.PI / 2;
+    c2.position.x = 0.42;
+    const c3 = new THREE.Mesh(new THREE.PlaneGeometry(0.035, 0.12), crossMat);
+    c3.rotation.x = -Math.PI / 2;
+    c3.position.z = -0.42;
+    const c4 = new THREE.Mesh(new THREE.PlaneGeometry(0.035, 0.12), crossMat);
+    c4.rotation.x = -Math.PI / 2;
+    c4.position.z = 0.42;
+    this.pitchTargetGroup.add(c1, c2, c3, c4);
+
+    this.pitchTargetGroup.position.set(0, 0.045, 1.2);
+    this.pitchTargetGroup.visible = false;
+    this.scene.add(this.pitchTargetGroup);
+  }
+
+  _setupPitchScreenPicker() {
+    this.pitchRaycaster = new THREE.Raycaster();
+    this.pitchPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.02);
+    this.mouseCoords = new THREE.Vector2();
+
+    const handlePointerOnPitch = (e) => {
+      // Only active when bowler is aiming to bowl
+      if (!this.bowlingUI || !this.bowlingUI.active) return;
+      if (e.target && e.target.closest('#bowling-ui, #batting-ui, #hud, .modal-card, button, input, select')) {
+        return;
+      }
+
+      const clientX = e.clientX ?? (e.touches && e.touches[0]?.clientX);
+      const clientY = e.clientY ?? (e.touches && e.touches[0]?.clientY);
+      if (typeof clientX !== 'number' || typeof clientY !== 'number') return;
+
+      this.mouseCoords.x = (clientX / window.innerWidth) * 2 - 1;
+      this.mouseCoords.y = -(clientY / window.innerHeight) * 2 + 1;
+
+      this.pitchRaycaster.setFromCamera(this.mouseCoords, this.camera);
+      const intersection = new THREE.Vector3();
+      if (this.pitchRaycaster.ray.intersectPlane(this.pitchPlane, intersection)) {
+        // Clamp within realistic pitch bounds
+        const px = Math.max(-1.1, Math.min(1.1, intersection.x));
+        const pz = Math.max(-1.8, Math.min(3.4, intersection.z));
+
+        if (this.pitchTargetGroup) {
+          this.pitchTargetGroup.position.set(px, 0.045, pz);
+          this.pitchTargetGroup.visible = true;
+        }
+        this.bowlingUI.setLandingZone(px, pz);
+      }
+    };
+
+    window.addEventListener('pointermove', handlePointerOnPitch);
+    window.addEventListener('pointerdown', handlePointerOnPitch);
   }
 
   _initAudio() {
@@ -368,9 +458,13 @@ class CricketGame {
       if (e.code === 'KeyV' && !e.target.matches('input, select')) {
         this._toggleVRMode();
       } else if (e.code === 'KeyR') {
-        this._handleUserPushRun();
+        if (!this.isUserBowling && this.manualRunningActive) {
+          this._handleUserPushRun();
+        }
       } else if (e.code === 'KeyC') {
-        this._handleUserCancelRun();
+        if (!this.isUserBowling && this.manualRunningActive) {
+          this._handleUserCancelRun();
+        }
       }
     });
   }
@@ -482,8 +576,12 @@ class CricketGame {
     });
 
     this.network.on('bowl_now', (data) => {
-      this.showNotice(`⚾ Your turn to bowl ball ${data.ball} of over ${data.over}!`);
+      this.showNotice(`⚾ Your turn to bowl ball ${data.ball} of over ${data.over}! Click on pitch to set landing spot.`);
       this._updateCameraMode();
+      if (this.pitchTargetGroup) {
+        this.pitchTargetGroup.position.set(this.bowlingUI.landingZone.x, 0.045, this.bowlingUI.landingZone.z);
+        this.pitchTargetGroup.visible = true;
+      }
       this.bowlingUI.show({ timeout: 20000 });
     });
 
@@ -537,6 +635,7 @@ class CricketGame {
     });
 
     this.network.on('delivery', (data) => {
+      if (this.pitchTargetGroup) this.pitchTargetGroup.visible = false;
       const paceStr = data.paceKmh ? ` [${data.paceKmh} km/h]` : '';
       const swingStr = data.swingDirection ? ` &bull; ${data.swingDirection.toUpperCase()}` : '';
       this.domActionBanner.textContent = `⚾ ${data.bowler?.name} delivers ${data.deliveryType.toUpperCase()}${swingStr}${paceStr}!`;
@@ -545,11 +644,10 @@ class CricketGame {
         this.bowlerAvatar.triggerBowlAction();
       }
 
-      // Authentic cricket ball delivery: release from bowler hand (y = 1.35m)
+      // Authentic cricket ball delivery: release from bowler hand (y = 1.35m) to EXACT pitch spot
       const startPos = new THREE.Vector3(0, 1.35, -3.7);
-      const lzNormZ = typeof data.landingZone?.z === 'number' ? data.landingZone.z : 0.45;
-      const lzZ = 3.0 - lzNormZ * 3.2;
-      const lzX = (data.landingZone?.x || 0) * 0.65;
+      const lzX = typeof data.landingZone?.x === 'number' ? data.landingZone.x : 0;
+      const lzZ = typeof data.landingZone?.z === 'number' ? data.landingZone.z : 1.2;
       const landingPos = new THREE.Vector3(lzX, 0.16, lzZ);
       const targetPos = new THREE.Vector3(lzX, 0.68, 3.8);
 
@@ -575,6 +673,7 @@ class CricketGame {
     this.network.on('ball_result', (data) => {
       this.battingUI.hide();
       this.bowlingUI.hide();
+      if (this.pitchTargetGroup) this.pitchTargetGroup.visible = false;
       this._updateScorecardUI(data.scorecard);
 
       const dirStr = data.direction || 'forward';
@@ -588,6 +687,13 @@ class CricketGame {
           power: data.timing || 0.8
         });
       }
+
+      // Determine whether user on THIS client is on the batting team
+      const isBattingUser = !this.isUserBowling && (
+        (this.currentScorecard?.battingTeam === this.myTeam) ||
+        (data.batsmanId === this.myId) ||
+        (!this.roomInfo?.players?.teamA?.some(p => !p.isBot && p.id !== this.myId) && this.currentScorecard?.battingTeam === 'a')
+      );
 
       if (data.wicket) {
         this._playOutSound();
@@ -604,12 +710,12 @@ class CricketGame {
           setTimeout(() => {
             this.cameraTracking = false;
             this._animateFielderCatch(dirInfo, catchDist);
-            this.showBigEvent('OUT! CAUGHT!', `${data.dismissal || 'Caught'} — Brilliant take!`);
+            this.showBigEvent('OUT! CAUGHT! 🧤', `${data.dismissal || 'Caught'} — Direct catch taken cleanly!`);
           }, 800);
         } else {
           // Bowled / LBW / Stumped
           this.cameraTracking = false;
-          this.showBigEvent('OUT! WICKET!', `${dismissal} — Umpire finger raised!`);
+          this.showBigEvent('OUT! WICKET! ☝️', `${dismissal} — Umpire finger raised!`);
         }
       } else if (data.runs === 6) {
         this.cameraTracking = true;
@@ -629,10 +735,14 @@ class CricketGame {
         setTimeout(() => { this.cameraTracking = false; }, 3200);
       } else if (data.runs > 0) {
         this.cameraTracking = true;
-        this.showNotice(`🏏 Ball placed in the gap! Use RUN button to run!`);
+        if (isBattingUser) {
+          this.showNotice(`🏏 Ball placed in the gap! Use RUN [R] button to run!`);
+        } else {
+          this.showNotice(`🏏 Ball hit into the gap! Fielders sprinting to collect and throw!`);
+        }
         this.ball.hitLaunch(new THREE.Vector3(0, 0.65, 3.8), dirInfo, data.timing || 0.55, data.shotType || 'drive', false, data.runs);
         this._animateFieldersPursuit(dirInfo, data.runs);
-        this._setupManualRunning(data.runs);
+        this._setupManualRunning(data.runs, isBattingUser);
         setTimeout(() => { this.cameraTracking = false; }, 3200);
       } else if (data.wide) {
         this.cameraTracking = false;
@@ -645,6 +755,16 @@ class CricketGame {
         this.cameraTracking = false;
         this.showNotice(`• Dot ball! Tidy fielding.`);
       }
+    });
+
+    this.network.on('run_out_confirmed', (data) => {
+      this._playOutSound();
+      if (this.umpireAvatar) this.umpireAvatar.signalOut();
+      this.showBigEvent('OUT! RUN OUT! 🎯', `${data.batsmanName || 'Batter'} is RUN OUT! Direct hit!`);
+      this._updateScorecardUI(data.scorecard);
+      this.manualRunningActive = false;
+      this.isRunningBetweenWickets = false;
+      if (this.domRunningBar) this.domRunningBar.classList.add('hidden');
     });
 
     this.network.on('next_batsman_needed', (data) => {
@@ -807,7 +927,7 @@ class CricketGame {
     }
   }
 
-  // Dynamic Fielder Pursuit: 2 closest fielders sprint towards ball, gather and throw
+  // Dynamic Fielder Pursuit: closest fielders sprint towards ball, gather, and throw
   _animateFieldersPursuit(dirInfo, runs = 1) {
     const dist = Math.min(25, 12 + (runs || 1) * 3.5);
     const targetX = dirInfo.x * dist;
@@ -827,19 +947,27 @@ class CricketGame {
       const startX = primary.group.position.x;
       const startZ = primary.group.position.z;
       const startTime = performance.now();
-      const duration = 1600;
+      const duration = 1400;
 
       const chaseStep = (now) => {
         const p = Math.min(1.0, (now - startTime) / duration);
-        primary.group.position.x = startX + (targetX - startX) * (p * 0.85);
-        primary.group.position.z = startZ + (targetZ - startZ) * (p * 0.85);
+        primary.group.position.x = startX + (targetX - startX) * (p * 0.9);
+        primary.group.position.z = startZ + (targetZ - startZ) * (p * 0.9);
         primary.group.rotation.y = Math.atan2(targetX - startX, targetZ - startZ);
         primary.group.position.y = 0.3 + Math.abs(Math.sin(p * Math.PI * 8)) * 0.08;
 
         if (p < 1.0) {
           requestAnimationFrame(chaseStep);
         } else {
+          // Fielder reaches the ball, gathers it, and then THROWS it back towards the stumps!
           primary.triggerFieldGather();
+          this.ball.pos.set(primary.group.position.x, 0.35, primary.group.position.z);
+          this.ball.vel.set(0, 0, 0);
+          this.ball.group.position.copy(this.ball.pos);
+
+          setTimeout(() => {
+            this._animateFielderThrow(primary, runs);
+          }, 350);
         }
       };
       requestAnimationFrame(chaseStep);
@@ -851,7 +979,7 @@ class CricketGame {
       const bTargetX = targetX * 0.75;
       const bTargetZ = targetZ * 0.75;
       const bStartTime = performance.now();
-      const bDuration = 1800;
+      const bDuration = 1600;
 
       const backupStep = (now) => {
         const p = Math.min(1.0, (now - bStartTime) / bDuration);
@@ -862,6 +990,79 @@ class CricketGame {
       };
       requestAnimationFrame(backupStep);
     }
+  }
+
+  // Fielder Collect & Rapid Throw to the Wickets (+ Run Out Trigger!)
+  _animateFielderThrow(fielder, runs) {
+    if (!fielder || !this.ball) return;
+
+    // Determine target stumps: throw towards the closest stumps or where batsman is running to
+    const fielderZ = fielder.group.position.z;
+    const targetEndZ = Math.abs(fielderZ - 4.5) < Math.abs(fielderZ + 4.5) ? 4.5 : -4.5;
+    const targetCreaseZ = targetEndZ > 0 ? 3.8 : -3.8;
+    const stumpTarget = new THREE.Vector3(0, 0.42, targetEndZ);
+
+    const fPos = fielder.group.position.clone();
+    this.showNotice(`🎯 Fielder gathers and fires throw toward the ${targetEndZ > 0 ? 'striker' : 'bowler'} stumps!`);
+
+    const startTime = performance.now();
+    const throwDuration = 620;
+
+    const throwStep = (now) => {
+      const elapsed = now - startTime;
+      const p = Math.min(1.0, elapsed / throwDuration);
+
+      // Arc throw through the air
+      this.ball.pos.x = fPos.x + (stumpTarget.x - fPos.x) * p;
+      this.ball.pos.z = fPos.z + (stumpTarget.z - fPos.z) * p;
+      this.ball.pos.y = fPos.y + 0.35 + (stumpTarget.y - (fPos.y + 0.35)) * p + Math.sin(p * Math.PI) * 0.85;
+      this.ball.group.position.copy(this.ball.pos);
+
+      if (p < 1.0) {
+        requestAnimationFrame(throwStep);
+      } else {
+        // Ball strikes / reaches the stumps!
+        this.ball.pos.copy(stumpTarget);
+        this.ball.group.position.copy(this.ball.pos);
+
+        // Check whether batsmen are running between wickets!
+        const isCurrentlyRunning = this.manualRunningActive && this.isRunningBetweenWickets;
+        const strikerZ = this.strikerAvatar ? this.strikerAvatar.group.position.z : 3.8;
+        const nonStrikerZ = this.nonStrikerAvatar ? this.nonStrikerAvatar.group.position.z : -3.8;
+
+        const strikerShortOfCrease = Math.abs(strikerZ - targetCreaseZ) > 0.45 && Math.abs(strikerZ) < 3.6;
+        const nonStrikerShortOfCrease = Math.abs(nonStrikerZ - targetCreaseZ) > 0.45 && Math.abs(nonStrikerZ) < 3.6;
+
+        if (isCurrentlyRunning || (this.manualRunningActive && (strikerShortOfCrease || nonStrikerShortOfCrease))) {
+          // Trigger RUN OUT!
+          this._triggerRunOut(targetEndZ < 0);
+        } else {
+          this.showNotice('🧤 Clean collection at the stumps by the keeper/bowler.');
+        }
+      }
+    };
+    requestAnimationFrame(throwStep);
+  }
+
+  // Trigger Run Out Sequence
+  _triggerRunOut(isNonStriker = false) {
+    this._playOutSound();
+    if (this.umpireAvatar) this.umpireAvatar.signalOut();
+
+    const victimName = isNonStriker
+      ? (this.currentScorecard?.nonStriker?.name || 'Non-Striker')
+      : (this.currentScorecard?.currentBatsman?.name || 'Striker');
+
+    this.showBigEvent('OUT! RUN OUT! 🎯', `Direct hit! ${victimName} is caught short of the crease!`);
+
+    this.manualRunningActive = false;
+    this.isRunningBetweenWickets = false;
+    if (this.domRunningBar) this.domRunningBar.classList.add('hidden');
+
+    this.network.runOut({
+      batsmanId: isNonStriker ? this.currentScorecard?.nonStriker?.id : this.currentScorecard?.currentBatsman?.id,
+      isNonStriker
+    });
   }
 
   _updateCameraMode() {
@@ -1053,45 +1254,48 @@ class CricketGame {
   }
 
   // Interactive Manual Running System (User chooses to Run [R] or Cancel [C])
-  _setupManualRunning(maxRuns) {
+  _setupManualRunning(maxRuns, isBattingUser = false) {
     this.manualRunningActive = true;
     this.manualRunsTaken = 0;
     this.maxAvailableRuns = Math.max(1, maxRuns || 1);
     this.isRunningBetweenWickets = false;
     this.runCancelled = false;
 
-    if (!this.domRunningBar) {
-      this.domRunningBar = document.createElement('div');
-      this.domRunningBar.id = 'manual-running-bar';
-      this.domRunningBar.className = 'running-control-bar';
-      this.domRunningBar.innerHTML = `
-        <div class="run-score-tally">Runs: <strong id="manual-runs-count">0</strong> / <span id="manual-max-runs">${this.maxAvailableRuns}</span></div>
-        <button id="btn-manual-run" class="btn-run-action">🏃 RUN [R]</button>
-        <button id="btn-manual-cancel" class="btn-cancel-action">🛑 CANCEL RUN [C]</button>
-      `;
-      document.body.appendChild(this.domRunningBar);
+    if (isBattingUser) {
+      if (!this.domRunningBar) {
+        this.domRunningBar = document.createElement('div');
+        this.domRunningBar.id = 'manual-running-bar';
+        this.domRunningBar.className = 'running-control-bar';
+        this.domRunningBar.innerHTML = `
+          <div class="run-score-tally">Runs: <strong id="manual-runs-count">0</strong> / <span id="manual-max-runs">${this.maxAvailableRuns}</span></div>
+          <button id="btn-manual-run" class="btn-run-action">🏃 RUN [R]</button>
+          <button id="btn-manual-cancel" class="btn-cancel-action">🛑 CANCEL RUN [C]</button>
+        `;
+        document.body.appendChild(this.domRunningBar);
 
-      this.domRunningBar.querySelector('#btn-manual-run').addEventListener('click', () => {
-        this._handleUserPushRun();
-      });
-      this.domRunningBar.querySelector('#btn-manual-cancel').addEventListener('click', () => {
-        this._handleUserCancelRun();
-      });
+        this.domRunningBar.querySelector('#btn-manual-run').addEventListener('click', () => {
+          this._handleUserPushRun();
+        });
+        this.domRunningBar.querySelector('#btn-manual-cancel').addEventListener('click', () => {
+          this._handleUserCancelRun();
+        });
+      } else {
+        const countEl = document.getElementById('manual-runs-count');
+        const maxEl = document.getElementById('manual-max-runs');
+        if (countEl) countEl.textContent = '0';
+        if (maxEl) maxEl.textContent = String(this.maxAvailableRuns);
+        this.domRunningBar.classList.remove('hidden');
+      }
+
+      const cancelBtn = this.domRunningBar.querySelector('#btn-manual-cancel');
+      if (cancelBtn) cancelBtn.classList.remove('disabled');
     } else {
-      const countEl = document.getElementById('manual-runs-count');
-      const maxEl = document.getElementById('manual-max-runs');
-      if (countEl) countEl.textContent = '0';
-      if (maxEl) maxEl.textContent = String(this.maxAvailableRuns);
-      this.domRunningBar.classList.remove('hidden');
-    }
+      // Ensure running bar is completely hidden for bowler and fielding team
+      if (this.domRunningBar) {
+        this.domRunningBar.classList.add('hidden');
+      }
 
-    const cancelBtn = this.domRunningBar.querySelector('#btn-manual-cancel');
-    if (cancelBtn) cancelBtn.classList.remove('disabled');
-
-    // If human is not on the batting team (e.g. user is bowling), bots automatically take runs
-    const isBattingTeam = (this.currentScorecard?.battingTeam === this.myTeam) ||
-                          (!this.roomInfo?.players?.teamA?.some(p => !p.isBot && p.id !== this.myId));
-    if (!isBattingTeam) {
+      // Automated bot running animation for visual realism on bowling side
       let r = 0;
       const botRunInterval = setInterval(() => {
         if (!this.manualRunningActive || r >= this.maxAvailableRuns) {
@@ -1115,13 +1319,15 @@ class CricketGame {
   _handleUserPushRun() {
     if (!this.manualRunningActive || this.isRunningBetweenWickets || this.runCancelled) return;
     if (this.manualRunsTaken >= this.maxAvailableRuns) {
-      this.showNotice('⚠️ Fielder has gathered ball! Cannot risk another run.');
+      if (!this.isUserBowling) this.showNotice('⚠️ Fielder has gathered ball! Cannot risk another run.');
       return;
     }
 
     this.isRunningBetweenWickets = true;
     const runNum = this.manualRunsTaken + 1;
-    this.showNotice(`🏃 Taking run ${runNum}! Press [C] to Cancel & Dive.`);
+    if (!this.isUserBowling) {
+      this.showNotice(`🏃 Taking run ${runNum}! Press [C] to Cancel & Dive.`);
+    }
 
     const fromStrikerEnd = (this.manualRunsTaken % 2 === 0);
     const runZStartStriker = fromStrikerEnd ? 3.8 : -3.8;
@@ -1390,6 +1596,12 @@ class CricketGame {
 
     // Update real physics ball
     this.ball.update(delta);
+
+    // Pulse pitch target reticle when aiming
+    if (this.pitchTargetGroup && this.pitchTargetGroup.visible) {
+      const s = 1.0 + Math.sin(now * 0.007) * 0.08;
+      this.pitchTargetGroup.scale.set(s, 1, s);
+    }
 
     this.renderer.render(this.scene, this.camera);
   }

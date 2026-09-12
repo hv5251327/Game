@@ -25,7 +25,7 @@ export class NetworkClient {
       'innings_setup','batting_order_set','bowling_order_needed','over_started',
       'delivery','ball_result','wicket','over_complete','innings_end',
       'game_over','sb_turn_started','new_batsman','next_batsman_needed',
-      'bowler_needed','bowl_now','error_msg'
+      'bowler_needed','bowl_now','run_out_confirmed','error_msg'
     ];
     events.forEach(ev => {
       this.socket.on(ev, (data) => this._emit(ev, data));
@@ -58,4 +58,6 @@ export class NetworkClient {
   bowl(data) { this.socket.emit('bowl', data); }
   bat(data) { this.socket.emit('bat', data); }
   setNextBatsman(batsmanId) { this.socket.emit('set_next_batsman', { batsmanId }); }
+  runOut(data) { this.socket.emit('run_out', data); }
 }
+

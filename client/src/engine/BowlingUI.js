@@ -19,7 +19,7 @@ export class BowlingUI {
   _build() {
     this.el = document.createElement('div');
     this.el.id = 'bowling-ui';
-    this.el.className = 'bowling-controller-optimized';
+    this.el.className = 'bowling-controller-side-panel';
     this.el.innerHTML = `
       <div class="bowl-ui-header">
         <div class="bowl-title-row">
@@ -45,36 +45,13 @@ export class BowlingUI {
         </div>
       </div>
 
-      <!-- 2. Mouse Target on Pitch (Select where to pitch the ball with mouse) -->
-      <div class="pitch-picker-container">
-        <div class="pitch-picker-label">🎯 Move mouse over pitch to set where to pitch the ball:</div>
-        <div class="pitch-wrapper">
-          <div id="pitch-canvas" class="pitch-canvas-pro" title="Move mouse or click to choose pitch landing spot">
-            <div class="pitch-zone-pro zone-yorker">
-              <span class="zone-tag">YORKER</span>
-            </div>
-            <div class="pitch-zone-pro zone-good">
-              <span class="zone-tag">GOOD LENGTH</span>
-            </div>
-            <div class="pitch-zone-pro zone-bouncer">
-              <span class="zone-tag">BOUNCER</span>
-            </div>
-            <div class="pitch-stump-line top">||| BATSMAN STUMPS |||</div>
-            <div class="pitch-crease-line popping-crease"></div>
-            <div class="pitch-crease-line bowling-crease"></div>
-            <div class="pitch-stump-line bottom">||| BOWLER END |||</div>
-            <div id="landing-marker" class="landing-crosshair">🎯</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Real-time Line and Length Readout -->
+      <!-- Real-time Line and Length Readout from On-Screen Click -->
       <div class="bowl-hud-stats">
         <span id="bowl-length-label">Length: <strong>Good Length</strong> &bull; Swing: <strong style="color:#7bed9f;">SWING LEFT</strong></span>
         <span id="bowl-line-label">Line: <strong>Outside Off</strong></span>
       </div>
 
-      <!-- 3. Dedicated Meter for Pace with No-Ball Crease Line -->
+      <!-- 2. Dedicated Meter for Pace with No-Ball Crease Line -->
       <div class="bowling-meter-wrap">
         <div class="bowl-meter-labels">
           <span>MIN PACE</span>
@@ -91,10 +68,10 @@ export class BowlingUI {
         </div>
       </div>
 
-      <!-- Action Button & Keyboard Hint -->
+      <!-- Action Button & On-Screen Pitch Instruction Hint -->
       <button type="button" id="btn-bowl" class="btn-bowl-pro">⚡ BOWL DELIVERY [SPACE] ⚡</button>
       <div class="bowl-keyboard-hint">
-        🖱️ <strong>Mouse:</strong> Move over pitch to place landing spot &bull; <strong>[1]/[2]</strong> Swing Left/Right &bull; <strong>SPACE</strong> to Bowl
+        🎯 <strong>Click directly on pitch screen to set landing spot!</strong> &bull; <strong>[1]/[2]</strong> Swing &bull; <strong>SPACE</strong> to Bowl
       </div>
     `;
     this.el.style.display = 'none';
@@ -108,54 +85,18 @@ export class BowlingUI {
       });
     });
 
-    // Pitch mouse targeting: moving or clicking the mouse directly positions the target
-    const pitchCanvas = this.el.querySelector('#pitch-canvas');
-    const marker = this.el.querySelector('#landing-marker');
-
-    const updateTargetFromPointer = (e) => {
-      const rect = pitchCanvas.getBoundingClientRect();
-      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-      const nx = Math.max(0.06, Math.min(0.94, (clientX - rect.left) / rect.width));
-      const ny = Math.max(0.06, Math.min(0.94, (clientY - rect.top) / rect.height));
-
-      // ny: 0.0 (Yorker at batsman) to 1.0 (Bouncer near bowler)
-      this.landingZone.x = (nx - 0.5) * 2.0; // -1.0 to +1.0
-      this.landingZone.z = ny; // 0.06 to 0.94
-
-      marker.style.left = `${nx * 100}%`;
-      marker.style.top = `${ny * 100}%`;
-      this._updateLabels();
-    };
-
-    pitchCanvas.addEventListener('mousemove', (e) => {
-      updateTargetFromPointer(e);
-    });
-    pitchCanvas.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      updateTargetFromPointer(e);
-    });
-    pitchCanvas.addEventListener('touchmove', (e) => {
-      e.preventDefault();
-      updateTargetFromPointer(e);
-    }, { passive: false });
-    pitchCanvas.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      updateTargetFromPointer(e);
-    }, { passive: false });
-
     // Bowl button & Pace meter track click to bowl
-    this.el.querySelector('#btn-bowl').addEventListener('click', (e) => {
+    this.el.querySelector('#btn-bowl')?.addEventListener('click', (e) => {
       e.stopPropagation();
       this._bowl();
     });
-    this.el.querySelector('#bowl-pace-track').addEventListener('click', (e) => {
+    const paceTrack = this.el.querySelector('#bowl-pace-track');
+    paceTrack?.addEventListener('click', (e) => {
       e.stopPropagation();
       this._bowl();
     });
 
     this.marker = this.el.querySelector('#bowling-speed-marker');
-    this._updateMarkerVisual();
   }
 
   _bindKeyboard() {
@@ -197,10 +138,14 @@ export class BowlingUI {
 
       if (moved) {
         e.preventDefault();
-        this._updateMarkerVisual();
         this._updateLabels();
       }
     });
+  }
+
+  setLandingZone(x, z) {
+    this.landingZone = { x, z };
+    this._updateLabels();
   }
 
   _setSwingDirection(swing) {
@@ -211,15 +156,6 @@ export class BowlingUI {
     this._updateLabels();
   }
 
-  _updateMarkerVisual() {
-    const marker = this.el.querySelector('#landing-marker');
-    if (!marker) return;
-    const nx = (this.landingZone.x / 2.0) + 0.5;
-    const ny = this.landingZone.z;
-    marker.style.left = `${nx * 100}%`;
-    marker.style.top = `${ny * 100}%`;
-  }
-
   _updateLabels() {
     const lengthLabel = this.el.querySelector('#bowl-length-label');
     const lineLabel = this.el.querySelector('#bowl-line-label');
@@ -227,19 +163,19 @@ export class BowlingUI {
 
     const z = this.landingZone.z;
     let lenStr = 'Good Length';
-    if (z < 0.25) lenStr = 'Yorker / Full Length';
-    else if (z < 0.38) lenStr = 'Full Pitch';
-    else if (z < 0.65) lenStr = 'Good Length';
-    else if (z < 0.80) lenStr = 'Short of a Length';
+    if (z >= 2.3) lenStr = 'Yorker / Full Length';
+    else if (z >= 1.0) lenStr = 'Full Pitch';
+    else if (z >= -0.2) lenStr = 'Good Length';
+    else if (z >= -1.2) lenStr = 'Short of Length';
     else lenStr = 'Bouncer / Short Pitch';
 
     const x = this.landingZone.x;
     let lineStr = 'Middle Stump';
-    if (x < -0.5) lineStr = 'Way Outside Off';
-    else if (x < -0.2) lineStr = 'Outside Off (4th Stump)';
-    else if (x > 0.5) lineStr = 'Down Leg Side';
+    if (x < -0.55) lineStr = 'Way Outside Off';
+    else if (x < -0.15) lineStr = 'Off Stump Line';
+    else if (x > 0.55) lineStr = 'Down Leg Side';
     else if (x > 0.2) lineStr = 'On the Pads (Leg Stump)';
-    else lineStr = 'Middle & Off Channel';
+    else lineStr = 'Middle Stump Line';
 
     const swingText = this.swingDirection === 'left' ? 'SWING LEFT' : 'SWING RIGHT';
     if (lengthLabel) lengthLabel.innerHTML = `Length: <strong>${lenStr}</strong> &bull; Swing: <strong style="color:#7bed9f;">${swingText}</strong>`;
@@ -335,8 +271,10 @@ export class BowlingUI {
     const paceKmh = Math.round(baseKmh + this.power * 45);
 
     let delivType = 'pace';
-    if (this.landingZone.z < 0.25) delivType = 'yorker';
-    else if (this.landingZone.z > 0.75) delivType = 'bouncer';
+    if (this.landingZone.z >= 2.3) delivType = 'yorker';
+    else if (this.landingZone.z <= -1.2) delivType = 'bouncer';
+    else if (this.swingDirection === 'left') delivType = 'inswing';
+    else if (this.swingDirection === 'right') delivType = 'outswing';
 
     if (this.onBowl) {
       this.onBowl({

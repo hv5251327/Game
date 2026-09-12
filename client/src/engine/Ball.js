@@ -69,6 +69,9 @@ export class Ball {
   // Bowler delivery towards pitch landing zone with authentic cricket physics
   bowlDelivery(startPos, landingPos, targetPos, deliveryType = 'pace', swingDirection = 'left') {
     this.pos.copy(startPos);
+    this.startSpot = startPos.clone();
+    this.landingSpot = landingPos.clone();
+    this.landingSpot.y = this.radius;
     this.group.position.copy(this.pos);
     this.group.visible = true;
     this.active = true;
@@ -78,22 +81,20 @@ export class Ball {
     this.flightTime = 0;
     this.deliveryType = deliveryType || 'pace';
     this.swingDirection = swingDirection || 'left';
-    this.landingSpot = landingPos.clone();
     this.batsmanTarget = targetPos ? targetPos.clone() : new THREE.Vector3(0, 0.68, 3.8);
 
-    // Phase 1: From bowler release hand (z ≈ -3.7, y ≈ 1.35) to pitch landing spot
-    const dz1 = Math.max(1.2, landingPos.z - startPos.z);
-    const totalDz = 7.5; // -3.7 to 3.8
+    // Phase 1: From bowler release hand to exact pitch landing spot
+    const totalDz = Math.max(0.8, this.landingSpot.z - this.startSpot.z);
     const isSpin = this.deliveryType.includes('spin');
     const isYorker = this.deliveryType === 'yorker';
     const isBouncer = this.deliveryType === 'bouncer';
 
-    let totalDuration = isSpin ? 0.74 : isYorker ? 0.46 : isBouncer ? 0.50 : 0.54;
-    const duration1 = Math.max(0.20, totalDuration * (dz1 / totalDz));
+    this.duration1 = isSpin ? 0.62 : isYorker ? 0.42 : isBouncer ? 0.52 : 0.46;
 
-    const vx = (landingPos.x - startPos.x) / duration1;
-    const vz = dz1 / duration1;
-    const vy = (0.16 - startPos.y - 0.5 * this.gravity * duration1 * duration1) / duration1;
+    // Exact analytical velocity to hit landingSpot precisely at t = duration1 under gravity
+    const vx = (this.landingSpot.x - this.startSpot.x) / this.duration1;
+    const vz = totalDz / this.duration1;
+    const vy = (this.landingSpot.y - this.startSpot.y - 0.5 * this.gravity * this.duration1 * this.duration1) / this.duration1;
 
     this.vel.set(vx, vy, vz);
     this.trailPoints = [];
@@ -156,30 +157,27 @@ export class Ball {
     if (!this.active) return;
     this.flightTime += delta;
 
-    // Apply gravity
-    this.vel.y += this.gravity * delta;
-    this.vel.x *= this.airDrag;
-    this.vel.z *= this.airDrag;
-
-    // In-flight aerodynamic swing curve before pitch bounce
+    // --- 1. CRICKET PITCH DELIVERY (Bowler delivery to exact pitch landing spot) ---
     if (!this.isHitShot && !this.deliveryBounced) {
-      if (this.swingDirection === 'left' || this.deliveryType === 'inswing') {
-        this.vel.x -= 2.2 * delta; // Curve left towards pads
-      } else if (this.swingDirection === 'right' || this.deliveryType === 'outswing') {
-        this.vel.x += 2.2 * delta; // Curve right away to off
-      }
-    }
+      const dur = this.duration1 || 0.46;
+      const progress = Math.min(1.0, this.flightTime / dur);
 
-    // Update position
-    this.pos.x += this.vel.x * delta;
-    this.pos.y += this.vel.y * delta;
-    this.pos.z += this.vel.z * delta;
+      // In-flight aerodynamic swing curve (smooth lateral deviation that returns to exact landing spot at impact)
+      const swingSign = (this.swingDirection === 'left' || this.deliveryType === 'inswing') ? -1 : 1;
+      const swingOffset = Math.sin(progress * Math.PI) * swingSign * 0.28;
 
-    // --- 1. CRICKET PITCH BOUNCE (When Bowler delivers ball) ---
-    if (!this.isHitShot && !this.deliveryBounced) {
-      // Check if ball has reached turf level at or near landing zone
-      if (this.pos.y <= this.radius + 0.04 && this.pos.z >= this.landingSpot.z - 0.4) {
+      // Exact linear movement towards landing spot on XZ
+      this.pos.x = this.startSpot.x + (this.landingSpot.x - this.startSpot.x) * progress;
+      this.pos.z = this.startSpot.z + (this.landingSpot.z - this.startSpot.z) * progress;
+      // Exact parabolic arc under gravity
+      this.pos.y = this.startSpot.y + this.vel.y * this.flightTime + 0.5 * this.gravity * this.flightTime * this.flightTime;
+
+      // Check for pitch impact
+      if (progress >= 1.0 || (this.pos.z >= this.landingSpot.z && this.pos.y <= this.radius + 0.05)) {
+        this.pos.x = this.landingSpot.x;
         this.pos.y = this.radius;
+        this.pos.z = this.landingSpot.z;
+        this.group.position.copy(this.pos);
         this.deliveryBounced = true;
         this.bounceCount++;
         this._spawnBounceRipple(this.pos);
@@ -206,9 +204,9 @@ export class Ball {
         // Lateral deviation / spin turn / swing after pitch
         let targetX = this.landingSpot.x;
         if (isOutswing || this.deliveryType === 'leg_spin') {
-          targetX = this.landingSpot.x + 0.35; // breaks away / swings right
+          targetX = this.landingSpot.x + 0.32; // breaks away / swings right
         } else if (isInswing || this.deliveryType === 'spin') {
-          targetX = this.landingSpot.x - 0.35; // jags in / swings left
+          targetX = this.landingSpot.x - 0.32; // jags in / swings left
         }
 
         const vx2 = (targetX - this.pos.x) / duration2;
@@ -218,7 +216,19 @@ export class Ball {
         this.vel.set(vx2, vy2, vz2);
         return;
       }
+
+      this.group.position.set(this.pos.x + swingOffset, this.pos.y, this.pos.z);
+      return;
     }
+
+    // Apply gravity and drag for Phase 2 and Batted Shots
+    this.vel.y += this.gravity * delta;
+    this.vel.x *= this.airDrag;
+    this.vel.z *= this.airDrag;
+
+    this.pos.x += this.vel.x * delta;
+    this.pos.y += this.vel.y * delta;
+    this.pos.z += this.vel.z * delta;
 
     // --- 2. REALISTIC CRICKET TURF GROUND PHYSICS (Batted Shots & Rolls) ---
     if (this.pos.y <= this.radius) {

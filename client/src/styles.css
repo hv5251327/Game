@@ -824,25 +824,28 @@ body, html {
   border-color: #ffd32a;
 }
 
-/* Bowling UI */
-#bowling-ui {
-  position: absolute;
-  bottom: 18px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(14, 38, 16, 0.96);
+/* Bowling UI - Docked neatly to the side so pitch screen is fully open */
+#bowling-ui,
+.bowling-controller-side-panel {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  left: auto;
+  transform: none;
+  background: rgba(14, 38, 16, 0.95);
   border: 2px solid #2ed573;
-  border-radius: 20px;
-  padding: 14px 20px;
-  width: 94%;
-  max-width: 480px;
+  border-radius: 18px;
+  padding: 14px 18px;
+  width: 290px;
+  max-width: calc(100vw - 32px);
   display: flex;
   flex-direction: column;
   gap: 8px;
   pointer-events: auto;
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.75), 0 0 24px rgba(46, 213, 115, 0.3);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.8), 0 0 24px rgba(46, 213, 115, 0.3);
   backdrop-filter: blur(10px);
   z-index: 105;
+  user-select: none;
 }
 
 .bowl-ui-header {
@@ -2026,16 +2029,18 @@ body, html {
     border-radius: 6px !important;
   }
 
-  /* Centered Bowling Controller for Mobile */
-  #bowling-ui {
+  /* Side-docked Bowling Controller for Mobile */
+  #bowling-ui,
+  .bowling-controller-side-panel {
     bottom: 8px !important;
-    left: 50% !important;
-    transform: translateX(-50%) !important;
-    width: 95% !important;
-    max-width: 375px !important;
-    padding: 10px 12px !important;
+    right: 8px !important;
+    left: auto !important;
+    transform: none !important;
+    width: 250px !important;
+    max-width: 68vw !important;
+    padding: 8px 10px !important;
     gap: 6px !important;
-    border-radius: 16px !important;
+    border-radius: 14px !important;
   }
 
   .bowl-title-text {
@@ -2112,12 +2117,21 @@ body, html {
 
 /* Extra small mobile screens (<= 480px) */
 @media (max-width: 480px) {
-  #batting-ui.batting-controller-large,
-  #bowling-ui {
+  #batting-ui.batting-controller-large {
     width: 98% !important;
     max-width: 345px !important;
     bottom: 5px !important;
     padding: 8px 10px !important;
+  }
+
+  #bowling-ui,
+  .bowling-controller-side-panel {
+    width: 220px !important;
+    max-width: 65vw !important;
+    bottom: 5px !important;
+    right: 5px !important;
+    left: auto !important;
+    padding: 6px 8px !important;
   }
 
   .dir-btn-large {

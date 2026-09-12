@@ -211,6 +211,25 @@ class CricketRoom {
     this.fillBotsForTeam('a');
     this.fillBotsForTeam('b');
 
+    // Fully renew scorecards, targets and stats for every new match
+    this.scorecard = {
+      innings1: this._newInningsCard(),
+      innings2: this._newInningsCard(),
+      singleBatting: {}
+    };
+    this.target = null;
+    this.currentInnings = 1;
+    this.currentOver = 0;
+    this.currentBall = 0;
+    this.ballInFlight = false;
+    this.runupInProgress = false;
+    for (const p of this.players.values()) {
+      p.stats = {
+        runs: 0, balls: 0, fours: 0, sixes: 0, dismissed: false, dismissal: '',
+        wickets: 0, runsConceded: 0, overs: 0, ballsBowled: 0
+      };
+    }
+
     this.state = 'TOSS';
     this.tossCoinResult = Math.random() < 0.5 ? 'heads' : 'tails';
 
@@ -894,6 +913,15 @@ class CricketRoom {
       }
     }
 
+    // Direct Fielder Catch: if hit towards a fielder in the air without clearance power
+    if (shotType === 'loft' || (shotType === 'drive' && !isPerfect && Math.random() < 0.45)) {
+      if (['forward', 'forward_left', 'forward_right', 'left', 'right'].includes(direction)) {
+        if (!isPerfect && power < 0.85) {
+          return { type: 'wicket', wicket: true, dismissal: 'Caught', ballPath: 'caught_by_fielder' };
+        }
+      }
+    }
+
     // Drive shots (forward, forward_left, forward_right)
     if (isPerfect) {
       const sixProb = isBeetle ? 0.5 : 0.2;
@@ -1123,6 +1151,26 @@ class CricketRoom {
   // --- Single Batting Mode ---
   startSingleBatting() {
     this.mode = 'single_batting';
+
+    // Fully renew scorecards, targets and stats
+    this.scorecard = {
+      innings1: this._newInningsCard(),
+      innings2: this._newInningsCard(),
+      singleBatting: {}
+    };
+    this.target = null;
+    this.currentInnings = 1;
+    this.currentOver = 0;
+    this.currentBall = 0;
+    this.ballInFlight = false;
+    this.runupInProgress = false;
+    for (const p of this.players.values()) {
+      p.stats = {
+        runs: 0, balls: 0, fours: 0, sixes: 0, dismissed: false, dismissal: '',
+        wickets: 0, runsConceded: 0, overs: 0, ballsBowled: 0
+      };
+    }
+
     const realPlayers = Array.from(this.players.values()).filter(p => !p.isBot);
 
     this.sbQueue = realPlayers.map(p => p.id);
@@ -1295,6 +1343,40 @@ class CricketRoom {
       }))
     };
   }
+
+  handleRunOut(socketId, data) {
+    if (this.state !== 'PLAYING') return;
+    const card = this._currentCard();
+    const batsmanId = data?.isNonStriker
+      ? this.battingOrder[this.currentNonStrikerIdx]
+      : this.battingOrder[this.currentBatsmanIdx];
+
+    if (!batsmanId) return;
+
+    card.wickets++;
+    if (card.batsmen[batsmanId]) {
+      card.batsmen[batsmanId].dismissed = true;
+      card.batsmen[batsmanId].dismissal = 'Run Out';
+      card.batsmen[batsmanId].isOnPitch = false;
+    }
+    const fowOver = this.currentBall >= 6 ? `${this.currentOver + 1}.0` : `${this.currentOver}.${this.currentBall}`;
+    card.fallOfWickets.push({
+      wicket: card.wickets,
+      runs: card.runs,
+      batsmanId,
+      batsmanName: this.players.get(batsmanId)?.name,
+      over: fowOver
+    });
+
+    const snap = this._scorecardSnapshot();
+    io.to(this.code).emit('run_out_confirmed', {
+      batsmanId,
+      batsmanName: this.players.get(batsmanId)?.name,
+      scorecard: snap
+    });
+
+    this._handleWicket(batsmanId, 'Run Out');
+  }
 }
 
 function findRoom(socketId) {
@@ -1393,6 +1475,12 @@ io.on('connection', (socket) => {
     const room = findRoom(socket.id);
     if (!room) return;
     room.setNextBatsman(socket.id, data.batsmanId);
+  });
+
+  socket.on('run_out', (data) => {
+    const room = findRoom(socket.id);
+    if (!room) return;
+    room.handleRunOut(socket.id, data);
   });
 
   socket.on('disconnect', () => {
