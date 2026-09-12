@@ -67,7 +67,7 @@ export class Ball {
   }
 
   // Bowler delivery towards pitch landing zone with authentic cricket physics
-  bowlDelivery(startPos, landingPos, targetPos, deliveryType = 'pace') {
+  bowlDelivery(startPos, landingPos, targetPos, deliveryType = 'pace', swingDirection = 'left') {
     this.pos.copy(startPos);
     this.group.position.copy(this.pos);
     this.group.visible = true;
@@ -77,6 +77,7 @@ export class Ball {
     this.bounceCount = 0;
     this.flightTime = 0;
     this.deliveryType = deliveryType || 'pace';
+    this.swingDirection = swingDirection || 'left';
     this.landingSpot = landingPos.clone();
     this.batsmanTarget = targetPos ? targetPos.clone() : new THREE.Vector3(0, 0.68, 3.8);
 
@@ -154,6 +155,15 @@ export class Ball {
     this.vel.x *= this.airDrag;
     this.vel.z *= this.airDrag;
 
+    // In-flight aerodynamic swing curve before pitch bounce
+    if (!this.isHitShot && !this.deliveryBounced) {
+      if (this.swingDirection === 'left' || this.deliveryType === 'inswing') {
+        this.vel.x -= 2.2 * delta; // Curve left towards pads
+      } else if (this.swingDirection === 'right' || this.deliveryType === 'outswing') {
+        this.vel.x += 2.2 * delta; // Curve right away to off
+      }
+    }
+
     // Update position
     this.pos.x += this.vel.x * delta;
     this.pos.y += this.vel.y * delta;
@@ -176,8 +186,8 @@ export class Ball {
         const isSpin = this.deliveryType.includes('spin');
         const isBouncer = this.deliveryType === 'bouncer';
         const isYorker = this.deliveryType === 'yorker';
-        const isOutswing = this.deliveryType === 'outswing';
-        const isInswing = this.deliveryType === 'inswing';
+        const isOutswing = this.deliveryType === 'outswing' || this.swingDirection === 'right';
+        const isInswing = this.deliveryType === 'inswing' || this.swingDirection === 'left';
 
         let duration2 = isSpin ? 0.28 : isYorker ? 0.12 : isBouncer ? 0.24 : 0.20;
 
@@ -190,9 +200,9 @@ export class Ball {
         // Lateral deviation / spin turn / swing after pitch
         let targetX = this.landingSpot.x;
         if (isOutswing || this.deliveryType === 'leg_spin') {
-          targetX = this.landingSpot.x + 0.32; // breaks away to off
+          targetX = this.landingSpot.x + 0.35; // breaks away / swings right
         } else if (isInswing || this.deliveryType === 'spin') {
-          targetX = this.landingSpot.x - 0.32; // jags into pads/stumps
+          targetX = this.landingSpot.x - 0.35; // jags in / swings left
         }
 
         const vx2 = (targetX - this.pos.x) / duration2;

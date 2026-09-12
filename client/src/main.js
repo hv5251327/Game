@@ -33,8 +33,8 @@ class CricketGame {
 
     // Dual-perspective camera positions
     this.isUserBowling = false;
-    this.bowlerCamPos = new THREE.Vector3(0, 5.2, -11.5);
-    this.bowlerCamLookAt = new THREE.Vector3(0, 1.2, 3.5);
+    this.bowlerCamPos = new THREE.Vector3(0, 2.9, -6.6);
+    this.bowlerCamLookAt = new THREE.Vector3(0, 1.0, 3.8);
     this.batsmanCamPos = new THREE.Vector3(0, 6.5, 11.5);
     this.batsmanCamLookAt = new THREE.Vector3(0, 1.2, 0);
 
@@ -460,16 +460,21 @@ class CricketGame {
             this.bowlerAvatar.group.position.y = 0.35 + Math.abs(Math.sin(p * Math.PI * 12)) * 0.12;
             this.bowlerAvatar.group.position.x = Math.sin(p * Math.PI * 6) * 0.08;
 
-            // When user is bowling, dolly camera smoothly behind bowler running in
+            // When user is bowling, dolly camera smoothly towards the bowling wickets
             if (this.isUserBowling && !this.cameraTracking) {
-              this.defaultCamPos.set(0, 4.8, this.bowlerAvatar.group.position.z - 3.8);
-              this.defaultCamLookAt.set(0, 1.2, 3.8);
+              const camZ = -6.6 + (1 - p) * -3.0;
+              this.defaultCamPos.set(0, 2.9 + (1 - p) * 0.8, camZ);
+              this.defaultCamLookAt.set(0, 1.0, 3.8);
             }
           }
           if (p < 1.0) {
             requestAnimationFrame(runupStep);
           } else if (this.bowlerAvatar) {
             this.bowlerAvatar.setPosition(0, 0.35, targetZ);
+            if (this.isUserBowling && !this.cameraTracking) {
+              this.defaultCamPos.copy(this.bowlerCamPos);
+              this.defaultCamLookAt.copy(this.bowlerCamLookAt);
+            }
           }
         };
         requestAnimationFrame(runupStep);
@@ -486,7 +491,8 @@ class CricketGame {
 
     this.network.on('delivery', (data) => {
       const paceStr = data.paceKmh ? ` [${data.paceKmh} km/h]` : '';
-      this.domActionBanner.textContent = `⚾ ${data.bowler?.name} delivers ${data.deliveryType.toUpperCase()}${paceStr}!`;
+      const swingStr = data.swingDirection ? ` &bull; ${data.swingDirection.toUpperCase()}` : '';
+      this.domActionBanner.textContent = `⚾ ${data.bowler?.name} delivers ${data.deliveryType.toUpperCase()}${swingStr}${paceStr}!`;
       if (this.bowlerAvatar) {
         this.bowlerAvatar.setPosition(0, 0.35, -3.7);
         this.bowlerAvatar.triggerBowlAction();
@@ -500,10 +506,15 @@ class CricketGame {
       const landingPos = new THREE.Vector3(lzX, 0.16, lzZ);
       const targetPos = new THREE.Vector3(lzX, 0.68, 3.8);
 
-      this.ball.bowlDelivery(startPos, landingPos, targetPos, data.deliveryType);
+      this.ball.bowlDelivery(startPos, landingPos, targetPos, data.deliveryType, data.swingDirection);
 
-      // Re-center camera to appropriate end
+      // Camera after bowl: firmly positioned behind the bowling wickets!
       this._updateCameraMode();
+      if (this.isUserBowling) {
+        this.cameraTracking = false;
+        this.defaultCamPos.copy(this.bowlerCamPos);
+        this.defaultCamLookAt.copy(this.bowlerCamLookAt);
+      }
 
       // Ensure batting UI is displayed if user's team is batting
       const isBattingTeam = (this.currentScorecard?.battingTeam === this.myTeam) ||
@@ -1222,7 +1233,15 @@ class CricketGame {
     // Dynamic Broadcast Camera Tracking (follows ball in flight, including backside shots)
     if (this.cameraTracking && this.ball && this.ball.active) {
       const bPos = this.ball.pos;
-      if (bPos.z > 3.0) {
+      if (this.isUserBowling) {
+        // Bowling wickets perspective: elevated tracking following the ball into the outfield
+        this.targetCamPos.set(
+          bPos.x * 0.4,
+          3.8 + Math.max(0, bPos.y * 0.35),
+          Math.min(bPos.z - 4.5, -6.6)
+        );
+        this.targetCamLookAt.set(bPos.x, Math.max(0.5, bPos.y), bPos.z);
+      } else if (bPos.z > 3.0) {
         // Backside shot (Third Man, Fine Leg, behind wicketkeeper)
         // Camera moves higher and looks backward tracking the ball
         this.targetCamPos.set(
