@@ -25,6 +25,7 @@ export class BowlingUI {
         <div class="bowl-title-row">
           <span class="bowl-icon">⚾</span>
           <span class="bowl-title-text">BOWLING CONTROLLER</span>
+          <span id="bowl-timer-badge" class="timer-countdown-badge">⏱️ <span id="bowl-timer-count">20</span>s</span>
         </div>
         <div id="bowl-status-banner" class="bowl-status-banner">
           TARGET: <strong>GOOD LENGTH (Outside Off)</strong> &bull; <span id="bowl-speed-display" style="color:#ffd32a;">140 km/h</span>
@@ -260,17 +261,30 @@ export class BowlingUI {
     this._updateLabels();
     this._animate(performance.now());
 
-    if (options.timeout) {
-      clearTimeout(this._autoTimeout);
-      this._autoTimeout = setTimeout(() => {
-        if (this.active) this._bowl();
-      }, options.timeout);
-    }
+    const totalMs = options.timeout || 20000;
+    this.remainingSec = Math.round(totalMs / 1000);
+    const timerCountEl = this.el.querySelector('#bowl-timer-count');
+    if (timerCountEl) timerCountEl.textContent = String(this.remainingSec);
+
+    clearInterval(this._countdownInterval);
+    this._countdownInterval = setInterval(() => {
+      this.remainingSec--;
+      if (timerCountEl) timerCountEl.textContent = String(Math.max(0, this.remainingSec));
+      if (this.remainingSec <= 0) {
+        clearInterval(this._countdownInterval);
+      }
+    }, 1000);
+
+    clearTimeout(this._autoTimeout);
+    this._autoTimeout = setTimeout(() => {
+      if (this.active) this._bowl();
+    }, totalMs);
   }
 
   hide() {
     this.active = false;
     this.el.style.display = 'none';
+    clearInterval(this._countdownInterval);
     clearTimeout(this._autoTimeout);
     if (this.animFrame) cancelAnimationFrame(this.animFrame);
   }

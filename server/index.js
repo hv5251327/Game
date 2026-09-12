@@ -437,8 +437,7 @@ class CricketRoom {
   }
 
   handleBowl(socketId, data) {
-    if (this.state !== 'PLAYING' || socketId !== this.currentBowler || this.ballInFlight) return;
-
+    clearTimeout(this._bowlerTimeout);
     this.ballInFlight = true;
     this.pendingBall = { ...data, bowlerId: socketId };
 
@@ -446,20 +445,20 @@ class CricketRoom {
       ? this.sbQueue[this.sbCurrentBatsmanIdx]
       : this.battingOrder[this.currentBatsmanIdx];
 
-    // 1. Emit bowler_runup immediately so bowler starts running in from back over 2.0 seconds
+    // 1. Emit bowler_runup: bowler starts running in from back over 2.5 seconds (gives batsman preparation time)
     io.to(this.code).emit('bowler_runup', {
       bowler: this._playerInfo(socketId),
       batsman: this._playerInfo(batsmanId),
       deliveryType: data.deliveryType,
-      swingDirection: data.swingDirection || 'straight',
+      swingDirection: data.swingDirection || 'left',
       power: data.power,
       isNoBall: data.isNoBall || false,
-      runupDuration: 2000,
+      runupDuration: 2500,
       over: this.currentOver + 1,
       ball: this.currentBall + 1
     });
 
-    // 2. Deliver the ball after bowler complete 2.0-second run-up stride
+    // 2. Deliver the ball after bowler completes 2.5-second run-up stride
     setTimeout(() => {
       if (!this.ballInFlight) return;
 
@@ -468,7 +467,7 @@ class CricketRoom {
         batsman: this._playerInfo(batsmanId),
         landingZone: data.landingZone,
         deliveryType: data.deliveryType,
-        swingDirection: data.swingDirection || 'straight',
+        swingDirection: data.swingDirection || 'left',
         power: data.power,
         isNoBall: data.isNoBall || false,
         paceKmh: data.paceKmh,
@@ -484,13 +483,14 @@ class CricketRoom {
         setTimeout(() => this._botBat(batsmanId, data), 700 + Math.random() * 500);
       } else {
         clearTimeout(this._batTimeout);
+        // Generous 7.0 seconds window for batsman to choose shot style, direction, and time swing
         this._batTimeout = setTimeout(() => {
           if (this.ballInFlight) {
             this._botBat(batsmanId, data);
           }
-        }, 4000);
+        }, 7000);
       }
-    }, 2000);
+    }, 2500);
   }
 
   handleBat(socketId, data) {
@@ -966,6 +966,14 @@ class CricketRoom {
         ball: this.currentBall + 1,
         scorecard: this._scorecardSnapshot()
       });
+
+      // 20-second safety window for human bowler to aim, set swing & bowl
+      clearTimeout(this._bowlerTimeout);
+      this._bowlerTimeout = setTimeout(() => {
+        if (this.state === 'PLAYING' && !this.ballInFlight && this.currentBowler) {
+          this._botBowl(this.currentBowler);
+        }
+      }, 20000);
     }
   }
 

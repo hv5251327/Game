@@ -28,6 +28,7 @@ export class BattingUI {
         <div class="bat-aim-title">
           <span class="bat-icon">🏏</span>
           <span class="bat-main-text">BATSMAN CONTROL</span>
+          <span id="bat-timer-badge" class="timer-countdown-badge">⏱️ <span id="bat-timer-count">7</span>s</span>
         </div>
         <div class="bat-stance-bar">
           <button type="button" class="stance-badge-btn" id="btn-stance-hand" title="Toggle Right/Left Handed Batting [H]">
@@ -49,7 +50,7 @@ export class BattingUI {
           <span class="timing-label-perfect">⚡ SWEET SPOT ⚡</span>
           <span class="timing-label-late">LATE</span>
         </div>
-        <div class="timing-bar-track">
+        <div class="timing-bar-track" id="bat-timing-track" title="Tap or press SPACE to Swing!">
           <div class="timing-sweet-zone"></div>
           <div id="batting-timing-marker" class="timing-bar-marker"></div>
         </div>
@@ -276,17 +277,30 @@ export class BattingUI {
     this._updateShotLabel();
     this._animate(performance.now());
 
-    if (options.timeout) {
-      clearTimeout(this._autoTimeout);
-      this._autoTimeout = setTimeout(() => {
-        if (this.active) this._swing();
-      }, options.timeout);
-    }
+    const totalMs = options.timeout || 7000;
+    this.remainingSec = Math.round(totalMs / 1000);
+    const timerCountEl = this.el.querySelector('#bat-timer-count');
+    if (timerCountEl) timerCountEl.textContent = String(this.remainingSec);
+
+    clearInterval(this._countdownInterval);
+    this._countdownInterval = setInterval(() => {
+      this.remainingSec--;
+      if (timerCountEl) timerCountEl.textContent = String(Math.max(0, this.remainingSec));
+      if (this.remainingSec <= 0) {
+        clearInterval(this._countdownInterval);
+      }
+    }, 1000);
+
+    clearTimeout(this._autoTimeout);
+    this._autoTimeout = setTimeout(() => {
+      if (this.active) this._swing();
+    }, totalMs);
   }
 
   hide() {
     this.active = false;
     this.el.style.display = 'none';
+    clearInterval(this._countdownInterval);
     clearTimeout(this._autoTimeout);
     if (this.animFrame) cancelAnimationFrame(this.animFrame);
   }

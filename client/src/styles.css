@@ -4,6 +4,8 @@
   box-sizing: border-box;
   user-select: none;
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body, html {
@@ -1716,5 +1718,335 @@ body, html {
 .run-score-tally strong {
   color: #ffd32a;
   font-size: 1.15rem;
+}
+
+/* ==========================================================================
+   TIMER COUNTDOWN BADGE & TOUCH CONTROLS
+   ========================================================================== */
+.timer-countdown-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(0, 0, 0, 0.65);
+  border: 1.5px solid rgba(255, 211, 42, 0.8);
+  color: #ffd32a;
+  font-size: 0.74rem;
+  font-weight: 900;
+  padding: 3px 9px;
+  border-radius: 12px;
+  margin-left: auto;
+  box-shadow: 0 0 10px rgba(255, 211, 42, 0.35);
+  letter-spacing: 0.5px;
+  animation: timerPulse 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes timerPulse {
+  from { border-color: rgba(255, 211, 42, 0.5); box-shadow: 0 0 6px rgba(255, 211, 42, 0.25); }
+  to { border-color: rgba(255, 211, 42, 1.0); box-shadow: 0 0 14px rgba(255, 211, 42, 0.65); }
+}
+
+#pitch-canvas,
+#bat-timing-track,
+#bowl-pace-track {
+  touch-action: none !important;
+}
+
+/* ==========================================================================
+   RESPONSIVE MOBILE OPTIMIZATIONS (TABLETS & PHONES <= 768px)
+   ========================================================================== */
+@media (max-width: 768px) {
+  /* Lobby card on mobile */
+  .lobby-card {
+    padding: 18px 20px;
+    width: 95%;
+    max-height: 94vh;
+    border-radius: 18px;
+  }
+
+  .lobby-title {
+    font-size: 1.8rem;
+  }
+
+  .team-rosters-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  /* Compact HUD Top Bar on mobile */
+  .hud-top-bar {
+    top: 6px;
+    width: 98%;
+    gap: 4px;
+  }
+
+  .scoreboard-main {
+    padding: 6px 12px;
+    border-radius: 12px;
+  }
+
+  .score-team-badge {
+    font-size: 0.88rem;
+    gap: 6px;
+  }
+
+  .team-icon {
+    font-size: 1.2rem;
+  }
+
+  .runs-wickets {
+    font-size: 1.55rem;
+  }
+
+  .overs-text {
+    font-size: 0.85rem;
+  }
+
+  .match-info-pill {
+    font-size: 0.68rem;
+  }
+
+  .room-pill {
+    font-size: 0.68rem;
+    padding: 2px 6px;
+  }
+
+  /* Pitch stats single row */
+  .pitch-stats-bar {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 4px !important;
+  }
+
+  .batter-stat-box, .bowler-stat-box {
+    flex: 1 !important;
+    padding: 4px 6px !important;
+    font-size: 0.66rem !important;
+    border-radius: 8px !important;
+  }
+
+  .this-over-row {
+    padding: 3px 8px;
+    font-size: 0.68rem;
+  }
+
+  .ball-badge {
+    width: 20px;
+    height: 20px;
+    font-size: 0.65rem;
+  }
+
+  .btn-hud-scorecard {
+    top: 6px;
+    right: 6px;
+    padding: 4px 8px;
+    font-size: 0.7rem;
+    border-radius: 8px;
+  }
+
+  /* Centered Batting Controller for Mobile */
+  #batting-ui.batting-controller-large {
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    bottom: 8px !important;
+    width: 95% !important;
+    max-width: 375px !important;
+    padding: 10px 12px !important;
+    gap: 6px !important;
+    border-radius: 16px !important;
+  }
+
+  .bat-aim-title {
+    gap: 6px;
+  }
+
+  .bat-main-text {
+    font-size: 0.82rem;
+  }
+
+  .bat-stance-bar {
+    gap: 6px;
+  }
+
+  .stance-badge-btn {
+    font-size: 0.66rem;
+    padding: 3px 6px;
+  }
+
+  .bat-current-shot-badge {
+    font-size: 0.72rem;
+    padding: 3px 8px;
+  }
+
+  .timing-bar-track {
+    height: 18px;
+  }
+
+  /* Direction Grid scaled for touch */
+  .direction-grid-large {
+    gap: 4px !important;
+  }
+
+  .dir-btn-large {
+    min-height: 42px !important;
+    padding: 4px 2px !important;
+    border-radius: 8px !important;
+  }
+
+  .dir-btn-large .dir-arrow {
+    font-size: 1.05rem !important;
+  }
+
+  .dir-btn-large .dir-name {
+    font-size: 0.54rem !important;
+    margin-top: 1px !important;
+  }
+
+  .dir-btn-swing {
+    min-height: 42px !important;
+    padding: 4px 2px !important;
+    border-radius: 10px !important;
+  }
+
+  .dir-btn-swing .swing-icon {
+    font-size: 1.15rem !important;
+  }
+
+  .dir-btn-swing .swing-text {
+    font-size: 0.68rem !important;
+  }
+
+  /* Hide desktop keyboard hints on mobile */
+  .dir-btn-large .dir-key,
+  .dir-btn-swing .swing-key,
+  .laptop-keyboard-hint,
+  .bowl-keyboard-hint {
+    display: none !important;
+  }
+
+  /* Compact shot pills */
+  .shot-pills-row {
+    gap: 2px !important;
+  }
+
+  .shot-pill {
+    font-size: 0.64rem !important;
+    padding: 4px 2px !important;
+    border-radius: 6px !important;
+  }
+
+  /* Centered Bowling Controller for Mobile */
+  #bowling-ui {
+    bottom: 8px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    width: 95% !important;
+    max-width: 375px !important;
+    padding: 10px 12px !important;
+    gap: 6px !important;
+    border-radius: 16px !important;
+  }
+
+  .bowl-title-text {
+    font-size: 0.85rem !important;
+  }
+
+  .swing-dual-btn {
+    font-size: 0.74rem !important;
+    padding: 6px 4px !important;
+  }
+
+  .pitch-canvas-pro {
+    width: 145px !important;
+    height: 125px !important;
+  }
+
+  .pitch-picker-label {
+    font-size: 0.66rem !important;
+  }
+
+  .bowl-hud-stats {
+    font-size: 0.66rem !important;
+    padding: 3px 8px !important;
+  }
+
+  .bowl-meter-labels {
+    font-size: 0.58rem !important;
+  }
+
+  .bowl-meter-track {
+    height: 14px !important;
+  }
+
+  .btn-bowl-pro {
+    padding: 8px !important;
+    font-size: 0.86rem !important;
+    border-radius: 10px !important;
+  }
+
+  /* Running Control Bar on mobile */
+  .running-control-bar {
+    bottom: 10px !important;
+    padding: 8px 14px !important;
+    gap: 8px !important;
+    width: 94% !important;
+    max-width: 360px !important;
+    justify-content: space-between !important;
+  }
+
+  .btn-run-action, .btn-cancel-action {
+    font-size: 0.85rem !important;
+    padding: 8px 12px !important;
+  }
+
+  .run-score-tally {
+    font-size: 0.75rem !important;
+    padding: 6px 10px !important;
+  }
+
+  /* Big Event Banner */
+  .big-event-banner {
+    padding: 16px 28px !important;
+    border-radius: 18px !important;
+  }
+
+  .big-event-title {
+    font-size: 2.4rem !important;
+  }
+
+  .big-event-subtitle {
+    font-size: 0.9rem !important;
+  }
+}
+
+/* Extra small mobile screens (<= 480px) */
+@media (max-width: 480px) {
+  #batting-ui.batting-controller-large,
+  #bowling-ui {
+    width: 98% !important;
+    max-width: 345px !important;
+    bottom: 5px !important;
+    padding: 8px 10px !important;
+  }
+
+  .dir-btn-large {
+    min-height: 38px !important;
+  }
+
+  .dir-btn-large .dir-arrow {
+    font-size: 0.95rem !important;
+  }
+
+  .dir-btn-swing {
+    min-height: 38px !important;
+  }
+
+  .pitch-canvas-pro {
+    width: 130px !important;
+    height: 110px !important;
+  }
+
+  .runs-wickets {
+    font-size: 1.35rem !important;
+  }
 }
 

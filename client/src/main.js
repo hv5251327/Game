@@ -147,11 +147,28 @@ class CricketGame {
     const fillLight = new THREE.AmbientLight(0xBDE3FF, 0.45);
     this.scene.add(fillLight);
 
-    window.addEventListener('resize', () => {
-      this.camera.aspect = window.innerWidth / window.innerHeight;
+    const updateFOVAndSize = () => {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      const aspect = width / height;
+      this.camera.aspect = aspect;
+      // Responsive Mobile FOV scaling:
+      // In portrait mode (aspect < 1.0), widen the vertical FOV so the pitch, wickets, and characters fit nicely
+      if (aspect < 1.0) {
+        this.camera.fov = Math.min(68, Math.max(48, (48 / aspect) * 0.78));
+      } else {
+        this.camera.fov = 48;
+      }
       this.camera.updateProjectionMatrix();
-      this.renderer.setSize(window.innerWidth, window.innerHeight);
+      this.renderer.setSize(width, height);
+    };
+
+    window.addEventListener('resize', updateFOVAndSize);
+    window.addEventListener('orientationchange', () => {
+      setTimeout(updateFOVAndSize, 100);
+      setTimeout(updateFOVAndSize, 300);
     });
+    updateFOVAndSize();
   }
 
   _initGameModules() {
@@ -437,21 +454,21 @@ class CricketGame {
     this.network.on('bowl_now', (data) => {
       this.showNotice(`⚾ Your turn to bowl ball ${data.ball} of over ${data.over}!`);
       this._updateCameraMode();
-      this.bowlingUI.show({ timeout: 8500 });
+      this.bowlingUI.show({ timeout: 20000 });
     });
 
-    // Bowler Run-Up Event: bowler begins full 2.0-second runup from back and batting meter appears immediately
+    // Bowler Run-Up Event: bowler begins full 2.5-second runup from back and batting meter appears immediately
     this.network.on('bowler_runup', (data) => {
       const swingStr = data.swingDirection ? ` &bull; ${data.swingDirection.toUpperCase()}` : '';
       this.domActionBanner.innerHTML = `⚡ ${data.bowler?.name} charging in (${data.deliveryType.toUpperCase()}${swingStr})...`;
 
-      // Animate bowler run-up stride towards the bowling crease over 2000ms
+      // Animate bowler run-up stride towards the bowling crease over 2500ms
       if (this.bowlerAvatar) {
         this.bowlerAvatar.setPosition(0, 0.35, -11.0);
         const startZ = -11.0;
         const targetZ = -3.7;
         const startTime = performance.now();
-        const duration = 2000;
+        const duration = 2500;
         const runupStep = (now) => {
           const elapsed = now - startTime;
           const p = Math.min(1.0, elapsed / duration);
@@ -485,7 +502,7 @@ class CricketGame {
                             (data.batsman?.id === this.myId) ||
                             (!this.roomInfo?.players?.teamA?.some(p => !p.isBot && p.id !== this.myId));
       if (isBattingTeam) {
-        this.battingUI.show({ timeout: 4500 });
+        this.battingUI.show({ timeout: 7000 });
       }
     });
 
@@ -521,7 +538,7 @@ class CricketGame {
                             (data.batsman?.id === this.myId) ||
                             (!this.roomInfo?.players?.teamA?.some(p => !p.isBot && p.id !== this.myId));
       if (isBattingTeam && !this.battingUI.active) {
-        this.battingUI.show({ timeout: 3500 });
+        this.battingUI.show({ timeout: 7000 });
       }
     });
 
