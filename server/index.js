@@ -54,7 +54,6 @@ class CricketRoom {
     this.currentBall = 0;
     this.ballInFlight = false;
     this.runupInProgress = false;
-    this.pendingEarlyBat = null;
     this._runupTimeout = null;
     this.pendingBall = null;
     this.target = null;
@@ -465,7 +464,6 @@ class CricketRoom {
     clearTimeout(this._bowlerTimeout);
     this.runupInProgress = true;
     this.ballInFlight = false;
-    this.pendingEarlyBat = null;
     this.pendingBall = { ...data, bowlerId: socketId };
 
     const batsmanId = this.mode === 'single_batting'
@@ -503,30 +501,29 @@ class CricketRoom {
         ball: this.currentBall + 1
       });
 
-      // If batsman queued a swing during run-up, resolve immediately
-      if (this.pendingEarlyBat) {
-        const earlyBat = this.pendingEarlyBat;
-        this.pendingEarlyBat = null;
-        this.ballInFlight = false;
-        clearTimeout(this._batTimeout);
-        this._resolveBall(earlyBat, this.pendingBall);
-        return;
-      }
-
       const battingIds = this.battingTeam === 'a' ? this.teamA : this.teamB;
       const humanOnBattingTeam = battingIds.some(id => !this.players.get(id)?.isBot);
       const batsmanPlayer = this.players.get(batsmanId);
 
+      clearTimeout(this._batTimeout);
       if (batsmanPlayer && batsmanPlayer.isBot && !humanOnBattingTeam) {
-        setTimeout(() => this._botBat(batsmanId, data), 700 + Math.random() * 500);
+        setTimeout(() => this._botBat(batsmanId, data), 650 + Math.random() * 400);
       } else {
-        clearTimeout(this._batTimeout);
-        // Generous 7.0 seconds window for batsman to choose shot style, direction, and time swing
+        // Realistic 1.4-second arrival window: batsman can only hit while ball is approaching
         this._batTimeout = setTimeout(() => {
           if (this.ballInFlight) {
-            this._botBat(batsmanId, data);
+            this.ballInFlight = false;
+            // Ball passed batsman into keeper's gloves (leave / missed / dot ball or bowled if right on stumps)
+            this._resolveBall({
+              character_id: batsmanId,
+              action: 'swing_bat',
+              shotType: 'leave',
+              timing: 0.1,
+              power: 0,
+              direction: 'forward'
+            }, data);
           }
-        }, 7000);
+        }, 1400);
       }
     }, 2500);
   }
@@ -542,13 +539,9 @@ class CricketRoom {
 
     if (!isBatsman && !isHumanOnBattingTeam) return;
 
-    if (this.runupInProgress) {
-      // Batsman swung during bowler runup - queue early swing
-      this.pendingEarlyBat = { ...data, timing: Math.min(data.timing || 0.3, 0.25) };
-      return;
-    }
+    // Strictly reject swings while bowler is running up or after the ball has passed / is no longer in flight
+    if (this.runupInProgress || !this.ballInFlight) return;
 
-    if (!this.ballInFlight) return;
     this.ballInFlight = false;
     clearTimeout(this._batTimeout);
     this._resolveBall(data, this.pendingBall);
@@ -632,7 +625,6 @@ class CricketRoom {
   _resolveBall(batData, bowlData) {
     this.ballInFlight = false;
     this.runupInProgress = false;
-    this.pendingEarlyBat = null;
     clearTimeout(this._runupTimeout);
     clearTimeout(this._batTimeout);
     const card = this._currentCard();
@@ -820,6 +812,15 @@ class CricketRoom {
     const isEarly = timing < 0.32;
     const isLate = timing > 0.85;
     const missHit = isEarly || isLate;
+
+    // Batsman Leaves / Did not swing before ball arrived
+    if (shotType === 'leave') {
+      const lzX = Math.abs(bowl.landingZone?.x || 0);
+      if (lzX < 0.18 && (deliveryType === 'yorker' || deliveryType === 'inswing' || Math.random() < 0.28)) {
+        return { type: 'wicket', wicket: true, dismissal: 'Bowled', ballPath: 'bowled' };
+      }
+      return { type: 'runs', runs: 0, ballPath: 'leave_dot' };
+    }
 
     // Yorker delivery logic
     if (deliveryType === 'yorker') {
