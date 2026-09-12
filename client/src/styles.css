@@ -659,6 +659,20 @@ body, html {
   box-shadow: 0 4px 16px rgba(255, 71, 87, 0.5);
 }
 
+
+.lobby-waiting-banner {
+  font-size: 0.9rem;
+  color: #2ed573;
+  font-weight: 700;
+  padding: 7px 18px;
+  background: rgba(46, 213, 115, 0.08);
+  border: 1px solid rgba(46, 213, 115, 0.35);
+  border-radius: 20px;
+  letter-spacing: 0.5px;
+  animation: pulseNotice 2s infinite alternate;
+  pointer-events: none;
+}
+
 .hidden {
   display: none !important;
 }

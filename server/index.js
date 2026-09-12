@@ -340,7 +340,7 @@ class GameRoom {
   updateBots(delta) {
     if (this.state !== 'HUNTING' && this.state !== 'LOBBY') return;
 
-    const bounds = 8.8;
+    const bounds = 10.5;
 
     if (this.soundInvestigateTimer > 0) {
       this.soundInvestigateTimer -= delta;
@@ -498,7 +498,7 @@ class GameRoom {
 
           if (distMoved < 0.35) {
             player.stationaryTimer = (player.stationaryTimer || 0) + delta;
-            if (player.stationaryTimer >= 10.0) {
+            if (player.stationaryTimer >= 5.0) {
               player.stationaryTimer = 0;
               player.lastStationaryPos = { ...player.position };
               io.to(this.code).emit('player_camp_revealed', {

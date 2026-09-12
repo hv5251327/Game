@@ -30,6 +30,7 @@ class HittlersGame {
     this.touchCrawl = false;
     this.lastSwingTime = 0;
     this.lastTime = performance.now();
+    this.roundActive = false; // true only while a round is actually running
 
     // DOM Elements
     this.domLobby = document.getElementById('lobby-screen');
@@ -61,6 +62,7 @@ class HittlersGame {
     this.domBtnCopyRoom = document.getElementById('btn-copy-room');
     this.domSelectLobbyHunterCount = document.getElementById('select-lobby-hunter-count');
     this.domSelectHostHunterCount = document.getElementById('select-host-hunter-count');
+    this.domLobbyWaitingBanner = document.getElementById('lobby-waiting-banner');
 
     this.init();
   }
@@ -376,6 +378,11 @@ class HittlersGame {
       this.network.joinRoom(roomCode, nickname, color, isNaN(botCount) ? 9 : botCount, preferredRole, false, hunterCount);
       this.domLobby.classList.add('hidden');
       this.domHud.classList.remove('hidden');
+      // Hide round-specific HUD elements until the match actually begins
+      if (this.domTimer) this.domTimer.closest('.timer-box')?.classList.add('hidden');
+      if (this.domRoleBadge) this.domRoleBadge.classList.add('hidden');
+      if (this.domRoleDesc) this.domRoleDesc.classList.add('hidden');
+      if (this.domHpBar) this.domHpBar.classList.add('hidden');
     });
 
     document.getElementById('btn-start-match')?.addEventListener('click', () => {
@@ -522,14 +529,32 @@ class HittlersGame {
   }
 
   handleRoundStarted(data) {
+    this.roundActive = true;
     this.domHostControls?.classList.add('hidden');
     this.domWaitingForHost?.classList.add('hidden');
+    this.domLobbyWaitingBanner?.classList.add('hidden');
+    // Reveal round-specific HUD elements now that the match is live
+    this.domTimer?.closest('.timer-box')?.classList.remove('hidden');
+    this.domRoleBadge?.classList.remove('hidden');
+    this.domRoleDesc?.classList.remove('hidden');
+    // Show HP bar for runners
+    if (this.localPlayer.role === 'RUNNER') {
+      this.domHpBar?.classList.remove('hidden');
+      this.updateHpUi();
+    }
     const hCount = data.hunterCount || (data.hitterIds ? data.hitterIds.length : 1);
     this.showHitFeedNotice(`⚡ ROUND STARTED! SURVIVE 120 SECONDS (${hCount} Hunter${hCount > 1 ? 's' : ''})!`);
   }
 
   handleRoundEnded(data) {
+    this.roundActive = false;
     this.domEndOverlay.classList.remove('hidden');
+    // Re-hide round-specific HUD during round-end/lobby transition
+    this.domTimer?.closest('.timer-box')?.classList.add('hidden');
+    this.domRoleBadge?.classList.add('hidden');
+    this.domRoleDesc?.classList.add('hidden');
+    this.domHpBar?.classList.add('hidden');
+    this.domLobbyWaitingBanner?.classList.remove('hidden');
 
     if (data.winner === 'RUNNERS') {
       this.domEndTitle.textContent = '🎉 RUNNERS SURVIVED!';
@@ -605,7 +630,7 @@ class HittlersGame {
   handlePlayerCampRevealed(data) {
     if (data.playerId === this.network.myId) {
       this.localPlayer.triggerThermalReveal(data.duration || 1.0);
-      this.showHitFeedNotice('⚠️ You stayed still for 10s! Thermal ping revealed to Hunter!');
+      this.showHitFeedNotice('⚠️ You stayed still for 5s! Thermal ping revealed to Hunter!');
     } else {
       const remote = this.remotePlayers.get(data.playerId);
       if (remote) remote.triggerThermalReveal(data.duration || 1.0);
@@ -707,8 +732,11 @@ class HittlersGame {
         ? `Survive 120s against ${hunterCount} Hunters! Crawl under tables, jump on beds, toggle view with V!`
         : 'Survive 120s! Crawl under tables, jump on beds, toggle 1st/3rd view with V!';
       this.domPeepDarkness.classList.add('hidden');
-      this.domHpBar.classList.remove('hidden');
-      this.updateHpUi();
+      // Only show HP bar if the round is actually active (not in lobby waiting)
+      if (this.roundActive) {
+        this.domHpBar.classList.remove('hidden');
+        this.updateHpUi();
+      }
     }
   }
 
