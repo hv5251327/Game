@@ -1,7 +1,7 @@
 {
-  "name": "cricket-doodle-3d",
+  "name": "ants-and-snails-cricket-3d",
   "version": "1.0.0",
-  "description": "CRICKET DOODLE 3D - Ants vs Grasshoppers Multiplayer Browser Game",
+  "description": "3D Ants and Snails Cricket Match - Stylized Multiplayer Cricket Game",
   "main": "server/index.js",
   "type": "module",
   "scripts": {

@@ -627,29 +627,36 @@ class CricketRoom {
 
   _computeOutcome(bat, bowl) {
     const timing = clamp(bat.timing || 0.5, 0, 1);
-    const power = clamp(bat.power || 0.5, 0, 1);
-    const direction = bat.direction || 0;
+    const power = clamp(bat.power || 0.75, 0, 1);
+    const direction = typeof bat.direction === 'string' ? bat.direction : 'forward';
     const shotType = bat.shotType || 'drive';
+    const charId = bat.character_id || 'ant_batter_01';
     const deliveryType = bowl.deliveryType || 'pace';
     const accuracy = clamp(bowl.accuracy || 0.7, 0, 1);
+
+    // Character physics modifiers
+    const isBeetle = charId.includes('beetle');
+    const isGrasshopper = charId.includes('grasshopper');
+    const impactMult = isBeetle ? 1.4 : isGrasshopper ? 1.05 : 1.0;
+    const stability = isBeetle ? 0.98 : isGrasshopper ? 0.38 : 0.62;
 
     // Wide check: bowler missed landing zone by a lot
     if (accuracy < 0.22 && Math.abs(bowl.landingZone?.x || 0) > 0.85) {
       return { type: 'wide', wide: true, runs: 0, ballPath: 'wide' };
     }
 
-    // Timing score: sweet spot around 0.55 - 0.75
-    const sweetCenter = 0.65;
+    // Timing score: sweet spot around 0.50 - 0.75
+    const sweetCenter = 0.62;
     const timingDiff = Math.abs(timing - sweetCenter);
     const isPerfect = timingDiff < 0.08;
-    const isGood = timingDiff < 0.20;
-    const isEarly = timing < 0.35;
+    const isGood = timingDiff < 0.22;
+    const isEarly = timing < 0.32;
     const isLate = timing > 0.85;
     const missHit = isEarly || isLate;
 
     // Yorker delivery logic
     if (deliveryType === 'yorker') {
-      if (shotType === 'defend' || isPerfect) {
+      if (shotType === 'defend' || direction === 'backward' || isPerfect) {
         return { type: 'runs', runs: isPerfect ? 1 : 0, ballPath: 'yorker_defended' };
       }
       if (missHit || (!isGood && shotType === 'loft')) {
@@ -659,24 +666,27 @@ class CricketRoom {
 
     // Bouncer delivery logic
     if (deliveryType === 'bouncer') {
-      if (shotType === 'sweep') {
+      if ((shotType === 'sweep' || direction === 'left') && !isPerfect) {
         return { type: 'wicket', wicket: true, dismissal: 'Caught', ballPath: 'top_edge_caught' };
       }
-      if (shotType === 'cut' && isGood) {
+      if ((shotType === 'cut' || direction === 'right' || direction === 'backward_right') && isGood) {
         return { type: 'runs', runs: 4, ballPath: 'upper_cut_four' };
       }
     }
 
-    // Shot type specific mechanics
-    if (shotType === 'defend') {
-      return { type: 'runs', runs: Math.random() < 0.25 ? 1 : 0, ballPath: 'defended' };
+    // Defensive Shot or Backward Direction (Block)
+    if (shotType === 'defend' || direction === 'backward') {
+      return { type: 'runs', runs: Math.random() < 0.2 ? 1 : 0, ballPath: 'defended' };
     }
 
+    // Lofted shot
     if (shotType === 'loft') {
-      if (isPerfect && power > 0.6) {
+      const powerThreshold = isBeetle ? 0.45 : 0.6;
+      if (isPerfect && power > powerThreshold) {
         return { type: 'runs', runs: 6, ballPath: 'maximum_six' };
       } else if (isGood) {
-        return { type: 'runs', runs: Math.random() < 0.6 ? 4 : 6, ballPath: 'lofted_boundary' };
+        const sixChance = isBeetle ? 0.65 : 0.4;
+        return { type: 'runs', runs: Math.random() < sixChance ? 6 : 4, ballPath: 'lofted_boundary' };
       } else if (missHit) {
         return { type: 'wicket', wicket: true, dismissal: 'Caught', ballPath: 'caught_in_deep' };
       } else {
@@ -684,7 +694,8 @@ class CricketRoom {
       }
     }
 
-    if (shotType === 'sweep') {
+    // Sweep shot (left or backward_left)
+    if (shotType === 'sweep' || direction === 'left' || direction === 'backward_left') {
       if (isGood) {
         return { type: 'runs', runs: Math.random() < 0.65 ? 4 : 2, ballPath: 'sweep_fine_leg' };
       } else if (missHit) {
@@ -694,9 +705,10 @@ class CricketRoom {
       }
     }
 
-    if (shotType === 'cut') {
+    // Cut shot (right or backward_right)
+    if (shotType === 'cut' || direction === 'right' || direction === 'backward_right') {
       if (isGood) {
-        return { type: 'runs', runs: Math.random() < 0.5 ? 4 : 2, ballPath: 'cut_past_point' };
+        return { type: 'runs', runs: Math.random() < 0.6 ? 4 : 2, ballPath: 'cut_past_point' };
       } else if (missHit) {
         return { type: 'wicket', wicket: true, dismissal: 'Caught', ballPath: 'edged_to_keeper' };
       } else {
@@ -704,16 +716,17 @@ class CricketRoom {
       }
     }
 
-    // Default: Drive
+    // Drive shots (forward, forward_left, forward_right)
     if (isPerfect) {
-      return { type: 'runs', runs: 4, ballPath: 'cover_drive_four' };
+      const sixProb = isBeetle ? 0.5 : 0.2;
+      return { type: 'runs', runs: Math.random() < sixProb ? 6 : 4, ballPath: 'cover_drive_four' };
     } else if (isGood) {
       const rand = Math.random();
-      const r = rand < 0.35 ? 4 : rand < 0.7 ? 2 : 1;
+      const r = rand < (0.35 * impactMult) ? 4 : rand < 0.7 ? 2 : 1;
       return { type: 'runs', runs: r, ballPath: 'drive_gap' };
     } else if (missHit) {
       const randWicket = Math.random();
-      if (randWicket < 0.45) {
+      if (randWicket < (0.42 / stability)) {
         return { type: 'wicket', wicket: true, dismissal: Math.random() < 0.5 ? 'Bowled' : 'LBW', ballPath: 'bowled' };
       } else {
         return { type: 'runs', runs: 0, ballPath: 'dot_ball' };

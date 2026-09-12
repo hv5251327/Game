@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Ground } from './engine/Ground.js';
-import { CricketCharacter } from './engine/CricketCharacter.js';
+import { CricketCharacter, CHARACTER_PRESETS, DIRECTION_VECTORS } from './engine/CricketCharacter.js';
 import { Ball } from './engine/Ball.js';
 import { BattingUI } from './engine/BattingUI.js';
 import { BowlingUI } from './engine/BowlingUI.js';
@@ -17,6 +17,7 @@ class CricketGame {
     this.currentScorecard = null;
     this.myId = null;
     this.myTeam = null;
+    this.selectedBatterId = 'ant_batter_01';
     this.isHost = false;
     this.roomInfo = null;
     this.lastTime = performance.now();
@@ -81,13 +82,13 @@ class CricketGame {
 
   _initThree() {
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x70a1ff); // Daylight summer sky
-    this.scene.fog = new THREE.FogExp2(0x70a1ff, 0.008);
+    this.scene.background = new THREE.Color(0x99D5FF); // Soft bright sky
+    this.scene.fog = new THREE.FogExp2(0x99D5FF, 0.008);
 
-    this.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 200);
-    // Isometric view looking down the pitch towards the batsman
-    this.camera.position.set(0, 11, -19);
-    this.camera.lookAt(0, 1.2, 4);
+    // Exact Camera: position { x: 0, y: 6.5, z: 11.5 }, look_at { x: 0, y: 1.2, z: 0 }
+    this.camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.1, 150);
+    this.camera.position.set(0, 6.5, 11.5);
+    this.camera.lookAt(0, 1.2, 0);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -97,22 +98,25 @@ class CricketGame {
 
     document.getElementById('canvas-container').appendChild(this.renderer.domElement);
 
-    // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
-    this.scene.add(ambientLight);
+    // Exact Lighting:
+    // key_light: directional, color "#FFF4C2", intensity 1.2, position { x: -4, y: 8, z: 5 }
+    const keyLight = new THREE.DirectionalLight(0xFFF4C2, 1.2);
+    keyLight.position.set(-4, 8, 5);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.width = 1024;
+    keyLight.shadow.mapSize.height = 1024;
+    keyLight.shadow.camera.near = 0.5;
+    keyLight.shadow.camera.far = 40;
+    keyLight.shadow.camera.left = -15;
+    keyLight.shadow.camera.right = 15;
+    keyLight.shadow.camera.top = 15;
+    keyLight.shadow.camera.bottom = -15;
+    keyLight.shadow.bias = -0.0005;
+    this.scene.add(keyLight);
 
-    const sun = new THREE.DirectionalLight(0xfff8e7, 1.25);
-    sun.position.set(15, 25, -10);
-    sun.castShadow = true;
-    sun.shadow.mapSize.width = 1024;
-    sun.shadow.mapSize.height = 1024;
-    sun.shadow.camera.near = 0.5;
-    sun.shadow.camera.far = 80;
-    sun.shadow.camera.left = -25;
-    sun.shadow.camera.right = 25;
-    sun.shadow.camera.top = 25;
-    sun.shadow.camera.bottom = -25;
-    this.scene.add(sun);
+    // fill_light: ambient, color "#BDE3FF", intensity 0.45
+    const fillLight = new THREE.AmbientLight(0xBDE3FF, 0.45);
+    this.scene.add(fillLight);
 
     window.addEventListener('resize', () => {
       this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -127,12 +131,19 @@ class CricketGame {
     this.battingUI = new BattingUI(this.domControlsContainer);
     this.bowlingUI = new BowlingUI(this.domControlsContainer);
 
-    this.battingUI.onSwing = (data) => {
+    // Initial character setup
+    this._setupDefaultCharacters();
+
+    // Bat Controller Swing Hook
+    this.battingUI.onSwing = (command) => {
       this._playBatSound();
-      if (this.strikerAvatar) this.strikerAvatar.triggerBatSwing();
-      this.network.bat(data);
+      if (this.strikerAvatar) {
+        this.strikerAvatar.executeCommand(command);
+      }
+      this.network.bat(command);
     };
 
+    // Bowling hook
     this.bowlingUI.onBowl = (data) => {
       this.network.bowl(data);
     };
@@ -158,8 +169,8 @@ class CricketGame {
       const osc = this.audioCtx.createOscillator();
       const gain = this.audioCtx.createGain();
       osc.type = 'triangle';
-      osc.frequency.setValueAtTime(280, this.audioCtx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(80, this.audioCtx.currentTime + 0.12);
+      osc.frequency.setValueAtTime(320, this.audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(90, this.audioCtx.currentTime + 0.12);
       gain.gain.setValueAtTime(0.8, this.audioCtx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.01, this.audioCtx.currentTime + 0.15);
       osc.connect(gain);
@@ -175,9 +186,9 @@ class CricketGame {
       const osc = this.audioCtx.createOscillator();
       const gain = this.audioCtx.createGain();
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(520, this.audioCtx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(780, this.audioCtx.currentTime + 0.4);
-      gain.gain.setValueAtTime(0.3, this.audioCtx.currentTime);
+      osc.frequency.setValueAtTime(540, this.audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(820, this.audioCtx.currentTime + 0.4);
+      gain.gain.setValueAtTime(0.35, this.audioCtx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.01, this.audioCtx.currentTime + 0.5);
       osc.connect(gain);
       gain.connect(this.audioCtx.destination);
@@ -192,33 +203,33 @@ class CricketGame {
       const osc = this.audioCtx.createOscillator();
       const gain = this.audioCtx.createGain();
       osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(150, this.audioCtx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(60, this.audioCtx.currentTime + 0.3);
-      gain.gain.setValueAtTime(0.6, this.audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, this.audioCtx.currentTime + 0.35);
+      osc.frequency.setValueAtTime(160, this.audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(55, this.audioCtx.currentTime + 0.35);
+      gain.gain.setValueAtTime(0.65, this.audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, this.audioCtx.currentTime + 0.4);
       osc.connect(gain);
       gain.connect(this.audioCtx.destination);
       osc.start();
-      osc.stop(this.audioCtx.currentTime + 0.35);
+      osc.stop(this.audioCtx.currentTime + 0.4);
     } catch (e) {}
   }
 
   _bindEvents() {
     this.domBtnRandRoom.addEventListener('click', () => {
       const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-      let code = 'CRIC-';
+      let code = 'MATCH-';
       for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
       this.domInputRoomCode.value = code;
     });
 
     this.domBtnConnect.addEventListener('click', () => {
       const name = this.domInputNickname.value.trim() || 'Player';
-      const roomCode = (this.domInputRoomCode.value.trim() || 'CRIC-1').toUpperCase();
+      const roomCode = (this.domInputRoomCode.value.trim() || 'MATCH-1').toUpperCase();
       const mode = this.domSelectGameMode.value;
       const overs = parseInt(this.domSelectOvers.value, 10) || 5;
 
       this.network.connect();
-      this.network.joinRoom(roomCode, name, '#5c2d0a', mode, overs);
+      this.network.joinRoom(roomCode, name, '#4C9B3C', mode, overs);
 
       this.domBtnConnect.classList.add('hidden');
       this.domBtnStartMatch.classList.remove('hidden');
@@ -307,7 +318,7 @@ class CricketGame {
     this.network.on('toss_started', (data) => {
       this.domLobby.classList.add('hidden');
       this.domTossModal.classList.remove('hidden');
-      this.domTossStatus.textContent = 'Flipping coin between Captains...';
+      this.domTossStatus.textContent = 'Flipping the coin between Team Captains...';
 
       const isCaptainA = (data.captainA?.id === this.myId);
       if (isCaptainA) {
@@ -333,14 +344,14 @@ class CricketGame {
     this.network.on('toss_decision', (data) => {
       this.domTossModal.classList.add('hidden');
       const choice = data.choice === 'bat' ? 'BAT' : 'BOWL';
-      const teamName = data.battingTeam === 'a' ? 'Ants' : 'Grasshoppers';
+      const teamName = data.battingTeam === 'a' ? 'Ants' : 'Grasshoppers/Snails';
       this.showBigEvent('TOSS DECIDED!', `${data.winner?.name} elected to ${choice}! ${teamName} batting.`);
     });
 
     this.network.on('innings_setup', (data) => {
       this.domLobby.classList.add('hidden');
       this.domHud.classList.remove('hidden');
-      this._setupCharacters(data.battingTeam, data.bowlingTeam);
+      this._setupMatchCharacters(data.battingTeam, data.bowlingTeam);
       this._updateScorecardUI(data.scorecard);
     });
 
@@ -353,38 +364,38 @@ class CricketGame {
       this.showNotice(`⚡ Over ${data.over} begins! ${data.bowler?.name} bowling to ${data.batsman?.name}.`);
       this._updateScorecardUI(data.scorecard);
       if (this.bowlerAvatar) {
-        this.bowlerAvatar.moveTo(0, 0, -10.5);
+        this.bowlerAvatar.setPosition(0, 0.35, -3.7);
       }
     });
 
     this.network.on('bowl_now', (data) => {
       this.showNotice(`⚾ Your turn to bowl ball ${data.ball} of over ${data.over}!`);
-      this.bowlingUI.show({ timeout: 6000 });
+      this.bowlingUI.show({ timeout: 6500 });
     });
 
     this.network.on('delivery', (data) => {
-      this.domActionBanner.textContent = `⚾ ${data.bowler?.name} delivers a ${data.deliveryType.toUpperCase()}!`;
+      this.domActionBanner.textContent = `⚾ ${data.bowler?.name} bowls a ${data.deliveryType.toUpperCase()}!`;
       if (this.bowlerAvatar) {
         this.bowlerAvatar.triggerBowlAction();
       }
 
-      // Launch ball delivery in 3D scene
-      const startPos = new THREE.Vector3(0, 1.4, -9.5);
-      const lzX = data.landingZone?.x || 0;
-      const lzZ = 8.2 - (data.landingZone?.z || 0.4) * 8.0;
-      const endPos = new THREE.Vector3(lzX * 0.8, 0.4, 8.5);
+      // Ball launch starting from exact starting position: { x: 0, y: 0.35, z: -2.8 }
+      const startPos = new THREE.Vector3(0, 0.35, -2.8);
+      const lzX = (data.landingZone?.x || 0) * 0.7;
+      const lzZ = 3.6 - (data.landingZone?.z || 0.4) * 4.5;
+      const endPos = new THREE.Vector3(lzX, 0.55, 3.8);
 
       this.ball.launch(startPos, endPos, {
-        peakHeight: data.deliveryType === 'bouncer' ? 3.8 : data.deliveryType === 'yorker' ? 1.4 : 2.5,
-        duration: data.deliveryType === 'spin' ? 1.4 : 0.9,
+        peakHeight: data.deliveryType === 'bouncer' ? 3.2 : data.deliveryType === 'yorker' ? 0.9 : 2.2,
+        duration: data.deliveryType === 'spin' ? 1.3 : 0.9,
         trajectory: data.deliveryType,
-        lateral: data.deliveryType === 'spin' ? (Math.random() - 0.5) * 0.8 : 0
+        lateral: data.deliveryType === 'spin' ? (Math.random() - 0.5) * 0.7 : 0
       });
 
-      // If local player is the current striker, show batting timing UI!
+      // Show batting UI if local player is striker
       const isStriker = (data.batsman?.id === this.myId);
       if (isStriker) {
-        this.battingUI.show({ timeout: 2500 });
+        this.battingUI.show({ timeout: 2600 });
       }
     });
 
@@ -393,30 +404,38 @@ class CricketGame {
       this.bowlingUI.hide();
       this._updateScorecardUI(data.scorecard);
 
-      // Visual / Audio feedback
+      // Trigger swing on striker avatar if not already swinging
+      if (this.strikerAvatar && !this.strikerAvatar.isSwinging) {
+        const dir = data.direction || 'forward';
+        this.strikerAvatar.executeCommand({
+          action: 'swing_bat',
+          direction: dir,
+          power: data.timing || 0.8
+        });
+      }
+
       if (data.wicket) {
         this._playOutSound();
         this.showBigEvent('WICKET! OUT!', `${data.dismissal} - clean dismissal!`);
-        if (this.strikerAvatar) {
-          this.strikerAvatar.setPosition(1.5, 0, 8.5);
-        }
+        if (this.bowlerAvatar) this.bowlerAvatar.triggerCelebrate();
       } else if (data.runs === 6) {
         this._playCheerSound();
-        this.showBigEvent('SIXER! 🚀', 'Magnificent maximum into the stands!');
-        this._launchHitBall(data.direction, 35, 8.0);
+        this.showBigEvent('SIXER! 🚀', 'Huge hit over the boundary rope!');
+        this._launchHitBall(data.direction, 28, 7.5);
+        if (this.strikerAvatar) this.strikerAvatar.triggerCelebrate();
       } else if (data.runs === 4) {
         this._playCheerSound();
-        this.showBigEvent('FOUR! 🏏', 'Crisp stroke racing across the turf!');
-        this._launchHitBall(data.direction, 26, 3.5);
+        this.showBigEvent('FOUR! 🏏', 'Crisp shot racing past the fielders!');
+        this._launchHitBall(data.direction, 22, 3.0);
       } else if (data.runs > 0) {
-        this.showNotice(`🏃 ${data.runs} Run${data.runs > 1 ? 's' : ''} taken! Good running between wickets.`);
-        this._launchHitBall(data.direction, 12, 1.5);
+        this.showNotice(`🏃 ${data.runs} Run${data.runs > 1 ? 's' : ''} scored!`);
+        this._launchHitBall(data.direction, 11, 1.2);
       } else if (data.wide) {
-        this.showNotice(`⚠️ WIDE BALL! 1 Extra run + ball to be re-bowled.`);
+        this.showNotice(`⚠️ WIDE BALL! 1 Extra run + ball re-bowled.`);
       } else if (data.noBall) {
         this.showNotice(`🚨 NO BALL! Extra run awarded.`);
       } else {
-        this.showNotice(`• Dot ball! Excellent fielding.`);
+        this.showNotice(`• Dot ball! Tidy delivery.`);
       }
     });
 
@@ -425,14 +444,11 @@ class CricketGame {
     });
 
     this.network.on('new_batsman', (data) => {
-      this.showNotice(`🏏 New Batsman on pitch: ${data.batsman?.name}!`);
-      if (this.strikerAvatar) {
-        this.strikerAvatar.setPosition(0, 0, 8.5);
-      }
+      this.showNotice(`🏏 New Batter on pitch: ${data.batsman?.name}!`);
     });
 
     this.network.on('over_complete', (data) => {
-      this.showNotice(`🔔 Over ${data.over} complete! Total: ${data.scorecard?.runs}/${data.scorecard?.wickets}`);
+      this.showNotice(`🔔 Over ${data.over} complete! Score: ${data.scorecard?.runs}/${data.scorecard?.wickets}`);
     });
 
     this.network.on('innings_end', (data) => {
@@ -444,8 +460,8 @@ class CricketGame {
     this.network.on('game_over', (data) => {
       this.domHud.classList.add('hidden');
       this.domGameOver.classList.remove('hidden');
-      document.getElementById('winner-title').textContent = (data.winner === 'a' ? '🐜 ANTS WIN!' : data.winner === 'b' ? '🦗 GRASSHOPPERS WIN!' : '🤝 MATCH DRAWN!');
-      document.getElementById('winner-reason').textContent = data.reason || 'What an incredible cricket clash!';
+      document.getElementById('winner-title').textContent = (data.winner === 'a' ? '🐜 ANTS WIN!' : data.winner === 'b' ? '🐌 SNAILS / GRASSHOPPERS WIN!' : '🤝 MATCH DRAWN!');
+      document.getElementById('winner-reason').textContent = data.reason || 'What a match!';
       this._renderFinalSummary(data.scorecard);
     });
 
@@ -453,8 +469,8 @@ class CricketGame {
     this.network.on('sb_turn_started', (data) => {
       this.domLobby.classList.add('hidden');
       this.domHud.classList.remove('hidden');
-      this._setupCharacters('a', 'b');
-      this.showNotice(`⚡ Single Batting Turn: ${data.batsman?.name} batting, ${data.bowler?.name} bowling!`);
+      this._setupMatchCharacters('a', 'b');
+      this.showNotice(`⚡ Single Batting: ${data.batsman?.name} batting vs ${data.bowler?.name} bowling!`);
       this._updateScorecardUI(data.scorecard);
     });
 
@@ -463,22 +479,24 @@ class CricketGame {
     });
   }
 
-  _launchHitBall(direction = 0, distance = 20, height = 3) {
-    const startPos = new THREE.Vector3(0, 0.4, 8.5);
-    const angle = direction * (Math.PI / 3); // -60 to +60 deg
-    const endPos = new THREE.Vector3(
-      Math.sin(angle) * distance,
-      0.1,
-      8.5 - Math.cos(angle) * distance
-    );
-    this.ball.launch(startPos, endPos, {
-      peakHeight: height,
-      duration: 1.2
-    });
+  // --- Character Setups using exact JSON Starting Transforms ---
+  _setupDefaultCharacters() {
+    // 1. ant_batter_01 at { x: 0, y: 0.65, z: 3.8 }, rotation_y: 180°
+    this.strikerAvatar = new CricketCharacter(this.scene, 'ant_batter_01');
+
+    // 2. snail_bowler_01 at { x: 0, y: 0.35, z: -3.7 }, rotation_y: 0°
+    this.bowlerAvatar = new CricketCharacter(this.scene, 'snail_bowler_01');
+
+    // 3. snail_fielder_left at { x: -5.0, y: 0.3, z: -1.2 }, rotation_y: 90°
+    const snailLeft = new CricketCharacter(this.scene, 'snail_fielder_left');
+
+    // 4. ant_fielder_right at { x: 4.6, y: 0.55, z: -1.8 }, rotation_y: -90°
+    const antRight = new CricketCharacter(this.scene, 'ant_fielder_right');
+
+    this.fielders.push(snailLeft, antRight);
   }
 
-  _setupCharacters(battingTeam, bowlingTeam) {
-    // Clean old avatars
+  _setupMatchCharacters(battingTeam, bowlingTeam) {
     if (this.strikerAvatar) this.strikerAvatar.destroy();
     if (this.nonStrikerAvatar) this.nonStrikerAvatar.destroy();
     if (this.bowlerAvatar) this.bowlerAvatar.destroy();
@@ -486,40 +504,59 @@ class CricketGame {
     this.fielders.forEach(f => f.destroy());
     this.fielders = [];
 
-    // Batsman (Striker at crease)
-    this.strikerAvatar = new CricketCharacter(this.scene, battingTeam, 'batsman');
-    this.strikerAvatar.setPosition(0, 0, 8.5);
-    this.strikerAvatar.setRotation(Math.PI);
+    // Chosen Batter: ant_batter_01, beetle_power_batter_01, or grasshopper_agile_batter_01
+    const batterPresetId = this.battingUI.characterId || 'ant_batter_01';
+    this.strikerAvatar = new CricketCharacter(this.scene, batterPresetId);
 
-    // Non-striker (at bowler end)
-    this.nonStrikerAvatar = new CricketCharacter(this.scene, battingTeam, 'batsman');
-    this.nonStrikerAvatar.setPosition(-1.3, 0, -8.5);
+    // Non-striker (Ant or Beetle) at bowler end
+    this.nonStrikerAvatar = new CricketCharacter(this.scene, 'ant_fielder_right');
+    this.nonStrikerAvatar.setPosition(-1.3, 0.55, -3.8);
+    this.nonStrikerAvatar.setRotation(0);
 
-    // Bowler
-    this.bowlerAvatar = new CricketCharacter(this.scene, bowlingTeam, 'bowler');
-    this.bowlerAvatar.setPosition(0, 0, -10.5);
+    // Bowler: snail_bowler_01 at { x: 0, y: 0.35, z: -3.7 }
+    this.bowlerAvatar = new CricketCharacter(this.scene, 'snail_bowler_01');
 
-    // Wicketkeeper (behind stumps)
-    this.keeperAvatar = new CricketCharacter(this.scene, bowlingTeam, 'wicketkeeper');
-    this.keeperAvatar.setPosition(0, 0, 10.2);
+    // Wicketkeeper behind batsman stumps
+    this.keeperAvatar = new CricketCharacter(this.scene, 'snail_fielder_left');
+    this.keeperAvatar.setPosition(0, 0.3, 5.4);
     this.keeperAvatar.setRotation(Math.PI);
 
-    // 7 Standard Fielders placed around the oval
-    const fielderPositions = [
-      { x: 5, z: 8, r: 'Point' },
-      { x: 8, z: 3, r: 'Cover' },
-      { x: 4, z: -5, r: 'Mid-off' },
-      { x: -4, z: -5, r: 'Mid-on' },
-      { x: -7, z: 3, r: 'Mid-wicket' },
-      { x: -5, z: 9, r: 'Square Leg' },
-      { x: 14, z: 12, r: 'Deep Extra Cover' }
+    // Left Fielder: snail_fielder_left at { x: -5.0, y: 0.3, z: -1.2 }
+    const f1 = new CricketCharacter(this.scene, 'snail_fielder_left');
+
+    // Right Fielder: ant_fielder_right at { x: 4.6, y: 0.55, z: -1.8 }
+    const f2 = new CricketCharacter(this.scene, 'ant_fielder_right');
+
+    // Additional deep boundary fielders
+    const extraPositions = [
+      { id: 'snail_fielder_left', x: -8, y: 0.3, z: 2 },
+      { id: 'ant_fielder_right', x: 9, y: 0.55, z: 4 },
+      { id: 'snail_fielder_left', x: 0, y: 0.3, z: -10 },
+      { id: 'ant_fielder_right', x: -10, y: 0.55, z: -6 }
     ];
 
-    fielderPositions.forEach(fp => {
-      const fielder = new CricketCharacter(this.scene, bowlingTeam, 'fielder');
-      fielder.setPosition(fp.x, 0, fp.z);
-      fielder.setRotation(Math.atan2(-fp.x, 8.5 - fp.z));
-      this.fielders.push(fielder);
+    extraPositions.forEach(ep => {
+      const f = new CricketCharacter(this.scene, ep.id);
+      f.setPosition(ep.x, ep.y, ep.z);
+      f.setRotation(Math.atan2(-ep.x, 3.8 - ep.z));
+      this.fielders.push(f);
+    });
+
+    this.fielders.push(f1, f2);
+  }
+
+  _launchHitBall(directionStr = 'forward', distance = 20, height = 3) {
+    const startPos = new THREE.Vector3(0, 0.65, 3.8);
+    const dirInfo = DIRECTION_VECTORS[directionStr] || DIRECTION_VECTORS.forward;
+    const endPos = new THREE.Vector3(
+      dirInfo.x * distance,
+      0.16,
+      3.8 + dirInfo.z * distance
+    );
+
+    this.ball.launch(startPos, endPos, {
+      peakHeight: height,
+      duration: 1.2
     });
   }
 
@@ -541,7 +578,7 @@ class CricketGame {
       });
     }
 
-    // Grasshoppers (Team B)
+    // Snails / Grasshoppers (Team B)
     this.domTeamBMembers.innerHTML = '';
     const teamB = info.players?.teamB || [];
     if (teamB.length === 0) {
@@ -551,7 +588,7 @@ class CricketGame {
         const isCap = (p.id === info.captainB);
         const item = document.createElement('div');
         item.className = 'team-member-tag';
-        item.innerHTML = `<span>🦗 ${p.name} ${p.isBot ? '(Bot)' : ''}</span>${isCap ? '<span class="captain-badge">👑 C</span>' : ''}`;
+        item.innerHTML = `<span>🐌 ${p.name} ${p.isBot ? '(Bot)' : ''}</span>${isCap ? '<span class="captain-badge">👑 C</span>' : ''}`;
         this.domTeamBMembers.appendChild(item);
       });
     }
@@ -562,8 +599,8 @@ class CricketGame {
     this.currentScorecard = card;
 
     const teamAIsBatting = (card.battingTeam === 'a');
-    this.domTeamName.textContent = teamAIsBatting ? 'ANTS' : 'GRASSHOPPERS';
-    this.domTeamIcon.textContent = teamAIsBatting ? '🐜' : '🦗';
+    this.domTeamName.textContent = teamAIsBatting ? 'ANTS' : 'SNAILS';
+    this.domTeamIcon.textContent = teamAIsBatting ? '🐜' : '🐌';
 
     this.domRunsWickets.textContent = `${card.runs} / ${card.wickets}`;
     this.domOvers.textContent = `(${card.overs}.${card.balls} / ${this.roomInfo?.overs || 5} ov)`;
@@ -600,7 +637,7 @@ class CricketGame {
       this.domBowlerFigures.textContent = `${bwlStats?.wickets || 0}-${bwlStats?.runs || 0} (${bwlStats?.overs || 0}.${bwlStats?.balls || 0} ov)`;
     }
 
-    // This Over Balls History
+    // This Over Balls
     this.domThisOverBalls.innerHTML = '';
     const balls = card.currentOverBalls || [];
     if (balls.length === 0) {
@@ -622,14 +659,14 @@ class CricketGame {
   _showCaptainPickBowler(bowlers, over) {
     this.domCaptainModal.classList.remove('hidden');
     document.getElementById('captain-modal-title').textContent = '👑 CAPTAIN: SELECT BOWLER';
-    document.getElementById('captain-modal-desc').textContent = `Choose who will bowl Over ${over}:`;
+    document.getElementById('captain-modal-desc').textContent = `Choose who bowls Over ${over}:`;
 
     const list = document.getElementById('captain-roster-list');
     list.innerHTML = '';
     bowlers.forEach(b => {
       const btn = document.createElement('button');
       btn.className = 'roster-btn';
-      btn.innerHTML = `<span>⚾ ${b.name}</span><span>${b.isBot ? '(Bot)' : 'Human'}</span>`;
+      btn.innerHTML = `<span>🐌 ${b.name}</span><span>${b.isBot ? '(Bot)' : 'Human'}</span>`;
       btn.addEventListener('click', () => {
         this.domCaptainModal.classList.add('hidden');
         this.network.setBowler(b.id);
@@ -640,7 +677,7 @@ class CricketGame {
 
   _showCaptainPickBatsman(batsmen) {
     this.domCaptainModal.classList.remove('hidden');
-    document.getElementById('captain-modal-title').textContent = '👑 CAPTAIN: NEXT BATSMAN';
+    document.getElementById('captain-modal-title').textContent = '👑 CAPTAIN: NEXT BATTER';
     document.getElementById('captain-modal-desc').textContent = 'Wicket fallen! Select who bats next:';
 
     const list = document.getElementById('captain-roster-list');
@@ -665,7 +702,7 @@ class CricketGame {
     let html = '';
     const renderInnings = (card, label) => {
       if (!card || !card.team) return '';
-      const tName = card.team === 'a' ? 'Ants' : 'Grasshoppers';
+      const tName = card.team === 'a' ? 'Ants' : 'Snails';
       let out = `<h3>${label}: ${tName} (${card.runs}/${card.wickets} in ${card.overs}.${card.balls} ov)</h3>`;
       out += `<table class="score-table">
         <thead><tr><th>Batter</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th>Dismissal</th></tr></thead><tbody>`;
@@ -698,7 +735,7 @@ class CricketGame {
     summary.innerHTML = `
       <div style="display:flex; justify-content:space-around; margin:16px 0; font-size:1.1rem; font-weight:bold;">
         <div>🐜 Ants: ${inn1?.runs || 0}/${inn1?.wickets || 0}</div>
-        <div>🦗 Grasshoppers: ${inn2?.runs || 0}/${inn2?.wickets || 0}</div>
+        <div>🐌 Snails: ${inn2?.runs || 0}/${inn2?.wickets || 0}</div>
       </div>
     `;
   }

@@ -1,205 +1,551 @@
-﻿import * as THREE from 'three';
+import * as THREE from 'three';
 
-// CricketCharacter: renders ants (Team A) or grasshoppers (Team B)
+// Exact Character definitions & physics presets from specification
+export const CHARACTER_PRESETS = {
+  ant_batter_01: {
+    id: 'ant_batter_01',
+    species: 'ant',
+    role: 'batter',
+    team_color: '#4C9B3C',
+    physics: {
+      mass_kg: 0.12,
+      swing_speed_degrees_per_second: 520,
+      impact_force_newtons: 18,
+      restitution: 0.58,
+      friction: 0.72,
+      air_drag: 0.18,
+      grounded_stability: 0.62
+    },
+    scale: 1.25,
+    bat: { shape: 'short rounded cricket bat', color: 0xF5F2DE, grip_color: 0x6C4B2A, attachment: 'right_hand' },
+    starting_transform: { position: { x: 0, y: 0.65, z: 3.8 }, rotation_y_degrees: 180, scale: 1.0 },
+    swing_phases: [
+      { name: 'wind_up', time: 0.0, bat_angle: -55, body_twist: -18 },
+      { name: 'accelerate', time: 0.22, bat_angle: 15, body_twist: 12 },
+      { name: 'contact', time: 0.34, bat_angle: 68, body_twist: 24 },
+      { name: 'follow_through', time: 0.55, bat_angle: 115, body_twist: 32 }
+    ]
+  },
+  snail_bowler_01: {
+    id: 'snail_bowler_01',
+    species: 'snail',
+    role: 'bowler',
+    team_color: '#A5C94D',
+    shell_color: 0xD79543,
+    spiral_color: 0x8B542A,
+    physics: {
+      mass_kg: 0.32,
+      swing_speed_degrees_per_second: 180,
+      impact_force_newtons: 8,
+      restitution: 0.22,
+      friction: 0.91,
+      air_drag: 0.34,
+      grounded_stability: 0.94
+    },
+    scale: 1.0,
+    starting_transform: { position: { x: 0, y: 0.35, z: -3.7 }, rotation_y_degrees: 0, scale: 1.0 }
+  },
+  snail_fielder_left: {
+    id: 'snail_fielder_left',
+    species: 'snail',
+    role: 'fielder',
+    team_color: '#E6A847',
+    shell_color: 0x73A947,
+    spiral_color: 0x396B31,
+    physics: {
+      mass_kg: 0.27,
+      swing_speed_degrees_per_second: 150,
+      impact_force_newtons: 6,
+      restitution: 0.2,
+      friction: 0.93,
+      air_drag: 0.36,
+      grounded_stability: 0.97
+    },
+    scale: 0.82,
+    starting_transform: { position: { x: -5.0, y: 0.3, z: -1.2 }, rotation_y_degrees: 90, scale: 1.0 }
+  },
+  ant_fielder_right: {
+    id: 'ant_fielder_right',
+    species: 'ant',
+    role: 'fielder',
+    team_color: '#D88732',
+    physics: {
+      mass_kg: 0.1,
+      swing_speed_degrees_per_second: 460,
+      impact_force_newtons: 14,
+      restitution: 0.5,
+      friction: 0.68,
+      air_drag: 0.2,
+      grounded_stability: 0.58
+    },
+    scale: 0.86,
+    starting_transform: { position: { x: 4.6, y: 0.55, z: -1.8 }, rotation_y_degrees: -90, scale: 1.0 }
+  },
+  beetle_power_batter_01: {
+    id: 'beetle_power_batter_01',
+    species: 'beetle',
+    role: 'batter',
+    batting_style: 'power_hitter',
+    team_color: '#315B4A',
+    shell_color: 0x244538,
+    physics: {
+      mass_kg: 0.48,
+      swing_speed_degrees_per_second: 390,
+      impact_force_newtons: 42,
+      restitution: 0.64,
+      friction: 0.86,
+      air_drag: 0.12,
+      grounded_stability: 0.98
+    },
+    scale: 1.35,
+    bat: { shape: 'wide heavy cricket bat', color: 0xD8A35D, grip_color: 0x4D3020, attachment: 'both_hands' },
+    starting_transform: { position: { x: 0, y: 0.72, z: 3.8 }, rotation_y_degrees: 180, scale: 1.0 },
+    swing_phases: [
+      { name: 'deep_wind_up', time: 0.0, bat_angle: -78, body_twist: -28 },
+      { name: 'power_drive', time: 0.34, bat_angle: 5, body_twist: 8 },
+      { name: 'contact', time: 0.48, bat_angle: 72, body_twist: 30 },
+      { name: 'long_follow_through', time: 0.78, bat_angle: 145, body_twist: 42 }
+    ]
+  },
+  grasshopper_agile_batter_01: {
+    id: 'grasshopper_agile_batter_01',
+    species: 'grasshopper',
+    role: 'batter',
+    batting_style: 'agile_switch_hitter',
+    team_color: '#8BC34A',
+    physics: {
+      mass_kg: 0.16,
+      swing_speed_degrees_per_second: 760,
+      impact_force_newtons: 24,
+      restitution: 0.7,
+      friction: 0.48,
+      air_drag: 0.1,
+      grounded_stability: 0.38
+    },
+    scale: 1.12,
+    bat: { shape: 'light narrow cricket bat', color: 0xF4D59A, grip_color: 0x6B452A, attachment: 'dominant_hand' },
+    starting_transform: { position: { x: 0, y: 0.62, z: 3.8 }, rotation_y_degrees: 180, scale: 1.0 },
+    swing_phases: [
+      { name: 'coil', time: 0.0, bat_angle: -35, body_twist: -12 },
+      { name: 'hop_and_accelerate', time: 0.14, bat_angle: 20, body_twist: 14 },
+      { name: 'contact', time: 0.24, bat_angle: 75, body_twist: 28 },
+      { name: 'airborne_follow_through', time: 0.42, bat_angle: 155, body_twist: 48 }
+    ]
+  }
+};
+
+// Direction vector map
+export const DIRECTION_VECTORS = {
+  forward: { x: 0, z: -1, angle: 0 },
+  backward: { x: 0, z: 1, angle: Math.PI },
+  left: { x: -1, z: 0, angle: -Math.PI / 2 },
+  right: { x: 1, z: 0, angle: Math.PI / 2 },
+  forward_left: { x: -0.7071, z: -0.7071, angle: -Math.PI / 4 },
+  forward_right: { x: 0.7071, z: -0.7071, angle: Math.PI / 4 },
+  backward_left: { x: -0.7071, z: 0.7071, angle: -3 * Math.PI / 4 },
+  backward_right: { x: 0.7071, z: 0.7071, angle: 3 * Math.PI / 4 }
+};
+
 export class CricketCharacter {
-  constructor(scene, team, role = 'fielder') {
+  constructor(scene, configOrId = 'ant_batter_01') {
     this.scene = scene;
-    this.team = team; // 'a' = ants, 'b' = grasshoppers
-    this.role = role; // 'batsman' | 'bowler' | 'fielder' | 'wicketkeeper'
+    this.config = typeof configOrId === 'string'
+      ? (CHARACTER_PRESETS[configOrId] || CHARACTER_PRESETS.ant_batter_01)
+      : configOrId;
+
+    this.id = this.config.id || 'char_' + Date.now();
+    this.species = this.config.species || 'ant';
+    this.role = this.config.role || 'batter';
+    this.physics = this.config.physics || CHARACTER_PRESETS.ant_batter_01.physics;
+
     this.group = new THREE.Group();
+    this.bodyPivot = new THREE.Group();
+    this.group.add(this.bodyPivot);
+
+    this.batMesh = null;
+    this.batPivot = new THREE.Group();
+    this.group.add(this.batPivot);
+
+    this.antennaeMeshes = [];
+    this.eyeStalks = [];
+    this.legs = [];
+
     this.animTime = Math.random() * Math.PI * 2;
     this.targetPos = new THREE.Vector3();
     this.isMoving = false;
+    this.isSwinging = false;
+    this.swingProgress = 0;
+    this.swingDuration = 0.55;
+    this.currentDirection = 'forward';
+    this.currentPower = 0.85;
+
     this.build();
+
+    // Set initial transform
+    if (this.config.starting_transform) {
+      const st = this.config.starting_transform;
+      this.setPosition(st.position.x, st.position.y, st.position.z);
+      this.setRotation((st.rotation_y_degrees || 0) * Math.PI / 180);
+      const sc = (st.scale || 1.0) * (this.config.scale || 1.0);
+      this.group.scale.setScalar(sc);
+    } else {
+      this.group.scale.setScalar(this.config.scale || 1.0);
+    }
+
     this.scene.add(this.group);
   }
 
   build() {
-    while (this.group.children.length > 0) this.group.remove(this.group.children[0]);
-    if (this.team === 'a') this._buildAnt();
-    else this._buildGrasshopper();
-    this._addRoleEquipment();
+    while (this.bodyPivot.children.length > 0) this.bodyPivot.remove(this.bodyPivot.children[0]);
+    while (this.batPivot.children.length > 0) this.batPivot.remove(this.batPivot.children[0]);
+
+    if (this.species === 'snail') {
+      this._buildSnail();
+    } else if (this.species === 'beetle') {
+      this._buildBeetle();
+    } else if (this.species === 'grasshopper') {
+      this._buildGrasshopper();
+    } else {
+      this._buildAnt();
+    }
+
+    if (this.config.bat) {
+      this._buildBat();
+    }
   }
 
+  // --- 1. ANT MODEL ---
   _buildAnt() {
-    const bodyColor = 0x2d1a0a;
-    const legColor = 0x1a0f05;
-    const eyeColor = 0xff2200;
-    const mat = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.6 });
+    const colorHex = parseInt((this.config.team_color || '#4C9B3C').replace('#', '0x'), 16);
+    const legColor = 0x22381A;
+    const bodyMat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.55 });
+    const legMat = new THREE.MeshStandardMaterial({ color: legColor, roughness: 0.7 });
 
-    // Head (sphere)
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), mat(bodyColor));
-    head.position.set(0, 0.55, 0.18);
-    this.group.add(head);
-    this._head = head;
+    // Segment 1: Head (large rounded head)
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 12), bodyMat);
+    head.position.set(0, 0.54, 0.18);
+    this.bodyPivot.add(head);
 
-    // Antennae
-    [-0.08, 0.08].forEach((dx, i) => {
-      const antGeo = new THREE.CylinderGeometry(0.015, 0.008, 0.28, 5);
-      const ant = new THREE.Mesh(antGeo, mat(legColor));
-      ant.position.set(dx, 0.82, 0.22);
-      ant.rotation.z = (i === 0 ? -0.4 : 0.4);
-      ant.rotation.x = -0.3;
-      this.group.add(ant);
-      const tip = new THREE.Mesh(new THREE.SphereGeometry(0.025, 5, 5), mat(0xff4400));
-      tip.position.set(dx + (i === 0 ? -0.06 : 0.06), 0.94, 0.26);
-      this.group.add(tip);
-    });
-
-    // Eyes
-    [-0.07, 0.07].forEach(dx => {
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.04, 6, 6), mat(eyeColor));
-      eye.position.set(dx, 0.58, 0.33);
-      this.group.add(eye);
-    });
-
-    // Thorax
-    const thorax = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 8), mat(bodyColor));
-    thorax.position.set(0, 0.35, 0);
-    this.group.add(thorax);
-
-    // Abdomen (larger, slightly elliptical)
-    const abdomen = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 8), mat(bodyColor));
-    abdomen.scale.set(0.9, 0.85, 1.2);
-    abdomen.position.set(0, 0.28, -0.28);
-    this.group.add(abdomen);
-
-    // 6 Legs
-    const legPositions = [
-      { x: -0.22, y: 0.32, z: 0.05, rx: 0, rz: 0.5 },
-      { x: 0.22, y: 0.32, z: 0.05, rx: 0, rz: -0.5 },
-      { x: -0.24, y: 0.30, z: -0.08, rx: 0, rz: 0.6 },
-      { x: 0.24, y: 0.30, z: -0.08, rx: 0, rz: -0.6 },
-      { x: -0.22, y: 0.28, z: -0.20, rx: 0, rz: 0.5 },
-      { x: 0.22, y: 0.28, z: -0.20, rx: 0, rz: -0.5 },
-    ];
-    legPositions.forEach(lp => {
-      const legGeo = new THREE.CylinderGeometry(0.02, 0.015, 0.3, 5);
-      const leg = new THREE.Mesh(legGeo, mat(legColor));
-      leg.position.set(lp.x, lp.y, lp.z);
-      leg.rotation.z = lp.rz;
-      leg.rotation.x = 0.3;
-      this.group.add(leg);
-    });
-  }
-
-  _buildGrasshopper() {
-    const bodyColor = 0x3a7d1e;
-    const legColor = 0x2d6016;
-    const eyeColor = 0xffcc00;
-    const mat = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.5 });
-
-    // Head
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 8), mat(bodyColor));
-    head.scale.set(1.1, 0.9, 1.2);
-    head.position.set(0, 0.52, 0.22);
-    this.group.add(head);
-    this._head = head;
-
-    // Compound eyes
+    // Large white eyes with black pupils looking toward ball
     [-0.1, 0.1].forEach(dx => {
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.055, 6, 6), mat(eyeColor));
-      eye.position.set(dx, 0.54, 0.35);
-      this.group.add(eye);
+      const eyeWhite = new THREE.Mesh(
+        new THREE.SphereGeometry(0.065, 8, 8),
+        new THREE.MeshStandardMaterial({ color: 0xFFFFFF, roughness: 0.2 })
+      );
+      eyeWhite.position.set(dx, 0.58, 0.36);
+      this.bodyPivot.add(eyeWhite);
+
+      const pupil = new THREE.Mesh(
+        new THREE.SphereGeometry(0.035, 6, 6),
+        new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.1 })
+      );
+      pupil.position.set(dx * 0.95, 0.58, 0.41);
+      this.bodyPivot.add(pupil);
     });
 
-    // Thorax (elongated)
-    const thorax = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 8), mat(bodyColor));
-    thorax.scale.set(0.85, 1.0, 1.4);
-    thorax.position.set(0, 0.34, 0);
-    this.group.add(thorax);
+    // Segment 2: Thorax
+    const thorax = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 10), bodyMat);
+    thorax.position.set(0, 0.38, -0.02);
+    this.bodyPivot.add(thorax);
 
-    // Abdomen (long, tapered)
-    const abdGeo = new THREE.CylinderGeometry(0.14, 0.06, 0.55, 8);
-    const abdomen = new THREE.Mesh(abdGeo, mat(bodyColor));
-    abdomen.rotation.x = Math.PI / 2;
-    abdomen.position.set(0, 0.30, -0.36);
-    this.group.add(abdomen);
+    // Segment 3: Abdomen
+    const abdomen = new THREE.Mesh(new THREE.SphereGeometry(0.3, 10, 10), bodyMat);
+    abdomen.scale.set(0.95, 0.88, 1.25);
+    abdomen.position.set(0, 0.32, -0.32);
+    this.bodyPivot.add(abdomen);
 
-    // Stripes on abdomen
-    for (let i = 0; i < 3; i++) {
-      const stripe = new THREE.Mesh(new THREE.TorusGeometry(0.12 - i * 0.02, 0.015, 4, 16), mat(0x2a5c10));
-      stripe.rotation.x = Math.PI / 2;
-      stripe.position.set(0, 0.30, -0.25 - i * 0.1);
-      this.group.add(stripe);
-    }
+    // Two thin curved antennae
+    [-0.08, 0.08].forEach((dx, i) => {
+      const antPivot = new THREE.Group();
+      antPivot.position.set(dx, 0.74, 0.22);
+      const ant = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.012, 0.006, 0.32, 5),
+        new THREE.MeshStandardMaterial({ color: 0x1B2E15, roughness: 0.6 })
+      );
+      ant.position.y = 0.15;
+      ant.rotation.z = (i === 0 ? -0.35 : 0.35);
+      ant.rotation.x = -0.2;
+      antPivot.add(ant);
+      this.bodyPivot.add(antPivot);
+      this.antennaeMeshes.push(antPivot);
+    });
 
-    // Front legs (short)
-    [{ x: -0.18, rz: 0.4 }, { x: 0.18, rz: -0.4 }].forEach(lp => {
-      const legGeo = new THREE.CylinderGeometry(0.018, 0.012, 0.28, 5);
-      const leg = new THREE.Mesh(legGeo, mat(legColor));
-      leg.position.set(lp.x, 0.32, 0.1);
-      leg.rotation.z = lp.rz;
+    // 6 short jointed legs
+    const legCoords = [
+      { x: -0.22, z: 0.1, rz: 0.4 }, { x: 0.22, z: 0.1, rz: -0.4 },
+      { x: -0.25, z: -0.05, rz: 0.5 }, { x: 0.25, z: -0.05, rz: -0.5 },
+      { x: -0.23, z: -0.22, rz: 0.4 }, { x: 0.23, z: -0.22, rz: -0.4 }
+    ];
+    legCoords.forEach(lc => {
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.015, 0.35, 6), legMat);
+      leg.position.set(lc.x, 0.25, lc.z);
+      leg.rotation.z = lc.rz;
       leg.rotation.x = 0.2;
-      this.group.add(leg);
+      this.bodyPivot.add(leg);
+      this.legs.push(leg);
     });
 
-    // Hind legs (large jump legs)
-    [{ x: -0.22, rz: 0.3, rx: -0.6 }, { x: 0.22, rz: -0.3, rx: -0.6 }].forEach((lp, i) => {
-      // Upper hind leg (femur)
-      const femGeo = new THREE.CylinderGeometry(0.03, 0.02, 0.45, 6);
-      const femur = new THREE.Mesh(femGeo, mat(0x2a7518));
-      femur.position.set(lp.x, 0.38, -0.15);
-      femur.rotation.z = lp.rz + (i === 0 ? -0.2 : 0.2);
-      femur.rotation.x = lp.rx;
-      this.group.add(femur);
-      // Lower hind leg (tibia - long)
-      const tibGeo = new THREE.CylinderGeometry(0.018, 0.01, 0.55, 6);
-      const tibia = new THREE.Mesh(tibGeo, mat(legColor));
-      tibia.position.set(lp.x * 1.3, 0.1, -0.35);
-      tibia.rotation.z = lp.rz * 2;
-      tibia.rotation.x = -0.8;
-      this.group.add(tibia);
-    });
-
-    // Wings (semi-transparent)
-    const wingMat = new THREE.MeshStandardMaterial({ color: 0x88cc44, transparent: true, opacity: 0.6, side: THREE.DoubleSide });
-    [-1, 1].forEach(side => {
-      const wingGeo = new THREE.PlaneGeometry(0.55, 0.32);
-      const wing = new THREE.Mesh(wingGeo, wingMat);
-      wing.position.set(side * 0.28, 0.5, -0.1);
-      wing.rotation.y = side * 0.4;
-      wing.rotation.x = 0.1;
-      this.group.add(wing);
+    // Two thin flexible arms
+    [-0.2, 0.2].forEach((dx, idx) => {
+      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.014, 0.28, 5), bodyMat);
+      arm.position.set(dx, 0.42, 0.08);
+      arm.rotation.z = idx === 0 ? -0.6 : 0.6;
+      arm.rotation.x = 0.4;
+      this.bodyPivot.add(arm);
     });
   }
 
-  _addRoleEquipment() {
-    const batMat = new THREE.MeshStandardMaterial({ color: 0xc8a46a, roughness: 0.7 });
-    if (this.role === 'batsman') {
-      // Cricket bat
-      const handleGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.28, 6);
-      const bladeGeo = new THREE.BoxGeometry(0.12, 0.04, 0.42);
-      const handle = new THREE.Mesh(handleGeo, new THREE.MeshStandardMaterial({ color: 0x8B4513 }));
-      const blade = new THREE.Mesh(bladeGeo, batMat);
-      handle.position.set(0.3, 0.55, 0.1);
-      handle.rotation.z = -0.4;
-      blade.position.set(0.35, 0.38, 0.06);
-      blade.rotation.z = -0.3;
-      this.group.add(handle, blade);
-      // Helmet
-      const helmetGeo = new THREE.SphereGeometry(0.21, 8, 8, 0, Math.PI * 2, 0, Math.PI / 1.4);
-      const helmetMat = new THREE.MeshStandardMaterial({ color: this.team === 'a' ? 0x1a3a6a : 0x1a6a3a });
-      const helmet = new THREE.Mesh(helmetGeo, helmetMat);
-      helmet.position.copy(this._head?.position || new THREE.Vector3(0, 0.55, 0.18));
-      helmet.position.y += 0.04;
-      this.group.add(helmet);
-    } else if (this.role === 'bowler') {
-      // Bowling arm pose (ball in hand)
-      const ballGeo = new THREE.SphereGeometry(0.07, 8, 8);
-      const ballMat = new THREE.MeshStandardMaterial({ color: 0xcc2200, roughness: 0.4, metalness: 0.2 });
-      const ball = new THREE.Mesh(ballGeo, ballMat);
-      ball.position.set(0.3, 0.6, 0.2);
-      this.group.add(ball);
-    } else if (this.role === 'wicketkeeper') {
-      // Gloves
-      const gloveMat = new THREE.MeshStandardMaterial({ color: 0xffeecc });
-      [-0.2, 0.2].forEach(dx => {
-        const glove = new THREE.Mesh(new THREE.SphereGeometry(0.1, 6, 6), gloveMat);
-        glove.position.set(dx, 0.35, 0.25);
-        this.group.add(glove);
-      });
-    }
+  // --- 2. SNAIL MODEL ---
+  _buildSnail() {
+    const bodyColor = parseInt((this.config.team_color || '#A5C94D').replace('#', '0x'), 16);
+    const shellColor = this.config.shell_color || 0xD79543;
+    const spiralColor = this.config.spiral_color || 0x8B542A;
+
+    const bodyMat = new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.65 });
+    const shellMat = new THREE.MeshStandardMaterial({ color: shellColor, roughness: 0.5 });
+    const spiralMat = new THREE.MeshStandardMaterial({ color: spiralColor, roughness: 0.6 });
+
+    // Rounded foot / soft body
+    const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.32, 0.2, 10), bodyMat);
+    foot.scale.set(0.9, 1.0, 1.8);
+    foot.position.set(0, 0.1, 0);
+    this.bodyPivot.add(foot);
+
+    // Front neck & head
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 10, 10), bodyMat);
+    head.position.set(0, 0.35, 0.35);
+    this.bodyPivot.add(head);
+
+    // Large spiral shell
+    const shell = new THREE.Mesh(new THREE.SphereGeometry(0.48, 14, 14), shellMat);
+    shell.scale.set(0.9, 1.1, 1.1);
+    shell.position.set(0, 0.5, -0.15);
+    shell.rotation.z = Math.PI / 10;
+    this.bodyPivot.add(shell);
+
+    // Spiral swirl accent
+    const spiralTorus = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.06, 6, 20), spiralMat);
+    spiralTorus.position.set(0.38, 0.5, -0.15);
+    spiralTorus.rotation.y = Math.PI / 2;
+    this.bodyPivot.add(spiralTorus);
+
+    const spiralTorus2 = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.06, 6, 20), spiralMat);
+    spiralTorus2.position.set(-0.38, 0.5, -0.15);
+    spiralTorus2.rotation.y = Math.PI / 2;
+    this.bodyPivot.add(spiralTorus2);
+
+    // Two eyes on long flexible stalks
+    [-0.1, 0.1].forEach((dx, i) => {
+      const stalkPivot = new THREE.Group();
+      stalkPivot.position.set(dx, 0.48, 0.4);
+
+      const stalk = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.016, 0.014, 0.28, 6),
+        bodyMat
+      );
+      stalk.position.y = 0.14;
+      stalk.rotation.z = i === 0 ? -0.2 : 0.2;
+      stalkPivot.add(stalk);
+
+      const eye = new THREE.Mesh(
+        new THREE.SphereGeometry(0.065, 8, 8),
+        new THREE.MeshStandardMaterial({ color: 0xFFFFFF, roughness: 0.2 })
+      );
+      eye.position.set(i === 0 ? -0.04 : 0.04, 0.28, 0);
+      stalkPivot.add(eye);
+
+      const pupil = new THREE.Mesh(
+        new THREE.SphereGeometry(0.035, 6, 6),
+        new THREE.MeshStandardMaterial({ color: 0x111111 })
+      );
+      pupil.position.set(i === 0 ? -0.04 : 0.04, 0.28, 0.05);
+      stalkPivot.add(pupil);
+
+      this.bodyPivot.add(stalkPivot);
+      this.eyeStalks.push(stalkPivot);
+    });
+  }
+
+  // --- 3. BEETLE POWER BATTER ---
+  _buildBeetle() {
+    const bodyColor = parseInt((this.config.team_color || '#315B4A').replace('#', '0x'), 16);
+    const shellColor = this.config.shell_color || 0x244538;
+    const armorMat = new THREE.MeshStandardMaterial({
+      color: shellColor,
+      roughness: 0.35,
+      metalness: 0.25
+    });
+    const bodyMat = new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.5 });
+
+    // Sturdy broad head
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 12), armorMat);
+    head.scale.set(1.15, 0.9, 1.1);
+    head.position.set(0, 0.58, 0.2);
+    this.bodyPivot.add(head);
+
+    // Large white eyes with dark pupils
+    [-0.14, 0.14].forEach(dx => {
+      const eyeWhite = new THREE.Mesh(
+        new THREE.SphereGeometry(0.075, 8, 8),
+        new THREE.MeshStandardMaterial({ color: 0xFFFFFF, roughness: 0.2 })
+      );
+      eyeWhite.position.set(dx, 0.62, 0.42);
+      this.bodyPivot.add(eyeWhite);
+
+      const pupil = new THREE.Mesh(
+        new THREE.SphereGeometry(0.04, 6, 6),
+        new THREE.MeshStandardMaterial({ color: 0x111111 })
+      );
+      pupil.position.set(dx * 0.95, 0.62, 0.48);
+      this.bodyPivot.add(pupil);
+    });
+
+    // Two short curved antennae
+    [-0.1, 0.1].forEach((dx, i) => {
+      const ant = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.016, 0.008, 0.2, 5),
+        new THREE.MeshStandardMaterial({ color: 0x1A2E26 })
+      );
+      ant.position.set(dx, 0.78, 0.28);
+      ant.rotation.z = i === 0 ? -0.4 : 0.4;
+      this.bodyPivot.add(ant);
+    });
+
+    // Broad armored carapace
+    const shell = new THREE.Mesh(new THREE.SphereGeometry(0.42, 12, 12), armorMat);
+    shell.scale.set(1.15, 0.9, 1.35);
+    shell.position.set(0, 0.42, -0.2);
+    this.bodyPivot.add(shell);
+
+    // 6 sturdy jointed legs
+    const legCoords = [
+      { x: -0.3, z: 0.15 }, { x: 0.3, z: 0.15 },
+      { x: -0.34, z: -0.1 }, { x: 0.34, z: -0.1 },
+      { x: -0.3, z: -0.35 }, { x: 0.3, z: -0.35 }
+    ];
+    legCoords.forEach(lc => {
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.022, 0.4, 6), armorMat);
+      leg.position.set(lc.x, 0.24, lc.z);
+      leg.rotation.z = lc.x < 0 ? 0.45 : -0.45;
+      this.bodyPivot.add(leg);
+      this.legs.push(leg);
+    });
+
+    // Two strong segmented arms holding heavy bat with both hands
+    [-0.24, 0.24].forEach((dx, idx) => {
+      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.024, 0.32, 6), bodyMat);
+      arm.position.set(dx, 0.48, 0.15);
+      arm.rotation.z = idx === 0 ? -0.45 : 0.45;
+      arm.rotation.x = 0.5;
+      this.bodyPivot.add(arm);
+    });
+  }
+
+  // --- 4. GRASSHOPPER AGILE BATTER ---
+  _buildGrasshopper() {
+    const colorHex = parseInt((this.config.team_color || '#8BC34A').replace('#', '0x'), 16);
+    const bodyMat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.45 });
+    const legMat = new THREE.MeshStandardMaterial({ color: 0x558B2F, roughness: 0.6 });
+
+    // Small rounded head with cheerful grin
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 10), bodyMat);
+    head.scale.set(0.9, 1.1, 1.1);
+    head.position.set(0, 0.56, 0.2);
+    this.bodyPivot.add(head);
+
+    // Large glossy compound eyes
+    [-0.1, 0.1].forEach(dx => {
+      const eye = new THREE.Mesh(
+        new THREE.SphereGeometry(0.065, 8, 8),
+        new THREE.MeshStandardMaterial({ color: 0x223311, roughness: 0.15, metalness: 0.3 })
+      );
+      eye.position.set(dx, 0.6, 0.32);
+      this.bodyPivot.add(eye);
+    });
+
+    // Long flexible antennae
+    [-0.06, 0.06].forEach((dx, i) => {
+      const antPivot = new THREE.Group();
+      antPivot.position.set(dx, 0.72, 0.22);
+      const ant = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.01, 0.005, 0.45, 5),
+        new THREE.MeshStandardMaterial({ color: 0x33691E })
+      );
+      ant.position.y = 0.22;
+      ant.rotation.z = i === 0 ? -0.4 : 0.4;
+      ant.rotation.x = -0.3;
+      antPivot.add(ant);
+      this.bodyPivot.add(antPivot);
+      this.antennaeMeshes.push(antPivot);
+    });
+
+    // Slim thorax & abdomen
+    const thorax = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), bodyMat);
+    thorax.position.set(0, 0.4, 0);
+    this.bodyPivot.add(thorax);
+
+    const abdomen = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.05, 0.6, 8), bodyMat);
+    abdomen.rotation.x = Math.PI / 2.2;
+    abdomen.position.set(0, 0.35, -0.35);
+    this.bodyPivot.add(abdomen);
+
+    // Oversized spring-loaded hind legs
+    [-0.2, 0.2].forEach((dx, idx) => {
+      const femur = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.02, 0.48, 6), legMat);
+      femur.position.set(dx, 0.42, -0.15);
+      femur.rotation.z = idx === 0 ? 0.35 : -0.35;
+      femur.rotation.x = -0.7;
+      this.bodyPivot.add(femur);
+
+      const tibia = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.009, 0.55, 6), legMat);
+      tibia.position.set(dx * 1.35, 0.15, -0.35);
+      tibia.rotation.z = idx === 0 ? 0.6 : -0.6;
+      tibia.rotation.x = 0.8;
+      this.bodyPivot.add(tibia);
+      this.legs.push(femur, tibia);
+    });
+  }
+
+  // --- CRICKET BAT ---
+  _buildBat() {
+    const batConf = this.config.bat || { color: 0xF5F2DE, grip_color: 0x6C4B2A };
+    const batMat = new THREE.MeshStandardMaterial({ color: batConf.color, roughness: 0.5 });
+    const gripMat = new THREE.MeshStandardMaterial({ color: batConf.grip_color, roughness: 0.7 });
+
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.26, 8), gripMat);
+    handle.position.y = 0.45;
+
+    const bladeWidth = this.species === 'beetle' ? 0.16 : this.species === 'grasshopper' ? 0.1 : 0.12;
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(bladeWidth, 0.44, 0.05), batMat);
+    blade.position.y = 0.18;
+
+    this.batPivot.add(handle);
+    this.batPivot.add(blade);
+
+    // Initial ready posture: bat raised behind right shoulder
+    this.batPivot.position.set(0.32, 0.52, 0.05);
+    this.batPivot.rotation.z = -0.4;
+    this.batPivot.rotation.x = -0.3;
+  }
+
+  // --- BAT CONTROLLER COMMAND EXECUTION ---
+  // command = { character_id, action: "swing_bat", direction: "forward_right", power: 0.85 }
+  executeCommand(command) {
+    if (command.action !== 'swing_bat') return;
+    if (!this.config.bat) return;
+
+    this.currentDirection = command.direction || 'forward';
+    this.currentPower = Math.max(0.1, Math.min(1.0, command.power || 0.75));
+
+    // Calculate swing speed multiplier from physics
+    const speedMult = (this.physics.swing_speed_degrees_per_second || 520) / 520;
+    this.swingDuration = (this.config.swing_phases ? 0.55 : 0.5) / (speedMult * (0.8 + this.currentPower * 0.4));
+    this.isSwinging = true;
+    this.swingProgress = 0;
+
+    // Direction angle offset
+    const dirInfo = DIRECTION_VECTORS[this.currentDirection] || DIRECTION_VECTORS.forward;
+    this.batPivot.rotation.y = dirInfo.angle;
   }
 
   setPosition(x, y, z) {
@@ -207,66 +553,78 @@ export class CricketCharacter {
     this.targetPos.set(x, y, z);
   }
 
-  moveTo(x, y, z) {
-    this.targetPos.set(x, y, z);
-    this.isMoving = true;
-  }
-
-  setRotation(y) {
-    this.group.rotation.y = y;
+  setRotation(yRad) {
+    this.group.rotation.y = yRad;
   }
 
   update(delta) {
     this.animTime += delta;
 
-    // Smooth movement
-    if (this.isMoving) {
-      const dx = this.targetPos.x - this.group.position.x;
-      const dz = this.targetPos.z - this.group.position.z;
-      const dist = Math.sqrt(dx*dx + dz*dz);
-      if (dist > 0.05) {
-        const speed = 5;
-        this.group.position.x += (dx / dist) * speed * delta;
-        this.group.position.z += (dz / dist) * speed * delta;
-        this.group.rotation.y = Math.atan2(dx, dz);
-        // Walk bob
-        this.group.position.y = Math.abs(Math.sin(this.animTime * 8)) * 0.05;
+    // Sway antennae with gentle motion
+    this.antennaeMeshes.forEach((ant, i) => {
+      ant.rotation.z = Math.sin(this.animTime * 3 + i) * 0.12;
+    });
+
+    // Eye stalk scanning for snails
+    this.eyeStalks.forEach((stalk, i) => {
+      stalk.rotation.z = Math.sin(this.animTime * 2 + i * 1.5) * 0.08;
+      stalk.rotation.x = Math.cos(this.animTime * 1.5 + i) * 0.06;
+    });
+
+    // Swing bat execution
+    if (this.isSwinging) {
+      this.swingProgress += delta / this.swingDuration;
+
+      if (this.swingProgress >= 1.0) {
+        this.swingProgress = 1.0;
+        this.isSwinging = false;
+        // Blend back to ready stance
+        this.batPivot.rotation.set(-0.3, 0, -0.4);
+        this.bodyPivot.rotation.y = 0;
       } else {
-        this.group.position.copy(this.targetPos);
-        this.isMoving = false;
-        this.group.position.y = 0;
+        this._updateSwingPhases(this.swingProgress);
       }
     } else {
-      // Idle bob
-      this.group.position.y = Math.sin(this.animTime * 2) * 0.02;
+      // Idle breathing / body pulse
+      this.bodyPivot.position.y = Math.sin(this.animTime * 2.5) * 0.02;
     }
   }
 
-  triggerBatSwing() {
-    // Quick rotation animation
-    const startRot = this.group.rotation.z;
-    const startTime = Date.now();
-    const swing = () => {
-      const t = (Date.now() - startTime) / 350;
-      if (t < 1) {
-        this.group.rotation.z = startRot - Math.sin(t * Math.PI) * 0.6;
-        requestAnimationFrame(swing);
-      } else {
-        this.group.rotation.z = startRot;
+  _updateSwingPhases(p) {
+    const phases = this.config.swing_phases || CHARACTER_PRESETS.ant_batter_01.swing_phases;
+    // Find phase
+    let cur = phases[0];
+    let next = phases[phases.length - 1];
+
+    for (let i = 0; i < phases.length - 1; i++) {
+      const p1 = phases[i].time / phases[phases.length - 1].time;
+      const p2 = phases[i + 1].time / phases[phases.length - 1].time;
+      if (p >= p1 && p <= p2) {
+        cur = phases[i];
+        next = phases[i + 1];
+        const t = (p - p1) / (p2 - p1);
+        const batAngleDeg = cur.bat_angle + (next.bat_angle - cur.bat_angle) * t;
+        const bodyTwistDeg = cur.body_twist + (next.body_twist - cur.body_twist) * t;
+
+        const dirInfo = DIRECTION_VECTORS[this.currentDirection] || DIRECTION_VECTORS.forward;
+        this.batPivot.rotation.z = (batAngleDeg * Math.PI / 180) * (0.8 + this.currentPower * 0.4);
+        this.bodyPivot.rotation.y = (bodyTwistDeg * Math.PI / 180) + dirInfo.angle * 0.5;
+        break;
       }
-    };
-    swing();
+    }
   }
 
   triggerBowlAction() {
-    const startTime = Date.now();
+    let t = 0;
     const bowl = () => {
-      const t = (Date.now() - startTime) / 500;
-      if (t < 1) {
-        this.group.rotation.x = -Math.sin(t * Math.PI) * 0.4;
+      t += 0.08;
+      if (t < Math.PI) {
+        this.bodyPivot.position.z = Math.sin(t) * 0.3;
+        this.bodyPivot.position.y = Math.sin(t) * 0.15;
         requestAnimationFrame(bowl);
       } else {
-        this.group.rotation.x = 0;
+        this.bodyPivot.position.z = 0;
+        this.bodyPivot.position.y = 0;
       }
     };
     bowl();
@@ -275,13 +633,13 @@ export class CricketCharacter {
   triggerCelebrate() {
     let t = 0;
     const cel = () => {
-      t += 0.08;
+      t += 0.09;
       if (t < Math.PI * 4) {
-        this.group.position.y = Math.abs(Math.sin(t)) * 0.5;
-        this.group.rotation.y += 0.15;
+        this.group.position.y = (this.config.starting_transform?.position.y || 0.65) + Math.abs(Math.sin(t)) * 0.4;
+        this.batPivot.rotation.z = Math.sin(t * 2) * 0.6;
         requestAnimationFrame(cel);
       } else {
-        this.group.position.y = 0;
+        this.group.position.y = this.config.starting_transform?.position.y || 0.65;
       }
     };
     cel();
