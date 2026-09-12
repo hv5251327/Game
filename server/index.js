@@ -427,27 +427,40 @@ class CricketRoom {
       ? this.sbQueue[this.sbCurrentBatsmanIdx]
       : this.battingOrder[this.currentBatsmanIdx];
 
-    io.to(this.code).emit('delivery', {
+    // 1. Emit bowler_runup immediately so bowler starts running in and batting meter appears
+    io.to(this.code).emit('bowler_runup', {
       bowler: this._playerInfo(socketId),
       batsman: this._playerInfo(batsmanId),
-      landingZone: data.landingZone,
       deliveryType: data.deliveryType,
       over: this.currentOver + 1,
       ball: this.currentBall + 1
     });
 
-    const batsmanPlayer = this.players.get(batsmanId);
-    if (batsmanPlayer && batsmanPlayer.isBot) {
-      setTimeout(() => this._botBat(batsmanId, data), 700 + Math.random() * 600);
-    } else {
-      // Batsman client has 3.5 seconds to hit, or auto-miss/defend
-      clearTimeout(this._batTimeout);
-      this._batTimeout = setTimeout(() => {
-        if (this.ballInFlight) {
-          this._botBat(batsmanId, data);
-        }
-      }, 3500);
-    }
+    // 2. Deliver the ball after bowler run-up stride (1000ms)
+    setTimeout(() => {
+      if (!this.ballInFlight) return;
+
+      io.to(this.code).emit('delivery', {
+        bowler: this._playerInfo(socketId),
+        batsman: this._playerInfo(batsmanId),
+        landingZone: data.landingZone,
+        deliveryType: data.deliveryType,
+        over: this.currentOver + 1,
+        ball: this.currentBall + 1
+      });
+
+      const batsmanPlayer = this.players.get(batsmanId);
+      if (batsmanPlayer && batsmanPlayer.isBot) {
+        setTimeout(() => this._botBat(batsmanId, data), 650 + Math.random() * 500);
+      } else {
+        clearTimeout(this._batTimeout);
+        this._batTimeout = setTimeout(() => {
+          if (this.ballInFlight) {
+            this._botBat(batsmanId, data);
+          }
+        }, 3600);
+      }
+    }, 1000);
   }
 
   handleBat(socketId, data) {
@@ -551,12 +564,13 @@ class CricketRoom {
         card.bowlers[bowlerId].wickets++;
         card.bowlers[bowlerId].balls++;
       }
+      const fowOver = this.currentBall >= 6 ? `${this.currentOver + 1}.0` : `${this.currentOver}.${this.currentBall}`;
       card.fallOfWickets.push({
         wicket: card.wickets,
         runs: card.runs,
         batsmanId,
         batsmanName: this.players.get(batsmanId)?.name,
-        over: `${this.currentOver}.${this.currentBall}`
+        over: fowOver
       });
     } else {
       legalBall = true;
@@ -1053,6 +1067,35 @@ class CricketRoom {
       ? null
       : this.battingOrder[this.currentNonStrikerIdx];
 
+    // Standard cricket overs formatting:
+    let displayOvers, displayBalls;
+    if (this.mode === 'single_batting') {
+      displayOvers = Math.floor(this.currentBall / 6);
+      displayBalls = this.currentBall % 6;
+    } else {
+      if (this.currentBall >= 6) {
+        displayOvers = this.currentOver + 1;
+        displayBalls = 0;
+      } else {
+        displayOvers = this.currentOver;
+        displayBalls = this.currentBall;
+      }
+    }
+
+    // Format bowler stats
+    const formattedBowlers = {};
+    if (card?.bowlers) {
+      for (const [id, bw] of Object.entries(card.bowlers)) {
+        const bTotalBalls = (bw.overs || 0) * 6 + (bw.balls || 0);
+        formattedBowlers[id] = {
+          ...bw,
+          overs: Math.floor(bTotalBalls / 6),
+          balls: bTotalBalls % 6,
+          totalBalls: bTotalBalls
+        };
+      }
+    }
+
     return {
       mode: this.mode,
       innings: this.currentInnings,
@@ -1060,13 +1103,14 @@ class CricketRoom {
       bowlingTeam: this.bowlingTeam,
       runs: card?.runs || 0,
       wickets: card?.wickets || 0,
-      overs: this.currentOver,
-      balls: this.currentBall,
+      overs: displayOvers,
+      balls: displayBalls,
+      totalBalls: this.mode === 'single_batting' ? this.currentBall : (card?.balls || 0),
       extras: card?.extras || 0,
       target: this.target,
       currentOverBalls: card?.currentOverBalls || [],
       batsmen: card?.batsmen || {},
-      bowlers: card?.bowlers || {},
+      bowlers: formattedBowlers,
       currentBatsman: this._playerInfo(batsmanId),
       nonStriker: this._playerInfo(nonStrikerId),
       currentBowler: this._playerInfo(this.currentBowler),

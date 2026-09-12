@@ -1,4 +1,4 @@
-// BattingUI: Compact Top-Left Meter with Keyboard/Laptop Controls & Direction System
+// BattingUI: Large prominent direction compass with laptop controls & precision timing bar
 export class BattingUI {
   constructor(container) {
     this.container = container;
@@ -8,7 +8,7 @@ export class BattingUI {
     this.shotType = 'drive';
     this.power = 0.75;
     this.barDirection = 1;
-    this.barSpeed = 2.4;
+    this.barSpeed = 2.2;
     this.onSwing = null;
     this.animFrame = null;
     this.lastTime = 0;
@@ -19,47 +19,112 @@ export class BattingUI {
   _build() {
     this.el = document.createElement('div');
     this.el.id = 'batting-ui';
-    this.el.className = 'top-left-batting-ui';
+    this.el.className = 'batting-controller-large';
     this.el.innerHTML = `
-      <div class="mini-bat-header">
-        <span class="bat-title">🏏 BAT: <span id="ui-current-dir">FWD</span></span>
-        <span class="bat-hint-key">[SPACE: SWING]</span>
+      <!-- Header Banner -->
+      <div class="bat-header-large">
+        <div class="bat-aim-title">
+          <span class="bat-icon">🏏</span>
+          <span class="bat-main-text">BATSMAN CONTROL</span>
+        </div>
+        <div class="bat-current-shot-badge" id="bat-current-shot-label">
+          AIM: <strong>⬆ STRAIGHT DRIVE [W/↑]</strong>
+        </div>
       </div>
 
-      <!-- Small Precision Timing Bar -->
-      <div class="mini-timing-bar-bg">
-        <div class="mini-sweet-zone"></div>
-        <div id="mini-timing-marker" class="mini-timing-marker"></div>
+      <!-- Large Precision Timing Bar -->
+      <div class="timing-meter-container">
+        <div class="timing-meter-labels">
+          <span class="timing-label-early">EARLY</span>
+          <span class="timing-label-perfect">⚡ SWEET SPOT ⚡</span>
+          <span class="timing-label-late">LATE</span>
+        </div>
+        <div class="timing-bar-track">
+          <div class="timing-sweet-zone"></div>
+          <div id="batting-timing-marker" class="timing-bar-marker"></div>
+        </div>
       </div>
 
-      <!-- Compact 8-Direction & Shot Selector -->
-      <div class="mini-direction-grid">
-        <button class="dir-btn-mini" data-dir="forward_left" title="On Drive (Q / Num7)">↖</button>
-        <button class="dir-btn-mini active" data-dir="forward" title="Straight Drive (↑ / W / Num8)">⬆</button>
-        <button class="dir-btn-mini" data-dir="forward_right" title="Cover Drive (E / Num9)">↗</button>
-        <button class="dir-btn-mini" data-dir="left" title="Square Leg / Sweep (← / A / Num4)">⬅</button>
-        <button id="btn-mini-swing" class="dir-btn-center" title="Click or Press SPACE to Swing!">🏏</button>
-        <button class="dir-btn-mini" data-dir="right" title="Point / Cut (→ / D / Num6)">➡</button>
-        <button class="dir-btn-mini" data-dir="backward_left" title="Fine Leg Glance (Z / Num1)">↙</button>
-        <button class="dir-btn-mini" data-dir="backward" title="Defend / Block (↓ / S / Num2)">⬇</button>
-        <button class="dir-btn-mini" data-dir="backward_right" title="Third Man (C / Num3)">↘</button>
+      <!-- BIG 8-Direction Aiming Compass -->
+      <div class="shot-direction-box-large">
+        <div class="direction-grid-large">
+          <button type="button" class="dir-btn-large" data-dir="forward_left" title="Mid-Wicket / On Drive (Q / 7)">
+            <span class="dir-arrow">↖</span>
+            <span class="dir-name">MID-WICKET</span>
+            <span class="dir-key">Q / 7</span>
+          </button>
+
+          <button type="button" class="dir-btn-large active" data-dir="forward" title="Straight Drive (↑ / W / 8)">
+            <span class="dir-arrow">⬆</span>
+            <span class="dir-name">STRAIGHT</span>
+            <span class="dir-key">W / ↑</span>
+          </button>
+
+          <button type="button" class="dir-btn-large" data-dir="forward_right" title="Cover Drive (E / 9)">
+            <span class="dir-arrow">↗</span>
+            <span class="dir-name">COVERS</span>
+            <span class="dir-key">E / 9</span>
+          </button>
+
+          <button type="button" class="dir-btn-large" data-dir="left" title="Square Leg / Pull (← / A / 4)">
+            <span class="dir-arrow">⬅</span>
+            <span class="dir-name">SQUARE LEG</span>
+            <span class="dir-key">A / ←</span>
+          </button>
+
+          <!-- BIG CENTER SWING BUTTON -->
+          <button type="button" id="btn-big-swing" class="dir-btn-swing" title="CLICK or press SPACE to Swing!">
+            <span class="swing-icon">🏏</span>
+            <span class="swing-text">SWING!</span>
+            <span class="swing-key">[SPACE]</span>
+          </button>
+
+          <button type="button" class="dir-btn-large" data-dir="right" title="Point / Cut (→ / D / 6)">
+            <span class="dir-arrow">➡</span>
+            <span class="dir-name">POINT</span>
+            <span class="dir-key">D / →</span>
+          </button>
+
+          <button type="button" class="dir-btn-large" data-dir="backward_left" title="Fine Leg Glance (Z / 1)">
+            <span class="dir-arrow">↙</span>
+            <span class="dir-name">FINE LEG</span>
+            <span class="dir-key">Z / 1</span>
+          </button>
+
+          <button type="button" class="dir-btn-large" data-dir="backward" title="Defend / Block (↓ / S / 2)">
+            <span class="dir-arrow">⬇</span>
+            <span class="dir-name">DEFEND</span>
+            <span class="dir-key">S / ↓</span>
+          </button>
+
+          <button type="button" class="dir-btn-large" data-dir="backward_right" title="Third Man Glance (C / 3)">
+            <span class="dir-arrow">↘</span>
+            <span class="dir-name">THIRD MAN</span>
+            <span class="dir-key">C / 3</span>
+          </button>
+        </div>
       </div>
 
-      <!-- Quick Shot Mode Pills -->
-      <div class="mini-shot-pills">
-        <button class="shot-pill-mini active" data-shot="drive">Drive</button>
-        <button class="shot-pill-mini" data-shot="loft">Loft</button>
-        <button class="shot-pill-mini" data-shot="sweep">Sweep</button>
-        <button class="shot-pill-mini" data-shot="cut">Cut</button>
-        <button class="shot-pill-mini" data-shot="defend">Def</button>
+      <!-- Shot Style Pills -->
+      <div class="shot-pills-row">
+        <button type="button" class="shot-pill active" data-shot="drive">💥 Drive</button>
+        <button type="button" class="shot-pill" data-shot="loft">🚀 Loft [L]</button>
+        <button type="button" class="shot-pill" data-shot="sweep">🧹 Sweep</button>
+        <button type="button" class="shot-pill" data-shot="cut">⚔️ Cut</button>
+        <button type="button" class="shot-pill" data-shot="defend">🛡️ Defend</button>
+      </div>
+
+      <!-- Laptop / Desktop Keyboard Guide -->
+      <div class="laptop-keyboard-hint">
+        💻 <strong>Laptop:</strong> WASD or Arrow Keys to Aim &bull; <strong>SPACE</strong> to Swing &bull; <strong>L</strong> for Loft
       </div>
     `;
     this.el.style.display = 'none';
     this.container.appendChild(this.el);
 
-    // Direction Buttons
-    this.dirLabel = this.el.querySelector('#ui-current-dir');
-    this.el.querySelectorAll('.dir-btn-mini').forEach(btn => {
+    // Direction buttons
+    this.dirLabel = this.el.querySelector('#bat-current-shot-label');
+    this.el.querySelectorAll('.dir-btn-large').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         this._setDirection(btn.dataset.dir);
@@ -67,23 +132,24 @@ export class BattingUI {
     });
 
     // Shot Mode Pills
-    this.el.querySelectorAll('.shot-pill-mini').forEach(btn => {
+    this.el.querySelectorAll('.shot-pill').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        this.el.querySelectorAll('.shot-pill-mini').forEach(b => b.classList.remove('active'));
+        this.el.querySelectorAll('.shot-pill').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         this.shotType = btn.dataset.shot;
         if (this.shotType === 'sweep') this._setDirection('left');
         else if (this.shotType === 'cut') this._setDirection('right');
+        else this._updateShotLabel();
       });
     });
 
-    // Center Swing Button
-    const swingBtn = this.el.querySelector('#btn-mini-swing');
+    // Big Center Swing Button
+    const swingBtn = this.el.querySelector('#btn-big-swing');
     swingBtn.addEventListener('click', (e) => { e.stopPropagation(); this._swing(); });
     swingBtn.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); this._swing(); });
 
-    this.marker = this.el.querySelector('#mini-timing-marker');
+    this.marker = this.el.querySelector('#batting-timing-marker');
   }
 
   _bindKeyboard() {
@@ -115,30 +181,37 @@ export class BattingUI {
       } else if (k === 'c' || k === '3') {
         this._setDirection('backward_right');
       } else if (k === 'l') {
-        // Quick toggle Loft
-        this.shotType = 'loft';
-        this.el.querySelectorAll('.shot-pill-mini').forEach(b => b.classList.toggle('active', b.dataset.shot === 'loft'));
+        // Toggle Loft
+        this.shotType = (this.shotType === 'loft') ? 'drive' : 'loft';
+        this.el.querySelectorAll('.shot-pill').forEach(b => b.classList.toggle('active', b.dataset.shot === this.shotType));
+        this._updateShotLabel();
       }
     });
   }
 
   _setDirection(dir) {
     this.direction = dir;
-    this.el.querySelectorAll('.dir-btn-mini').forEach(b => b.classList.remove('active'));
-    const target = this.el.querySelector(`.dir-btn-mini[data-dir="${dir}"]`);
+    this.el.querySelectorAll('.dir-btn-large').forEach(b => b.classList.remove('active'));
+    const target = this.el.querySelector(`.dir-btn-large[data-dir="${dir}"]`);
     if (target) target.classList.add('active');
+    this._updateShotLabel();
+  }
 
-    const shortNames = {
-      forward: 'FWD (Drive)',
-      forward_left: 'FWD-L (On)',
-      forward_right: 'FWD-R (Cover)',
-      left: 'LEFT (Sweep)',
-      right: 'RIGHT (Cut)',
-      backward_left: 'BWD-L (Leg)',
-      backward_right: 'BWD-R (3rd)',
-      backward: 'BWD (Block)'
+  _updateShotLabel() {
+    const dirMap = {
+      forward: '⬆ STRAIGHT DRIVE [W/↑]',
+      forward_left: '↖ MID-WICKET [Q/7]',
+      forward_right: '↗ COVER DRIVE [E/9]',
+      left: '⬅ SQUARE LEG / PULL [A/←]',
+      right: '➡ POINT / CUT [D/→]',
+      backward_left: '↙ FINE LEG [Z/1]',
+      backward_right: '↘ THIRD MAN [C/3]',
+      backward: '⬇ DEFEND / BLOCK [S/↓]'
     };
-    if (this.dirLabel) this.dirLabel.textContent = shortNames[dir] || dir;
+    const shotName = this.shotType.toUpperCase();
+    if (this.dirLabel) {
+      this.dirLabel.innerHTML = `AIM: <strong>${dirMap[this.direction] || this.direction}</strong> &bull; <span style="color:#ffd32a;">${shotName}</span>`;
+    }
   }
 
   show(options = {}) {
@@ -146,6 +219,7 @@ export class BattingUI {
     this.power = 0;
     this.barDirection = 1;
     this.el.style.display = 'flex';
+    this._updateShotLabel();
     this._animate(performance.now());
 
     if (options.timeout) {
@@ -172,7 +246,9 @@ export class BattingUI {
     if (this.power >= 1) { this.power = 1; this.barDirection = -1; }
     if (this.power <= 0) { this.power = 0; this.barDirection = 1; }
 
-    if (this.marker) this.marker.style.left = `${this.power * 100}%`;
+    if (this.marker) {
+      this.marker.style.left = `${this.power * 100}%`;
+    }
     this.animFrame = requestAnimationFrame((t) => this._animate(t));
   }
 

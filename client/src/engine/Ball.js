@@ -91,8 +91,8 @@ export class Ball {
     this.trailPoints = [];
   }
 
-  // Realistic Bat Hit Physics Launch
-  hitLaunch(startPos, dirVector, power = 0.8, shotType = 'drive', isSix = false) {
+  // Realistic Bat Hit Physics Launch with calibrated power, arcs, and backside trajectory
+  hitLaunch(startPos, dirVector, power = 0.8, shotType = 'drive', isSix = false, runs = 0) {
     this.pos.copy(startPos);
     this.group.position.copy(this.pos);
     this.group.visible = true;
@@ -106,27 +106,31 @@ export class Ball {
 
     let speedXZ, initialVy;
 
-    if (isSix || shotType === 'loft') {
-      // Big aerial sixer: High parabolic launch, clears stadium boundary
-      const baseSpeed = isSix ? 28 : 22;
+    if (isSix || runs === 6) {
+      // High soaring maximum: clears the 27.5m boundary rope with rainbow parabola
+      const baseSpeed = 29;
+      speedXZ = baseSpeed * (0.85 + power * 0.35);
+      initialVy = 16.0 * (0.85 + power * 0.3);
+    } else if (runs === 4) {
+      // Crisp boundary four: travels with good pace to touch/cross the rope
+      const baseSpeed = 25;
       speedXZ = baseSpeed * (0.8 + power * 0.4);
-      initialVy = isSix ? 15.5 * (0.85 + power * 0.3) : 11.5 * (0.8 + power * 0.3);
+      initialVy = shotType === 'loft' ? 9.5 : 3.8;
     } else if (shotType === 'sweep') {
-      // Low sweep skimming towards boundary
-      speedXZ = 21 * (0.75 + power * 0.45);
-      initialVy = 3.5;
+      speedXZ = 18 * (0.75 + power * 0.4);
+      initialVy = 3.2;
     } else if (shotType === 'cut') {
-      // Sharp cut off short pitch
-      speedXZ = 22 * (0.75 + power * 0.4);
-      initialVy = 4.2;
-    } else if (shotType === 'defend') {
-      // Defensive block: dead bounce
-      speedXZ = 4.0;
-      initialVy = 1.2;
+      speedXZ = 19 * (0.75 + power * 0.4);
+      initialVy = 3.5;
+    } else if (shotType === 'defend' || runs === 0) {
+      // Defensive block or dot: dead drop onto pitch
+      speedXZ = 3.2;
+      initialVy = 1.0;
     } else {
-      // Crisp ground drive / boundary four
-      speedXZ = 24 * (0.75 + power * 0.45);
-      initialVy = 4.5;
+      // 1, 2, or 3 runs: calibrated to gap in the outfield
+      const mult = runs === 3 ? 1.35 : runs === 2 ? 1.15 : 0.95;
+      speedXZ = 14.5 * mult * (0.8 + power * 0.35);
+      initialVy = 3.0;
     }
 
     this.vel.set(dir.x * speedXZ, initialVy, dir.y * speedXZ);

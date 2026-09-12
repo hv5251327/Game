@@ -1011,3 +1011,330 @@ body, html {
 .hidden {
   display: none !important;
 }
+
+/* ==========================================================================
+   LARGE BATTING CONTROLLER & 8-DIRECTION COMPASS
+   ========================================================================== */
+.batting-controller-large {
+  position: fixed;
+  bottom: 20px;
+  left: 24px;
+  width: 360px;
+  max-width: calc(100vw - 48px);
+  background: rgba(14, 38, 16, 0.95);
+  border: 2px solid rgba(46, 213, 115, 0.55);
+  border-radius: 18px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.7), 0 0 20px rgba(46, 213, 115, 0.25);
+  padding: 14px 16px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  backdrop-filter: blur(10px);
+  user-select: none;
+  animation: slideUpFade 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes slideUpFade {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.bat-header-large {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bat-aim-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bat-icon {
+  font-size: 1.3rem;
+}
+
+.bat-main-text {
+  font-size: 0.92rem;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: #7bed9f;
+  text-transform: uppercase;
+}
+
+.bat-current-shot-badge {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 0.82rem;
+  color: #f1f2f6;
+  text-align: center;
+}
+
+/* Timing Meter */
+.timing-meter-container {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.timing-meter-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #ced6e0;
+}
+
+.timing-label-perfect {
+  color: #2ed573;
+  text-shadow: 0 0 8px rgba(46, 213, 115, 0.6);
+}
+
+.timing-bar-track {
+  position: relative;
+  width: 100%;
+  height: 20px;
+  background: #1e272e;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.timing-sweet-zone {
+  position: absolute;
+  left: 48%;
+  width: 26%;
+  height: 100%;
+  background: linear-gradient(90deg, rgba(46, 213, 115, 0.6), rgba(46, 213, 115, 0.9), rgba(46, 213, 115, 0.6));
+  box-shadow: inset 0 0 8px #2ed573;
+}
+
+.timing-bar-marker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 8px;
+  height: 100%;
+  background: #ffd32a;
+  border-radius: 4px;
+  box-shadow: 0 0 12px #ffd32a, 0 0 4px #fff;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+/* 8-Direction Big Compass Grid */
+.shot-direction-box-large {
+  display: flex;
+  flex-direction: column;
+}
+
+.direction-grid-large {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.dir-btn-large {
+  background: rgba(0, 0, 0, 0.45);
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  padding: 6px 4px;
+  min-height: 54px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.dir-btn-large:hover {
+  background: rgba(46, 213, 115, 0.25);
+  border-color: #2ed573;
+  transform: translateY(-2px);
+}
+
+.dir-btn-large.active {
+  background: linear-gradient(135deg, #2ed573, #10ac84);
+  border-color: #ffd32a;
+  color: #111;
+  font-weight: 800;
+  box-shadow: 0 0 14px rgba(46, 213, 115, 0.7);
+  transform: scale(1.03);
+}
+
+.dir-btn-large.active .dir-arrow,
+.dir-btn-large.active .dir-name,
+.dir-btn-large.active .dir-key {
+  color: #111;
+  text-shadow: none;
+}
+
+.dir-arrow {
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.dir-name {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  margin-top: 2px;
+  text-align: center;
+}
+
+.dir-key {
+  font-size: 0.58rem;
+  color: #ced6e0;
+  opacity: 0.85;
+}
+
+/* Center Swing Button */
+.dir-btn-swing {
+  background: linear-gradient(135deg, #ffd32a, #ff9f1a);
+  border: 2px solid #fff382;
+  border-radius: 12px;
+  padding: 6px 4px;
+  min-height: 54px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #111;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 0 20px rgba(255, 211, 42, 0.7);
+  transition: all 0.15s ease;
+  animation: pulseSwing 1.5s infinite alternate;
+}
+
+@keyframes pulseSwing {
+  from { transform: scale(1); box-shadow: 0 0 16px rgba(255, 211, 42, 0.6); }
+  to { transform: scale(1.05); box-shadow: 0 0 24px rgba(255, 211, 42, 0.95); }
+}
+
+.dir-btn-swing:hover {
+  transform: scale(1.08);
+  filter: brightness(1.15);
+}
+
+.swing-icon {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.swing-text {
+  font-size: 0.75rem;
+  font-weight: 900;
+  letter-spacing: 0.5px;
+}
+
+.swing-key {
+  font-size: 0.58rem;
+  font-weight: 700;
+  color: #333;
+}
+
+/* Shot Pills */
+.shot-pills-row {
+  display: flex;
+  gap: 4px;
+  justify-content: space-between;
+}
+
+.shot-pill {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 5px 2px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #ced6e0;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.shot-pill:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.shot-pill.active {
+  background: #ffd32a;
+  color: #111;
+  border-color: #fff;
+  font-weight: 800;
+  box-shadow: 0 0 10px rgba(255, 211, 42, 0.5);
+}
+
+/* Laptop Keyboard Guide */
+.laptop-keyboard-hint {
+  font-size: 0.68rem;
+  color: #ced6e0;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+
+/* ==========================================================================
+   ANIMATED RUN BANNER & SYMBOL
+   ========================================================================== */
+.run-counter-banner {
+  position: fixed;
+  top: 32%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(10, 30, 12, 0.95);
+  border: 3px solid #2ed573;
+  border-radius: 20px;
+  padding: 16px 36px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 0 40px rgba(46, 213, 115, 0.7), 0 10px 30px rgba(0, 0, 0, 0.8);
+  z-index: 120;
+  pointer-events: none;
+  animation: runBounce 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes runBounce {
+  from { transform: translate(-50%, -50%) scale(0.6); opacity: 0; }
+  to { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+
+.run-banner-icon {
+  font-size: 2.8rem;
+  animation: runStrideAnim 0.4s infinite alternate;
+}
+
+@keyframes runStrideAnim {
+  from { transform: translateY(0) scaleX(1); }
+  to { transform: translateY(-6px) scaleX(1.1); }
+}
+
+.run-banner-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.run-banner-title {
+  font-size: 2.2rem;
+  font-weight: 900;
+  color: #ffd32a;
+  letter-spacing: 1.5px;
+  line-height: 1.1;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.7);
+}
+
+.run-banner-sub {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #7bed9f;
+  letter-spacing: 0.5px;
+}
