@@ -476,16 +476,55 @@ class CricketRoom {
   _botBowl(bowlerId) {
     if (this.ballInFlight || this.state !== 'PLAYING' || this.currentBowler !== bowlerId) return;
 
-    const deliveryTypes = ['pace', 'spin', 'yorker', 'bouncer'];
-    const dt = deliveryTypes[Math.floor(Math.random() * deliveryTypes.length)];
-    const lz = {
-      x: (Math.random() - 0.5) * 1.5,
-      z: 0.2 + Math.random() * 0.5
-    };
+    // Realistic delivery repertoire:
+    const deliveryOptions = [
+      { type: 'pace', weight: 26 },
+      { type: 'outswing', weight: 16 },
+      { type: 'inswing', weight: 16 },
+      { type: 'yorker', weight: 14 },
+      { type: 'bouncer', weight: 14 },
+      { type: 'spin', weight: 7 },
+      { type: 'leg_spin', weight: 7 }
+    ];
+
+    const totalWeight = deliveryOptions.reduce((s, o) => s + o.weight, 0);
+    let rand = Math.random() * totalWeight;
+    let dt = 'pace';
+    for (const opt of deliveryOptions) {
+      if (rand < opt.weight) { dt = opt.type; break; }
+      rand -= opt.weight;
+    }
+
+    // Authentic length and line:
+    // z: 0.0=Yorker (3.0m), 0.45=Good Length (1.56m), 0.9=Bouncer (0.12m)
+    let lzX = 0;
+    let lzZ = 0.45;
+
+    if (dt === 'yorker') {
+      lzZ = 0.06 + Math.random() * 0.12; // Blockhole
+      lzX = (Math.random() - 0.5) * 0.3; // Stumps line
+    } else if (dt === 'bouncer') {
+      lzZ = 0.82 + Math.random() * 0.14; // Short pitch
+      lzX = (Math.random() - 0.4) * 0.45; // Rib/helmet line
+    } else if (dt === 'outswing') {
+      lzZ = 0.42 + Math.random() * 0.12; // Good length
+      lzX = -0.32 + (Math.random() - 0.5) * 0.2; // 4th stump channel moving away
+    } else if (dt === 'inswing') {
+      lzZ = 0.38 + Math.random() * 0.12; // Full good length
+      lzX = -0.12 + (Math.random() - 0.5) * 0.2; // Angling in to pads
+    } else if (dt === 'spin' || dt === 'leg_spin') {
+      lzZ = 0.46 + Math.random() * 0.14; // Loop & dip
+      lzX = dt === 'spin' ? 0.32 : -0.32; // Flighted outside off/leg
+    } else {
+      // Standard Pace
+      lzZ = 0.44 + Math.random() * 0.12;
+      lzX = -0.22 + (Math.random() - 0.5) * 0.25;
+    }
+
     this.handleBowl(bowlerId, {
-      landingZone: lz,
+      landingZone: { x: parseFloat(lzX.toFixed(2)), z: parseFloat(lzZ.toFixed(2)) },
       deliveryType: dt,
-      accuracy: 0.6 + Math.random() * 0.35
+      accuracy: 0.65 + Math.random() * 0.3
     });
   }
 
@@ -709,6 +748,36 @@ class CricketRoom {
       }
       if ((shotType === 'cut' || direction === 'right' || direction === 'backward_right') && isGood) {
         return { type: 'runs', runs: 4, ballPath: 'upper_cut_four' };
+      }
+    }
+
+    // Outswing delivery logic (moving away outside off)
+    if (deliveryType === 'outswing') {
+      if (missHit && (direction === 'forward' || direction === 'forward_left')) {
+        return { type: 'wicket', wicket: true, dismissal: 'Caught', ballPath: 'edged_to_slips' };
+      }
+      if (isGood && (direction === 'forward_right' || direction === 'right')) {
+        return { type: 'runs', runs: isPerfect ? 6 : 4, ballPath: 'cover_drive_four' };
+      }
+    }
+
+    // Inswing delivery logic (curving into stumps and pads)
+    if (deliveryType === 'inswing') {
+      if (missHit) {
+        return { type: 'wicket', wicket: true, dismissal: Math.random() < 0.6 ? 'LBW' : 'Bowled', ballPath: 'inswing_bowled' };
+      }
+      if (isGood && (direction === 'forward_left' || direction === 'left')) {
+        return { type: 'runs', runs: isPerfect ? 4 : 2, ballPath: 'flick_four' };
+      }
+    }
+
+    // Slower delivery logic (deceptive dip in flight)
+    if (deliveryType === 'slower') {
+      if (isEarly && shotType === 'loft') {
+        return { type: 'wicket', wicket: true, dismissal: 'Caught', ballPath: 'caught_in_deep' };
+      }
+      if (isPerfect) {
+        return { type: 'runs', runs: 6, ballPath: 'maximum_six' };
       }
     }
 

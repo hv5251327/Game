@@ -445,12 +445,14 @@ class CricketGame {
         this.bowlerAvatar.triggerBowlAction();
       }
 
-      // Real Newtonian ball delivery towards pitch landing zone
-      const startPos = new THREE.Vector3(0, 0.45, -3.7);
-      const lzX = (data.landingZone?.x || 0) * 0.7;
-      const lzZ = 1.0 - (data.landingZone?.z || 0.4) * 3.5;
+      // Authentic cricket ball delivery: release from bowler hand (y = 1.35m)
+      const startPos = new THREE.Vector3(0, 1.35, -3.7);
+      // Pitch landing mapping: z=0 (Yorker at 3.0m), z=0.5 (Good Length at 1.4m), z=1.0 (Bouncer at -0.2m)
+      const lzNormZ = typeof data.landingZone?.z === 'number' ? data.landingZone.z : 0.45;
+      const lzZ = 3.0 - lzNormZ * 3.2;
+      const lzX = (data.landingZone?.x || 0) * 0.65;
       const landingPos = new THREE.Vector3(lzX, 0.16, lzZ);
-      const targetPos = new THREE.Vector3(0, 0.65, 3.8);
+      const targetPos = new THREE.Vector3(lzX, 0.68, 3.8);
 
       this.ball.bowlDelivery(startPos, landingPos, targetPos, data.deliveryType);
 

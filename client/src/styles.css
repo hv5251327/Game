@@ -737,59 +737,102 @@ body, html {
 /* Bowling UI */
 #bowling-ui {
   position: absolute;
-  bottom: 25px;
+  bottom: 18px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(14, 38, 16, 0.94);
+  background: rgba(14, 38, 16, 0.96);
   border: 2px solid #2ed573;
   border-radius: 20px;
-  padding: 16px 22px;
-  width: 92%;
+  padding: 14px 20px;
+  width: 94%;
   max-width: 480px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   pointer-events: auto;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 20px rgba(46, 213, 115, 0.25);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.75), 0 0 24px rgba(46, 213, 115, 0.3);
+  backdrop-filter: blur(10px);
+  z-index: 105;
 }
 
-.bowl-ui-title {
+.bowl-ui-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bowl-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.bowl-icon {
+  font-size: 1.3rem;
+}
+
+.bowl-title-text {
   font-size: 0.95rem;
   font-weight: 900;
   color: #2ed573;
-  text-align: center;
   letter-spacing: 1px;
 }
 
-.delivery-type-row {
-  display: flex;
-  gap: 6px;
-  justify-content: center;
+.bowl-status-banner {
+  font-size: 0.78rem;
+  color: #ced6e0;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.delivery-btn {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #fff;
-  padding: 6px 12px;
+.delivery-options-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+}
+
+.deliv-opt-btn {
+  background: rgba(0, 0, 0, 0.45);
+  border: 1.5px solid rgba(255, 255, 255, 0.2);
   border-radius: 8px;
-  font-size: 0.8rem;
-  font-weight: bold;
+  color: #fff;
+  padding: 6px 3px;
+  font-size: 0.68rem;
+  font-weight: 700;
   cursor: pointer;
+  text-align: center;
   transition: all 0.15s;
 }
 
-.delivery-btn.active {
-  background: #ffd32a;
+.deliv-opt-btn:hover {
+  background: rgba(46, 213, 115, 0.25);
+  border-color: #2ed573;
+  transform: translateY(-1px);
+}
+
+.deliv-opt-btn.active {
+  background: linear-gradient(135deg, #2ed573, #10ac84);
   color: #111;
   border-color: #ffd32a;
-  box-shadow: 0 0 10px rgba(255, 211, 42, 0.5);
+  font-weight: 800;
+  box-shadow: 0 0 10px rgba(46, 213, 115, 0.6);
+}
+
+.pitch-picker-container {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .pitch-picker-label {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   color: #7bed9f;
   text-align: center;
+  font-weight: 600;
 }
 
 .pitch-wrapper {
@@ -797,72 +840,166 @@ body, html {
   justify-content: center;
 }
 
-.pitch-canvas {
-  width: 140px;
-  height: 180px;
+.pitch-canvas-pro {
+  width: 170px;
+  height: 155px;
   background: #c8a96e;
   border: 2px solid #8d6e3f;
   border-radius: 8px;
   position: relative;
   cursor: crosshair;
   overflow: hidden;
-  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.3);
+  box-shadow: inset 0 0 14px rgba(0, 0, 0, 0.35);
 }
 
-.pitch-zone {
+.pitch-zone-pro {
   position: absolute;
   width: 100%;
   left: 0;
   pointer-events: none;
 }
 
-.pitch-zone.full-zone { top: 0; height: 33%; background: rgba(46, 213, 115, 0.15); border-bottom: 1px dashed rgba(0,0,0,0.2); }
-.pitch-zone.good-zone { top: 33%; height: 34%; background: rgba(255, 211, 42, 0.2); border-bottom: 1px dashed rgba(0,0,0,0.2); }
-.pitch-zone.short-zone { top: 67%; height: 33%; background: rgba(255, 71, 87, 0.15); }
+.pitch-zone-pro.zone-yorker {
+  top: 0;
+  height: 28%;
+  background: rgba(255, 71, 87, 0.28);
+  border-bottom: 1px dashed rgba(0, 0, 0, 0.3);
+}
 
-.stumps-icon {
+.pitch-zone-pro.zone-good {
+  top: 28%;
+  height: 40%;
+  background: rgba(46, 213, 115, 0.30);
+  border-bottom: 1px dashed rgba(0, 0, 0, 0.3);
+}
+
+.pitch-zone-pro.zone-bouncer {
+  top: 68%;
+  height: 32%;
+  background: rgba(255, 165, 2, 0.28);
+}
+
+.zone-tag {
+  position: absolute;
+  right: 5px;
+  top: 3px;
+  font-size: 0.52rem;
+  font-weight: 800;
+  color: rgba(0, 0, 0, 0.6);
+  letter-spacing: 0.4px;
+}
+
+.pitch-stump-line {
   position: absolute;
   width: 100%;
   text-align: center;
-  font-size: 0.65rem;
+  font-size: 0.58rem;
   color: #fff;
   font-weight: 900;
-  letter-spacing: 2px;
+  letter-spacing: 1px;
   pointer-events: none;
+  text-shadow: 0 1px 2px #000;
 }
 
-.stumps-icon.top { top: 2px; }
-.stumps-icon.bottom { bottom: 2px; }
+.pitch-stump-line.top { top: 3px; }
+.pitch-stump-line.bottom { bottom: 3px; }
 
-.landing-marker {
+.landing-crosshair {
   position: absolute;
-  top: 50%;
-  left: 50%;
   transform: translate(-50%, -50%);
-  font-size: 1.2rem;
+  font-size: 1.3rem;
   pointer-events: none;
   filter: drop-shadow(0 0 6px #ff4757);
+  transition: left 0.08s ease, top 0.08s ease;
 }
 
-.bowl-info {
+.bowl-hud-stats {
   display: flex;
-  justify-content: space-around;
-  font-size: 0.78rem;
+  justify-content: space-between;
+  font-size: 0.74rem;
   color: #ced6e0;
-  font-weight: 600;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 4px 10px;
+  border-radius: 6px;
 }
 
-.btn-bowl {
+.bowling-meter-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.bowl-meter-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #ced6e0;
+}
+
+.meter-label-sweet {
+  color: #2ed573;
+  text-shadow: 0 0 6px rgba(46, 213, 115, 0.6);
+}
+
+.bowl-meter-track {
+  position: relative;
+  width: 100%;
+  height: 16px;
+  background: #1e272e;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.bowl-meter-sweet-zone {
+  position: absolute;
+  left: 48%;
+  width: 28%;
+  height: 100%;
+  background: linear-gradient(90deg, rgba(46, 213, 115, 0.6), rgba(46, 213, 115, 0.95), rgba(46, 213, 115, 0.6));
+  box-shadow: inset 0 0 6px #2ed573;
+}
+
+.bowl-meter-marker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 7px;
+  height: 100%;
+  background: #ffd32a;
+  border-radius: 4px;
+  box-shadow: 0 0 10px #ffd32a, 0 0 3px #fff;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.btn-bowl-pro {
   background: linear-gradient(135deg, #2ed573, #10ac84);
-  border: none;
-  color: #fff;
+  border: 2px solid #7bed9f;
+  color: #111;
   font-weight: 900;
-  font-size: 1.1rem;
-  padding: 12px;
+  font-size: 0.95rem;
+  padding: 10px;
   border-radius: 12px;
   cursor: pointer;
   letter-spacing: 1px;
-  box-shadow: 0 6px 20px rgba(46, 213, 115, 0.4);
+  box-shadow: 0 6px 20px rgba(46, 213, 115, 0.5);
+  transition: all 0.15s;
+  text-align: center;
+}
+
+.btn-bowl-pro:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.1);
+  box-shadow: 0 8px 24px rgba(46, 213, 115, 0.7);
+}
+
+.bowl-keyboard-hint {
+  font-size: 0.65rem;
+  color: #ced6e0;
+  text-align: center;
+}
 }
 
 /* Event Banner (FOUR, SIX, WICKET) */

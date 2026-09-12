@@ -66,26 +66,33 @@ export class Ball {
     }
   }
 
-  // Bowler delivery towards pitch landing zone
+  // Bowler delivery towards pitch landing zone with authentic cricket physics
   bowlDelivery(startPos, landingPos, targetPos, deliveryType = 'pace') {
     this.pos.copy(startPos);
     this.group.position.copy(this.pos);
     this.group.visible = true;
     this.active = true;
     this.isHitShot = false;
+    this.deliveryBounced = false;
     this.bounceCount = 0;
     this.flightTime = 0;
+    this.deliveryType = deliveryType || 'pace';
+    this.landingSpot = landingPos.clone();
+    this.batsmanTarget = targetPos ? targetPos.clone() : new THREE.Vector3(0, 0.68, 3.8);
 
-    // Calculate initial velocity to hit landing spot
-    const dx = landingPos.x - startPos.x;
-    const dz = landingPos.z - startPos.z;
-    const distXZ = Math.hypot(dx, dz);
+    // Phase 1: From bowler release hand (z ≈ -3.7, y ≈ 1.35) to pitch landing spot
+    const dz1 = Math.max(1.2, landingPos.z - startPos.z);
+    const totalDz = 7.5; // -3.7 to 3.8
+    const isSpin = this.deliveryType.includes('spin');
+    const isYorker = this.deliveryType === 'yorker';
+    const isBouncer = this.deliveryType === 'bouncer';
 
-    let duration = deliveryType === 'spin' ? 0.75 : deliveryType === 'yorker' ? 0.45 : 0.55;
-    const vx = dx / duration;
-    const vz = dz / duration;
-    // y(t) = y0 + vy*t + 0.5*g*t^2  =>  vy = (y_land - y0 - 0.5*g*t^2) / t
-    const vy = (landingPos.y - startPos.y - 0.5 * this.gravity * duration * duration) / duration;
+    let totalDuration = isSpin ? 0.74 : isYorker ? 0.46 : isBouncer ? 0.50 : 0.54;
+    const duration1 = Math.max(0.20, totalDuration * (dz1 / totalDz));
+
+    const vx = (landingPos.x - startPos.x) / duration1;
+    const vz = dz1 / duration1;
+    const vy = (0.16 - startPos.y - 0.5 * this.gravity * duration1 * duration1) / duration1;
 
     this.vel.set(vx, vy, vz);
     this.trailPoints = [];
@@ -98,6 +105,7 @@ export class Ball {
     this.group.visible = true;
     this.active = true;
     this.isHitShot = true;
+    this.deliveryBounced = false;
     this.bounceCount = 0;
     this.flightTime = 0;
 
@@ -151,7 +159,52 @@ export class Ball {
     this.pos.y += this.vel.y * delta;
     this.pos.z += this.vel.z * delta;
 
-    // Ground bounce check (turf plane y = 0)
+    // --- 1. CRICKET PITCH BOUNCE (When Bowler delivers ball) ---
+    if (!this.isHitShot && !this.deliveryBounced) {
+      // Check if ball has reached turf level at or near landing zone
+      if (this.pos.y <= this.radius + 0.04 && this.pos.z >= this.landingSpot.z - 0.4) {
+        this.pos.y = this.radius;
+        this.deliveryBounced = true;
+        this.bounceCount++;
+        this._spawnBounceRipple(this.pos);
+
+        if (this.onBounce) this.onBounce(this.pos);
+
+        // Phase 2: Compute realistic cricket bounce trajectory to batsman crease (z = 3.8)
+        const targetZ = 3.8;
+        const distRemaining = Math.max(0.6, targetZ - this.pos.z);
+        const isSpin = this.deliveryType.includes('spin');
+        const isBouncer = this.deliveryType === 'bouncer';
+        const isYorker = this.deliveryType === 'yorker';
+        const isOutswing = this.deliveryType === 'outswing';
+        const isInswing = this.deliveryType === 'inswing';
+
+        let duration2 = isSpin ? 0.28 : isYorker ? 0.12 : isBouncer ? 0.24 : 0.20;
+
+        // Target height at batsman
+        let targetY = 0.68; // default waist / bat sweet spot
+        if (isYorker) targetY = 0.22; // low dipping blockhole
+        else if (isBouncer) targetY = 1.28; // high steep rising delivery at chest/helmet!
+        else if (isSpin) targetY = 0.72;
+
+        // Lateral deviation / spin turn / swing after pitch
+        let targetX = this.landingSpot.x;
+        if (isOutswing || this.deliveryType === 'leg_spin') {
+          targetX = this.landingSpot.x + 0.32; // breaks away to off
+        } else if (isInswing || this.deliveryType === 'spin') {
+          targetX = this.landingSpot.x - 0.32; // jags into pads/stumps
+        }
+
+        const vx2 = (targetX - this.pos.x) / duration2;
+        const vz2 = distRemaining / duration2;
+        const vy2 = (targetY - this.radius - 0.5 * this.gravity * duration2 * duration2) / duration2;
+
+        this.vel.set(vx2, vy2, vz2);
+        return;
+      }
+    }
+
+    // --- 2. REGULAR TURF BOUNCE (For Batted Hits or Ground Rolls) ---
     if (this.pos.y <= this.radius) {
       this.pos.y = this.radius;
 
