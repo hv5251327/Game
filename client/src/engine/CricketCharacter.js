@@ -205,6 +205,8 @@ export class CricketCharacter {
       this._buildBeetle();
     } else if (this.species === 'grasshopper') {
       this._buildGrasshopper();
+    } else if (this.species === 'umpire') {
+      this._buildUmpire();
     } else {
       this._buildAnt();
     }
@@ -643,6 +645,144 @@ export class CricketCharacter {
       }
     };
     cel();
+  }
+
+  // --- 5. UMPIRE MODEL ---
+  _buildUmpire() {
+    const coatMat = new THREE.MeshStandardMaterial({ color: 0xF5F6FA, roughness: 0.4 });
+    const hatMat = new THREE.MeshStandardMaterial({ color: 0xFFFFFF, roughness: 0.5 });
+    const pantMat = new THREE.MeshStandardMaterial({ color: 0x2F3542, roughness: 0.6 });
+
+    // Legs / Trousers
+    [-0.12, 0.12].forEach(dx => {
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.05, 0.45, 8), pantMat);
+      leg.position.set(dx, 0.22, 0);
+      this.bodyPivot.add(leg);
+    });
+
+    // Body in white coat
+    const coat = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.28, 0.52, 10), coatMat);
+    coat.position.set(0, 0.52, 0);
+    this.bodyPivot.add(coat);
+
+    // Head
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 10), new THREE.MeshStandardMaterial({ color: 0xFFD2A4 }));
+    head.position.set(0, 0.88, 0);
+    this.bodyPivot.add(head);
+
+    // Wide-brim umpire sun hat
+    const hatBrim = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.03, 16), hatMat);
+    hatBrim.position.set(0, 0.98, 0);
+    const hatCrown = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.2, 0.14, 12), hatMat);
+    hatCrown.position.set(0, 1.05, 0);
+    this.bodyPivot.add(hatBrim, hatCrown);
+
+    // Articulated arms for signals
+    this.rightArmPivot = new THREE.Group();
+    this.rightArmPivot.position.set(0.28, 0.72, 0);
+    const rArm = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.035, 0.38, 6), coatMat);
+    rArm.position.y = -0.18;
+    this.rightArmPivot.add(rArm);
+    this.bodyPivot.add(this.rightArmPivot);
+
+    this.leftArmPivot = new THREE.Group();
+    this.leftArmPivot.position.set(-0.28, 0.72, 0);
+    const lArm = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.035, 0.38, 6), coatMat);
+    lArm.position.y = -0.18;
+    this.leftArmPivot.add(lArm);
+    this.bodyPivot.add(this.leftArmPivot);
+  }
+
+  signalOut() {
+    if (!this.rightArmPivot) return;
+    let t = 0;
+    const anim = () => {
+      t += 0.08;
+      if (t < Math.PI * 2) {
+        // Raise right arm straight up with index finger to sky
+        this.rightArmPivot.rotation.z = Math.min(Math.PI, t * 2);
+        requestAnimationFrame(anim);
+      } else {
+        setTimeout(() => {
+          this.rightArmPivot.rotation.z = 0;
+        }, 1800);
+      }
+    };
+    anim();
+  }
+
+  signalFour() {
+    if (!this.rightArmPivot) return;
+    let t = 0;
+    const anim = () => {
+      t += 0.12;
+      if (t < Math.PI * 4) {
+        // Wave right arm horizontally across chest
+        this.rightArmPivot.rotation.z = 1.2;
+        this.rightArmPivot.rotation.y = Math.sin(t) * 0.8;
+        requestAnimationFrame(anim);
+      } else {
+        this.rightArmPivot.rotation.set(0, 0, 0);
+      }
+    };
+    anim();
+  }
+
+  signalSix() {
+    if (!this.rightArmPivot || !this.leftArmPivot) return;
+    let t = 0;
+    const anim = () => {
+      t += 0.08;
+      if (t < Math.PI * 2) {
+        // Raise both arms straight up overhead
+        this.rightArmPivot.rotation.z = Math.min(Math.PI, t * 2);
+        this.leftArmPivot.rotation.z = -Math.min(Math.PI, t * 2);
+        requestAnimationFrame(anim);
+      } else {
+        setTimeout(() => {
+          this.rightArmPivot.rotation.z = 0;
+          this.leftArmPivot.rotation.z = 0;
+        }, 2000);
+      }
+    };
+    anim();
+  }
+
+  signalWide() {
+    if (!this.rightArmPivot || !this.leftArmPivot) return;
+    let t = 0;
+    const anim = () => {
+      t += 0.1;
+      if (t < Math.PI) {
+        // Extend both arms horizontally
+        this.rightArmPivot.rotation.z = Math.PI / 2;
+        this.leftArmPivot.rotation.z = -Math.PI / 2;
+        requestAnimationFrame(anim);
+      } else {
+        setTimeout(() => {
+          this.rightArmPivot.rotation.z = 0;
+          this.leftArmPivot.rotation.z = 0;
+        }, 1500);
+      }
+    };
+    anim();
+  }
+
+  triggerCatch() {
+    let t = 0;
+    const origY = this.group.position.y;
+    const anim = () => {
+      t += 0.14;
+      if (t < Math.PI) {
+        this.group.position.y = origY + Math.sin(t) * 0.5;
+        this.bodyPivot.rotation.x = -Math.sin(t) * 0.4;
+        requestAnimationFrame(anim);
+      } else {
+        this.group.position.y = origY;
+        this.bodyPivot.rotation.x = 0;
+      }
+    };
+    anim();
   }
 
   destroy() {

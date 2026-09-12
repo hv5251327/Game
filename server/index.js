@@ -217,6 +217,16 @@ class CricketRoom {
       players: this._allPlayersInfo(),
       roomInfo: this.getRoomInfo()
     });
+
+    // If Captain A is a bot, bot calls heads or tails automatically after 1s
+    const capA = this.players.get(this.captainA);
+    if (capA && capA.isBot) {
+      setTimeout(() => {
+        if (this.state === 'TOSS') {
+          this.handleTossCall(this.captainA, Math.random() < 0.5 ? 'heads' : 'tails');
+        }
+      }, 1000);
+    }
     return true;
   }
 
@@ -237,7 +247,8 @@ class CricketRoom {
 
     const winnerPlayer = this.players.get(winner);
     if (winnerPlayer && winnerPlayer.isBot) {
-      setTimeout(() => this.handleTossDecision(winner, 'bat'), 1500);
+      const botChoice = Math.random() < 0.6 ? 'bat' : 'bowl';
+      setTimeout(() => this.handleTossDecision(winner, botChoice), 1400);
     } else {
       io.to(winner).emit('toss_decision_needed', {});
     }
@@ -351,8 +362,15 @@ class CricketRoom {
     const maxOvers = Math.ceil(this.overs / 2);
     const card = this._currentCard();
 
-    let bowlerId = bowlingIds.find(id => id !== this.currentBowler && (card.bowlers[id]?.overs || 0) < maxOvers);
-    if (!bowlerId) bowlerId = bowlingIds[0];
+    // Eligible bowlers who are not the current bowler and haven't reached max overs
+    const eligible = bowlingIds.filter(id => id !== this.currentBowler && (card.bowlers[id]?.overs || 0) < maxOvers);
+    let bowlerId;
+    if (eligible.length > 0) {
+      // Rotate through squad bowlers
+      bowlerId = eligible[this.currentOver % eligible.length];
+    } else {
+      bowlerId = bowlingIds.find(id => id !== this.currentBowler) || bowlingIds[0];
+    }
 
     this.startOver(null, bowlerId);
   }
@@ -462,13 +480,19 @@ class CricketRoom {
     if (!this.ballInFlight) return;
     const shotTypes = ['drive', 'loft', 'sweep', 'cut', 'defend'];
     const shot = shotTypes[Math.floor(Math.random() * shotTypes.length)];
-    const timing = 0.4 + Math.random() * 0.5;
-    const direction = (Math.random() - 0.5) * 1.8;
+    const timing = 0.45 + Math.random() * 0.45;
+    const allowedDirections = ['forward', 'forward_left', 'forward_right', 'left', 'right', 'backward_left', 'backward_right'];
+    const direction = allowedDirections[Math.floor(Math.random() * allowedDirections.length)];
+    const characters = ['ant_batter_01', 'beetle_power_batter_01', 'grasshopper_agile_batter_01'];
+    const charId = characters[Math.floor(Math.random() * characters.length)];
+
     this._resolveBall({
+      character_id: charId,
+      action: 'swing_bat',
       shotType: shot,
       timing,
       direction,
-      power: 0.4 + Math.random() * 0.5
+      power: 0.55 + Math.random() * 0.4
     }, bowlData);
   }
 

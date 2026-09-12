@@ -585,210 +585,153 @@ body, html {
   color: #111;
 }
 
-/* Batting UI */
-#batting-ui {
-  position: absolute;
-  bottom: 25px;
-  left: 50%;
-  transform: translateX(-50%);
+/* Batting UI - Compact Top-Left Meter */
+#batting-ui.top-left-batting-ui {
+  position: fixed;
+  top: 75px;
+  left: 18px;
   background: rgba(14, 38, 16, 0.94);
   border: 2px solid #ffd32a;
-  border-radius: 20px;
-  padding: 16px 22px;
-  width: 92%;
-  max-width: 520px;
+  border-radius: 16px;
+  padding: 10px 12px;
+  width: 195px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   pointer-events: auto;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 20px rgba(255, 211, 42, 0.25);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7), 0 0 15px rgba(255, 211, 42, 0.35);
+  z-index: 50;
+  backdrop-filter: blur(8px);
 }
 
-.bat-ui-title {
-  font-size: 0.95rem;
+.mini-bat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.bat-title {
+  font-size: 0.75rem;
   font-weight: 900;
   color: #ffd32a;
-  text-align: center;
-  letter-spacing: 1px;
 }
 
-.shot-type-row {
-  display: flex;
-  gap: 6px;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-
-.shot-btn {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #fff;
-  padding: 6px 12px;
-  border-radius: 8px;
-  font-size: 0.8rem;
-  font-weight: bold;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.shot-btn.active {
-  background: #2ed573;
-  color: #111;
-  border-color: #2ed573;
-  box-shadow: 0 0 10px rgba(46, 213, 115, 0.5);
-}
-
-/* Batter Switcher Pills */
-.batter-select-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 0.8rem;
-  font-weight: 700;
+.bat-hint-key {
+  font-size: 0.65rem;
   color: #7bed9f;
-}
-
-.batter-pills {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.batter-pill {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #fff;
-  padding: 4px 10px;
-  border-radius: 12px;
-  font-size: 0.75rem;
   font-weight: bold;
-  cursor: pointer;
-  transition: all 0.15s;
 }
 
-.batter-pill.active {
-  background: #ffa502;
-  color: #111;
-  border-color: #ffa502;
-  box-shadow: 0 0 10px rgba(255, 165, 2, 0.5);
-}
-
-/* 8-Direction System Compass */
-.direction-system-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-}
-
-.dir-title {
-  font-size: 0.8rem;
-  color: #ced6e0;
-}
-
-.dir-title strong {
-  color: #ffd32a;
-}
-
-.dir-compass-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 75px);
-  gap: 6px;
-  justify-content: center;
-}
-
-.dir-btn {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #f1f2f6;
-  padding: 6px 4px;
-  border-radius: 8px;
-  font-size: 0.72rem;
-  font-weight: 800;
-  cursor: pointer;
-  transition: all 0.12s;
-  touch-action: manipulation;
-}
-
-.dir-btn:hover {
-  background: rgba(46, 213, 115, 0.25);
-  border-color: #2ed573;
-}
-
-.dir-btn.active {
-  background: #2ed573;
-  color: #111;
-  border-color: #2ed573;
-  box-shadow: 0 0 10px rgba(46, 213, 115, 0.7);
-}
-
-.dir-center {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-size: 1.1rem;
-}
-
-/* Timing Bar */
-.timing-bar-wrapper {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.timing-bar-bg {
+/* Small Precision Timing Bar */
+.mini-timing-bar-bg {
   width: 100%;
-  height: 24px;
+  height: 16px;
   background: rgba(0, 0, 0, 0.6);
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-radius: 12px;
+  border: 1.5px solid rgba(255, 255, 255, 0.35);
+  border-radius: 8px;
   position: relative;
   overflow: hidden;
 }
 
-.timing-sweet-zone {
+.mini-sweet-zone {
   position: absolute;
-  left: 55%;
-  width: 20%;
+  left: 50%;
+  width: 24%;
   height: 100%;
   background: linear-gradient(90deg, #ffd32a, #2ed573, #ffd32a);
-  box-shadow: 0 0 10px #2ed573;
+  box-shadow: 0 0 8px #2ed573;
 }
 
-.timing-marker {
+.mini-timing-marker {
   position: absolute;
   top: 0;
   left: 0;
-  width: 8px;
+  width: 6px;
   height: 100%;
   background: #ff4757;
-  border-radius: 4px;
-  box-shadow: 0 0 8px #ff4757;
+  border-radius: 3px;
+  box-shadow: 0 0 6px #ff4757;
   transform: translateX(-50%);
 }
 
-.timing-label {
-  font-size: 0.72rem;
-  color: #ced6e0;
-  text-align: center;
+/* Compact 8-Direction Grid */
+.mini-direction-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
 }
 
-.btn-swing {
+.dir-btn-mini {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #f1f2f6;
+  height: 28px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: all 0.12s;
+  touch-action: manipulation;
+}
+
+.dir-btn-mini:hover {
+  background: rgba(46, 213, 115, 0.3);
+  border-color: #2ed573;
+}
+
+.dir-btn-mini.active {
+  background: #2ed573;
+  color: #111;
+  border-color: #2ed573;
+  box-shadow: 0 0 8px rgba(46, 213, 115, 0.7);
+}
+
+.dir-btn-center {
   background: linear-gradient(135deg, #ffd32a, #ff9f1a);
   border: none;
-  color: #111;
-  font-weight: 900;
-  font-size: 1.1rem;
-  padding: 12px;
-  border-radius: 12px;
+  border-radius: 6px;
+  height: 28px;
+  font-size: 1rem;
   cursor: pointer;
-  letter-spacing: 1px;
-  box-shadow: 0 6px 20px rgba(255, 211, 42, 0.4);
-  transition: all 0.15s;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 2px 8px rgba(255, 211, 42, 0.5);
+  transition: transform 0.1s;
 }
 
-.btn-swing:active {
-  transform: scale(0.97);
+.dir-btn-center:active {
+  transform: scale(0.92);
+}
+
+/* Compact Shot Mode Pills */
+.mini-shot-pills {
+  display: flex;
+  gap: 3px;
+  justify-content: space-between;
+}
+
+.shot-pill-mini {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #ced6e0;
+  padding: 3px 5px;
+  border-radius: 6px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  cursor: pointer;
+  flex: 1;
+  text-align: center;
+  transition: all 0.12s;
+}
+
+.shot-pill-mini.active {
+  background: #ffd32a;
+  color: #111;
+  border-color: #ffd32a;
 }
 
 /* Bowling UI */
