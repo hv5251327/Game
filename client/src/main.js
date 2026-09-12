@@ -1,880 +1,741 @@
 import * as THREE from 'three';
-import { AudioEngine } from './engine/AudioEngine.js';
-import { Apartment } from './engine/Apartment.js';
-import { RagdollAvatar } from './engine/RagdollAvatar.js';
-import { Physics } from './engine/Physics.js';
-import { CameraManager } from './engine/CameraManager.js';
+import { Ground } from './engine/Ground.js';
+import { CricketCharacter } from './engine/CricketCharacter.js';
+import { Ball } from './engine/Ball.js';
+import { BattingUI } from './engine/BattingUI.js';
+import { BowlingUI } from './engine/BowlingUI.js';
 import { NetworkClient } from './engine/NetworkClient.js';
-import { supabaseService } from './engine/SupabaseService.js';
 
-class HittlersGame {
+class CricketGame {
   constructor() {
-    this.scene = null;
-    this.camera = null;
-    this.renderer = null;
-
-    this.audio = new AudioEngine();
-    this.apartment = null;
-    this.physics = null;
-    this.cameraManager = null;
-    this.network = null;
-    this.supabase = supabaseService;
-
-    this.localPlayer = null;
-    this.remotePlayers = new Map(); // id -> RagdollAvatar
-    this.remoteData = new Map(); // id -> latest server data
-
-    this.keys = {};
-    this.touchMove = { x: 0, y: 0 };
-    this.touchDuck = false;
-    this.touchCrawl = false;
-    this.lastSwingTime = 0;
+    this.network = new NetworkClient();
+    this.fielders = [];
+    this.strikerAvatar = null;
+    this.nonStrikerAvatar = null;
+    this.bowlerAvatar = null;
+    this.keeperAvatar = null;
+    this.currentScorecard = null;
+    this.myId = null;
+    this.myTeam = null;
+    this.isHost = false;
+    this.roomInfo = null;
     this.lastTime = performance.now();
-    this.roundActive = false; // true only while a round is actually running
 
-    // DOM Elements
-    this.domLobby = document.getElementById('lobby-screen');
-    this.domHud = document.getElementById('hud');
-    this.domPeepDarkness = document.getElementById('peep-darkness-mask');
-    this.domTimer = document.getElementById('match-timer');
-    this.domRoleBadge = document.getElementById('role-badge');
-    this.domRoleDesc = document.getElementById('role-desc');
-    this.domHostControls = document.getElementById('host-controls');
-    this.domBtnStartMatch = document.getElementById('btn-start-match');
-    this.domBtnStartHunter = document.getElementById('btn-start-as-hunter');
-    this.domWaitingForHost = document.getElementById('waiting-for-host');
-    this.domSelectRole = document.getElementById('select-role');
-    this.domHpBar = document.getElementById('hp-bar');
-    this.domHpFill = document.getElementById('hp-fill');
-    this.domHpText = document.getElementById('hp-text');
-    this.domEndOverlay = document.getElementById('end-overlay');
-    this.domEndTitle = document.getElementById('end-title');
-    this.domEndSubtitle = document.getElementById('end-subtitle');
-    this.domFlailAlert = document.getElementById('flail-alert');
-    this.domHitFeed = document.getElementById('hit-feed');
-    this.domLeaderboardModal = document.getElementById('leaderboard-modal');
-    this.domLeaderboardList = document.getElementById('leaderboard-list');
+    this._setupDOM();
+    this._initThree();
+    this._initAudio();
+    this._initGameModules();
+    this._bindEvents();
+    this._bindNetwork();
 
-    this.domInputRoomCode = document.getElementById('input-room-code');
-    this.domBtnRandRoom = document.getElementById('btn-rand-room');
-    this.domHudRoomBadge = document.getElementById('hud-room-badge');
-    this.domHudRoomCode = document.getElementById('hud-room-code');
-    this.domBtnCopyRoom = document.getElementById('btn-copy-room');
-    this.domSelectLobbyHunterCount = document.getElementById('select-lobby-hunter-count');
-    this.domSelectHostHunterCount = document.getElementById('select-host-hunter-count');
-    this.domLobbyWaitingBanner = document.getElementById('lobby-waiting-banner');
-
-    this.init();
+    this.animate(performance.now());
   }
 
-  init() {
-    // 1. Setup Three.js Scene & Renderer
-    this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x181926);
-    this.scene.fog = new THREE.FogExp2(0x181926, 0.025);
+  _setupDOM() {
+    this.domLobby = document.getElementById('lobby-screen');
+    this.domHud = document.getElementById('hud');
+    this.domTossModal = document.getElementById('toss-modal');
+    this.domCaptainModal = document.getElementById('captain-modal');
+    this.domScorecardModal = document.getElementById('scorecard-modal');
+    this.domGameOver = document.getElementById('game-over-overlay');
+    this.domBigEvent = document.getElementById('big-event-banner');
 
-    this.camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 100);
+    this.domRunsWickets = document.getElementById('hud-runs-wickets');
+    this.domOvers = document.getElementById('hud-overs');
+    this.domTeamName = document.getElementById('hud-team-name');
+    this.domTeamIcon = document.getElementById('hud-team-icon');
+    this.domTargetInfo = document.getElementById('hud-target-info');
+    this.domCrrInfo = document.getElementById('hud-crr-info');
+    this.domRoomCode = document.getElementById('hud-room-code');
+
+    this.domStrikerName = document.getElementById('striker-name');
+    this.domStrikerFigures = document.getElementById('striker-figures');
+    this.domNonStrikerName = document.getElementById('non-striker-name');
+    this.domNonStrikerFigures = document.getElementById('non-striker-figures');
+    this.domBowlerName = document.getElementById('bowler-name');
+    this.domBowlerFigures = document.getElementById('bowler-figures');
+    this.domThisOverBalls = document.getElementById('this-over-balls');
+    this.domActionBanner = document.getElementById('action-banner');
+
+    this.domTossStatus = document.getElementById('toss-status');
+    this.domTossCoin = document.getElementById('toss-coin');
+    this.domTossCallButtons = document.getElementById('toss-call-buttons');
+    this.domTossDecisionButtons = document.getElementById('toss-decision-buttons');
+    this.domCaptainCallingName = document.getElementById('captain-calling-name');
+
+    this.domBtnConnect = document.getElementById('btn-connect');
+    this.domBtnStartMatch = document.getElementById('btn-start-match');
+    this.domBtnRandRoom = document.getElementById('btn-rand-room');
+    this.domInputRoomCode = document.getElementById('input-room-code');
+    this.domInputNickname = document.getElementById('input-nickname');
+    this.domSelectGameMode = document.getElementById('select-game-mode');
+    this.domSelectOvers = document.getElementById('select-overs');
+
+    this.domTeamAMembers = document.getElementById('team-a-members');
+    this.domTeamBMembers = document.getElementById('team-b-members');
+    this.domBtnJoinTeamA = document.getElementById('btn-join-team-a');
+    this.domBtnJoinTeamB = document.getElementById('btn-join-team-b');
+
+    this.domControlsContainer = document.getElementById('game-controls-container');
+  }
+
+  _initThree() {
+    this.scene = new THREE.Scene();
+    this.scene.background = new THREE.Color(0x70a1ff); // Daylight summer sky
+    this.scene.fog = new THREE.FogExp2(0x70a1ff, 0.008);
+
+    this.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 200);
+    // Isometric view looking down the pitch towards the batsman
+    this.camera.position.set(0, 11, -19);
+    this.camera.lookAt(0, 1.2, 4);
+
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
     document.getElementById('canvas-container').appendChild(this.renderer.domElement);
 
-    // 2. Lighting
-    this.ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-    this.scene.add(this.ambientLight);
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
+    this.scene.add(ambientLight);
 
-    this.dirLight = new THREE.DirectionalLight(0xfff5e6, 1.3);
-    this.dirLight.position.set(12, 16, 10);
-    this.dirLight.castShadow = true;
-    this.dirLight.shadow.mapSize.width = 2048;
-    this.dirLight.shadow.mapSize.height = 2048;
-    this.dirLight.shadow.camera.near = 0.5;
-    this.dirLight.shadow.camera.far = 45;
-    const d = 15;
-    this.dirLight.shadow.camera.left = -d;
-    this.dirLight.shadow.camera.right = d;
-    this.dirLight.shadow.camera.top = d;
-    this.dirLight.shadow.camera.bottom = -d;
-    this.scene.add(this.dirLight);
+    const sun = new THREE.DirectionalLight(0xfff8e7, 1.25);
+    sun.position.set(15, 25, -10);
+    sun.castShadow = true;
+    sun.shadow.mapSize.width = 1024;
+    sun.shadow.mapSize.height = 1024;
+    sun.shadow.camera.near = 0.5;
+    sun.shadow.camera.far = 80;
+    sun.shadow.camera.left = -25;
+    sun.shadow.camera.right = 25;
+    sun.shadow.camera.top = 25;
+    sun.shadow.camera.bottom = -25;
+    this.scene.add(sun);
 
-    // 3. Environment & Physics
-    this.apartment = new Apartment(this.scene);
-    this.physics = new Physics(this.apartment, (mesh) => {
-      // Thermal echo outline pulse on bump (only for Hitter)
-      if (this.localPlayer && this.localPlayer.role === 'HITTER') {
-        this.apartment.triggerThermalEcho(mesh);
-        this.network.triggerThermalEcho(mesh.userData.thermalId, mesh.position);
-        this.audio.playObjectHit();
-      }
-    });
-
-    // 4. Camera Manager
-    this.cameraManager = new CameraManager(this.camera, this.renderer.domElement);
-
-    // 5. Local Human: Fall Flat Bob Avatar
-    this.localPlayer = new RagdollAvatar(this.scene, '#f0f0f0', true);
-
-    // 6. Network Client & Event Callbacks
-    this.network = new NetworkClient({
-      onRoomJoined: (data) => this.handleRoomJoined(data),
-      onCountdownStarted: (data) => this.handleCountdownStarted(data),
-      onRoundStarted: (data) => this.handleRoundStarted(data),
-      onRoundEnded: (data) => this.handleRoundEnded(data),
-      onPlayerSwungBat: (data) => this.handleRemoteBatSwing(data),
-      onPlayerHit: (data) => this.handlePlayerHit(data),
-      onThermalEchoPulsed: (data) => this.handleThermalEchoPulsed(data),
-      onPlayerCampRevealed: (data) => this.handlePlayerCampRevealed(data),
-      onGameTick: (data) => this.handleGameTick(data)
-    });
-
-    // 7. Input Listeners
-    this.bindInputs();
-
-    // 8. Window Resize
     window.addEventListener('resize', () => {
       this.camera.aspect = window.innerWidth / window.innerHeight;
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(window.innerWidth, window.innerHeight);
     });
-
-    // 9. Start Game Loop
-    this.animate();
   }
 
-  bindTouchButton(id, callback) {
-    const btn = document.getElementById(id);
-    if (!btn) return;
-    const trigger = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.audio.ensureContext();
-      callback(btn);
+  _initGameModules() {
+    this.ground = new Ground(this.scene);
+    this.ball = new Ball(this.scene);
+    this.battingUI = new BattingUI(this.domControlsContainer);
+    this.bowlingUI = new BowlingUI(this.domControlsContainer);
+
+    this.battingUI.onSwing = (data) => {
+      this._playBatSound();
+      if (this.strikerAvatar) this.strikerAvatar.triggerBatSwing();
+      this.network.bat(data);
     };
-    btn.addEventListener('touchstart', trigger, { passive: false });
-    btn.addEventListener('click', trigger);
+
+    this.bowlingUI.onBowl = (data) => {
+      this.network.bowl(data);
+    };
   }
 
-  bindInputs() {
-    // Keyboard
-    window.addEventListener('keydown', (e) => {
-      this.audio.ensureContext();
-      this.keys[e.code] = true;
-
-      // Stick / Bat Swing: 'KeyX' or 'Space' (when Hitter)
-      if (e.code === 'KeyX' || (e.code === 'Space' && this.localPlayer.role === 'HITTER')) {
-        this.triggerLocalBatSwing();
+  _initAudio() {
+    this.audioCtx = null;
+    const ensureAudio = () => {
+      if (!this.audioCtx) {
+        this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       }
-
-      // Perspective Toggle (V key)
-      if (e.code === 'KeyV') {
-        const mode = this.cameraManager.togglePerspective();
-        this.showHitFeedNotice(`Camera switched to ${mode.replace('_', ' ')}`);
+      if (this.audioCtx.state === 'suspended') {
+        this.audioCtx.resume();
       }
+    };
+    window.addEventListener('click', ensureAudio, { once: true });
+    window.addEventListener('touchstart', ensureAudio, { once: true });
+  }
 
-      // Flat Flop ('F' key - belly flop to slide under beds)
-      if (e.code === 'KeyF') {
-        this.localPlayer.isFlatFlop = !this.localPlayer.isFlatFlop;
-        if (this.localPlayer.isFlatFlop) {
-          this.localPlayer.isCrawling = false;
-          this.localPlayer.isSitting = false;
-        }
-      }
-
-      // Sit ('C' key)
-      if (e.code === 'KeyC') {
-        this.localPlayer.isSitting = !this.localPlayer.isSitting;
-        if (this.localPlayer.isSitting) {
-          this.localPlayer.isFlatFlop = false;
-          this.localPlayer.isCrawling = false;
-        }
-      }
-
-      // Crawl / Crouch (Ctrl / Shift key)
-      if (e.code === 'ControlLeft' || e.code === 'ShiftLeft') {
-        this.localPlayer.isCrawling = true;
-      }
-
-      // Grab ('E' key)
-      if (e.code === 'KeyE') {
-        this.localPlayer.isGrabbing = true;
-      }
-    });
-
-    window.addEventListener('keyup', (e) => {
-      this.keys[e.code] = false;
-      if (e.code === 'ControlLeft' || e.code === 'ShiftLeft') {
-        if (!this.touchCrawl) {
-          this.localPlayer.isCrawling = false;
-        }
-      }
-      if (e.code === 'KeyE') {
-        this.localPlayer.isGrabbing = false;
-      }
-    });
-
-    // Mouse Left-Click Bat Swing (when Hitter)
-    this.renderer.domElement.addEventListener('mousedown', (e) => {
-      if (e.button === 0 && this.localPlayer.role === 'HITTER') {
-        this.triggerLocalBatSwing();
-      }
-    });
-
-    // Touch Joystick for Mobile Movement
-    const joyContainer = document.getElementById('touch-joystick');
-    const joyKnob = document.getElementById('touch-knob');
-    if (joyContainer && joyKnob) {
-      let joyActive = false;
-      let startX = 0, startY = 0;
-
-      joyContainer.addEventListener('touchstart', (e) => {
-        this.audio.ensureContext();
-        joyActive = true;
-        const touch = e.touches[0];
-        const rect = joyContainer.getBoundingClientRect();
-        startX = rect.left + rect.width / 2;
-        startY = rect.top + rect.height / 2;
-      }, { passive: true });
-
-      joyContainer.addEventListener('touchmove', (e) => {
-        if (!joyActive) return;
-        const touch = e.touches[0];
-        const dx = touch.clientX - startX;
-        const dy = touch.clientY - startY;
-        const dist = Math.hypot(dx, dy);
-        const maxDist = 45;
-        const clampedDist = Math.min(dist, maxDist);
-        const angle = Math.atan2(dy, dx);
-
-        const kx = Math.cos(angle) * clampedDist;
-        const ky = Math.sin(angle) * clampedDist;
-        joyKnob.style.transform = `translate(${kx}px, ${ky}px)`;
-
-        this.touchMove.x = kx / maxDist;
-        this.touchMove.y = ky / maxDist;
-      }, { passive: true });
-
-      const resetJoy = () => {
-        joyActive = false;
-        joyKnob.style.transform = `translate(0px, 0px)`;
-        this.touchMove.x = 0;
-        this.touchMove.y = 0;
-      };
-
-      joyContainer.addEventListener('touchend', resetJoy);
-      joyContainer.addEventListener('touchcancel', resetJoy);
-    }
-
-    // Touch Action Buttons
-    this.bindTouchButton('btn-jump', () => {
-      if (this.localPlayer.isOnGround) {
-        this.physics.resolveVerticalPhysics(this.localPlayer, 0.016, true, 6.5);
-      }
-    });
-
-    this.bindTouchButton('btn-crawl', (btn) => {
-      this.touchCrawl = !this.touchCrawl;
-      this.localPlayer.isCrawling = this.touchCrawl;
-      if (this.touchCrawl) {
-        this.localPlayer.isFlatFlop = false;
-        document.getElementById('btn-flop')?.classList.remove('active');
-      }
-      btn?.classList.toggle('active', this.touchCrawl);
-    });
-
-    this.bindTouchButton('btn-flop', (btn) => {
-      this.localPlayer.isFlatFlop = !this.localPlayer.isFlatFlop;
-      if (this.localPlayer.isFlatFlop) {
-        this.touchCrawl = false;
-        this.localPlayer.isCrawling = false;
-        document.getElementById('btn-crawl')?.classList.remove('active');
-        this.localPlayer.isSitting = false;
-        document.getElementById('btn-sit')?.classList.remove('active');
-      }
-      btn?.classList.toggle('active', this.localPlayer.isFlatFlop);
-    });
-
-    this.bindTouchButton('btn-sit', (btn) => {
-      this.localPlayer.isSitting = !this.localPlayer.isSitting;
-      if (this.localPlayer.isSitting) {
-        this.localPlayer.isFlatFlop = false;
-        document.getElementById('btn-flop')?.classList.remove('active');
-        this.touchCrawl = false;
-        this.localPlayer.isCrawling = false;
-        document.getElementById('btn-crawl')?.classList.remove('active');
-      }
-      btn?.classList.toggle('active', this.localPlayer.isSitting);
-    });
-
-    this.bindTouchButton('btn-duck', (btn) => {
-      this.touchDuck = !this.touchDuck;
-      btn?.classList.toggle('active', this.touchDuck);
-      if (this.touchDuck) {
-        this.showHitFeedNotice('🦆 Ducking down (Bended Spine)');
-      }
-    });
-
-    this.bindTouchButton('btn-swing', () => {
-      this.triggerLocalBatSwing();
-    });
-
-    this.bindTouchButton('btn-view', () => {
-      const mode = this.cameraManager.togglePerspective();
-      this.showHitFeedNotice(`Camera: ${mode.replace('_', ' ')}`);
-    });
-
-    // Room Code from URL query (?room=CODE)
+  _playBatSound() {
+    if (!this.audioCtx) return;
     try {
-      const urlParams = new URLSearchParams(window.location.search);
-      const roomParam = urlParams.get('room');
-      if (roomParam && this.domInputRoomCode) {
-        this.domInputRoomCode.value = roomParam.trim().toUpperCase();
-      }
+      const osc = this.audioCtx.createOscillator();
+      const gain = this.audioCtx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(280, this.audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(80, this.audioCtx.currentTime + 0.12);
+      gain.gain.setValueAtTime(0.8, this.audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, this.audioCtx.currentTime + 0.15);
+      osc.connect(gain);
+      gain.connect(this.audioCtx.destination);
+      osc.start();
+      osc.stop(this.audioCtx.currentTime + 0.15);
     } catch (e) {}
+  }
 
-    // Random Room Code Generator
-    this.domBtnRandRoom?.addEventListener('click', () => {
-      if (this.domInputRoomCode) {
-        const randCode = `ROOM-${Math.floor(1000 + Math.random() * 9000)}`;
-        this.domInputRoomCode.value = randCode;
-        this.showHitFeedNotice(`Generated new Room Code: ${randCode}`);
-      }
+  _playCheerSound() {
+    if (!this.audioCtx) return;
+    try {
+      const osc = this.audioCtx.createOscillator();
+      const gain = this.audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(520, this.audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(780, this.audioCtx.currentTime + 0.4);
+      gain.gain.setValueAtTime(0.3, this.audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, this.audioCtx.currentTime + 0.5);
+      osc.connect(gain);
+      gain.connect(this.audioCtx.destination);
+      osc.start();
+      osc.stop(this.audioCtx.currentTime + 0.5);
+    } catch (e) {}
+  }
+
+  _playOutSound() {
+    if (!this.audioCtx) return;
+    try {
+      const osc = this.audioCtx.createOscillator();
+      const gain = this.audioCtx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(150, this.audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(60, this.audioCtx.currentTime + 0.3);
+      gain.gain.setValueAtTime(0.6, this.audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, this.audioCtx.currentTime + 0.35);
+      osc.connect(gain);
+      gain.connect(this.audioCtx.destination);
+      osc.start();
+      osc.stop(this.audioCtx.currentTime + 0.35);
+    } catch (e) {}
+  }
+
+  _bindEvents() {
+    this.domBtnRandRoom.addEventListener('click', () => {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let code = 'CRIC-';
+      for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
+      this.domInputRoomCode.value = code;
     });
 
-    // Copy Room Code / Invite Link Button
-    this.domBtnCopyRoom?.addEventListener('click', () => {
-      const code = this.network.roomCode || this.domInputRoomCode?.value || 'LOBBY-1';
-      const inviteUrl = `${window.location.origin}${window.location.pathname}?room=${encodeURIComponent(code)}`;
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(inviteUrl).then(() => {
-          this.showHitFeedNotice(`📋 Room invite link copied! Send to friends: ${code}`);
-        }).catch(() => {
-          prompt('Copy room code to share:', code);
-        });
+    this.domBtnConnect.addEventListener('click', () => {
+      const name = this.domInputNickname.value.trim() || 'Player';
+      const roomCode = (this.domInputRoomCode.value.trim() || 'CRIC-1').toUpperCase();
+      const mode = this.domSelectGameMode.value;
+      const overs = parseInt(this.domSelectOvers.value, 10) || 5;
+
+      this.network.connect();
+      this.network.joinRoom(roomCode, name, '#5c2d0a', mode, overs);
+
+      this.domBtnConnect.classList.add('hidden');
+      this.domBtnStartMatch.classList.remove('hidden');
+      document.getElementById('lobby-hint').textContent = '✅ Connected! Choose your team below:';
+    });
+
+    this.domBtnJoinTeamA.addEventListener('click', () => {
+      this.myTeam = 'a';
+      this.network.selectTeam('a');
+    });
+
+    this.domBtnJoinTeamB.addEventListener('click', () => {
+      this.myTeam = 'b';
+      this.network.selectTeam('b');
+    });
+
+    this.domBtnStartMatch.addEventListener('click', () => {
+      const mode = this.domSelectGameMode.value;
+      if (mode === 'single_batting') {
+        const overs = parseInt(this.domSelectOvers.value, 10) || 5;
+        this.network.startSingleBatting(overs);
       } else {
-        prompt('Copy room code to share:', code);
+        this.network.startToss();
       }
     });
 
-    // Host Hunter Count Selector inside Match
-    this.domSelectHostHunterCount?.addEventListener('change', (e) => {
-      const count = parseInt(e.target.value, 10) || 1;
-      this.network.setHunterCount(count);
-      this.showHitFeedNotice(`🪓 Host set Hunter count to ${count} (Max 3)`);
+    document.getElementById('btn-call-heads')?.addEventListener('click', () => {
+      this.network.tossCAll('heads');
+      this.domTossCallButtons.classList.add('hidden');
     });
 
-    // Lobby Join Button
-    document.getElementById('btn-join-room')?.addEventListener('click', () => {
-      const roomCode = (document.getElementById('input-room-code')?.value.trim() || 'LOBBY-1').toUpperCase();
-      const nickname = document.getElementById('input-nickname')?.value.trim() || 'Bob';
-      const color = document.getElementById('input-color')?.value || '#f0f0f0';
-      const botCount = parseInt(document.getElementById('input-bots')?.value, 10);
-      const preferredRole = document.getElementById('select-role')?.value || 'RANDOM';
-      const hunterCount = parseInt(this.domSelectLobbyHunterCount?.value, 10) || 1;
+    document.getElementById('btn-call-tails')?.addEventListener('click', () => {
+      this.network.tossCAll('tails');
+      this.domTossCallButtons.classList.add('hidden');
+    });
 
-      this.audio.ensureContext();
-      this.localPlayer.setColor(color);
-      this.network.joinRoom(roomCode, nickname, color, isNaN(botCount) ? 9 : botCount, preferredRole, false, hunterCount);
+    document.getElementById('btn-choose-bat')?.addEventListener('click', () => {
+      this.network.tossDecision('bat');
+      this.domTossModal.classList.add('hidden');
+    });
+
+    document.getElementById('btn-choose-bowl')?.addEventListener('click', () => {
+      this.network.tossDecision('bowl');
+      this.domTossModal.classList.add('hidden');
+    });
+
+    document.getElementById('btn-toggle-scorecard')?.addEventListener('click', () => {
+      this._renderFullScorecard();
+      this.domScorecardModal.classList.remove('hidden');
+    });
+
+    document.getElementById('btn-close-scorecard')?.addEventListener('click', () => {
+      this.domScorecardModal.classList.add('hidden');
+    });
+
+    document.getElementById('btn-copy-room')?.addEventListener('click', () => {
+      if (this.network.roomCode) {
+        navigator.clipboard.writeText(window.location.origin + '?room=' + this.network.roomCode);
+        this.showNotice('📋 Room link copied to clipboard!');
+      }
+    });
+
+    document.getElementById('btn-play-again')?.addEventListener('click', () => {
+      window.location.reload();
+    });
+  }
+
+  _bindNetwork() {
+    this.network.on('connected', (data) => {
+      this.myId = data.id;
+    });
+
+    this.network.on('room_joined', (info) => {
+      this.roomInfo = info;
+      this.isHost = (info.hostId === this.myId);
+      this.domRoomCode.textContent = info.code;
+      this._updateLobbyRoster(info);
+    });
+
+    this.network.on('team_updated', (info) => {
+      this.roomInfo = info;
+      this.isHost = (info.hostId === this.myId);
+      this._updateLobbyRoster(info);
+    });
+
+    this.network.on('toss_started', (data) => {
+      this.domLobby.classList.add('hidden');
+      this.domTossModal.classList.remove('hidden');
+      this.domTossStatus.textContent = 'Flipping coin between Captains...';
+
+      const isCaptainA = (data.captainA?.id === this.myId);
+      if (isCaptainA) {
+        this.domTossCallButtons.classList.remove('hidden');
+        this.domCaptainCallingName.textContent = 'You (Ants Captain)';
+      } else {
+        this.domTossCallButtons.classList.add('hidden');
+        this.domTossStatus.textContent = `Waiting for ${data.captainA?.name || 'Ants Captain'} to call...`;
+      }
+    });
+
+    this.network.on('toss_result', (data) => {
+      this.domTossCallButtons.classList.add('hidden');
+      const rotY = data.result === 'heads' ? 1800 : 1980;
+      this.domTossCoin.style.transform = `rotateY(${rotY}deg)`;
+      this.domTossStatus.textContent = `Coin landed on: ${data.result.toUpperCase()}! ${data.winner?.name} won the toss!`;
+    });
+
+    this.network.on('toss_decision_needed', () => {
+      this.domTossDecisionButtons.classList.remove('hidden');
+    });
+
+    this.network.on('toss_decision', (data) => {
+      this.domTossModal.classList.add('hidden');
+      const choice = data.choice === 'bat' ? 'BAT' : 'BOWL';
+      const teamName = data.battingTeam === 'a' ? 'Ants' : 'Grasshoppers';
+      this.showBigEvent('TOSS DECIDED!', `${data.winner?.name} elected to ${choice}! ${teamName} batting.`);
+    });
+
+    this.network.on('innings_setup', (data) => {
       this.domLobby.classList.add('hidden');
       this.domHud.classList.remove('hidden');
-      // Hide round-specific HUD elements until the match actually begins
-      if (this.domTimer) this.domTimer.closest('.timer-box')?.classList.add('hidden');
-      if (this.domRoleBadge) this.domRoleBadge.classList.add('hidden');
-      if (this.domRoleDesc) this.domRoleDesc.classList.add('hidden');
-      if (this.domHpBar) this.domHpBar.classList.add('hidden');
+      this._setupCharacters(data.battingTeam, data.bowlingTeam);
+      this._updateScorecardUI(data.scorecard);
     });
 
-    document.getElementById('btn-start-match')?.addEventListener('click', () => {
-      this.audio.ensureContext();
-      this.domHostControls?.classList.add('hidden');
-      this.network.startGame(false);
+    this.network.on('bowling_order_needed', (data) => {
+      this._showCaptainPickBowler(data.bowlers, data.over);
     });
 
-    document.getElementById('btn-start-as-hunter')?.addEventListener('click', () => {
-      this.audio.ensureContext();
-      this.domHostControls?.classList.add('hidden');
-      this.network.startGame(true);
+    this.network.on('over_started', (data) => {
+      this.domCaptainModal.classList.add('hidden');
+      this.showNotice(`⚡ Over ${data.over} begins! ${data.bowler?.name} bowling to ${data.batsman?.name}.`);
+      this._updateScorecardUI(data.scorecard);
+      if (this.bowlerAvatar) {
+        this.bowlerAvatar.moveTo(0, 0, -10.5);
+      }
     });
 
-    // Leaderboard Modal
-    document.getElementById('btn-show-leaderboard')?.addEventListener('click', async () => {
-      this.domLeaderboardModal?.classList.remove('hidden');
-      this.loadLeaderboardData();
+    this.network.on('bowl_now', (data) => {
+      this.showNotice(`⚾ Your turn to bowl ball ${data.ball} of over ${data.over}!`);
+      this.bowlingUI.show({ timeout: 6000 });
     });
 
-    document.getElementById('btn-close-leaderboard')?.addEventListener('click', () => {
-      this.domLeaderboardModal?.classList.add('hidden');
+    this.network.on('delivery', (data) => {
+      this.domActionBanner.textContent = `⚾ ${data.bowler?.name} delivers a ${data.deliveryType.toUpperCase()}!`;
+      if (this.bowlerAvatar) {
+        this.bowlerAvatar.triggerBowlAction();
+      }
+
+      // Launch ball delivery in 3D scene
+      const startPos = new THREE.Vector3(0, 1.4, -9.5);
+      const lzX = data.landingZone?.x || 0;
+      const lzZ = 8.2 - (data.landingZone?.z || 0.4) * 8.0;
+      const endPos = new THREE.Vector3(lzX * 0.8, 0.4, 8.5);
+
+      this.ball.launch(startPos, endPos, {
+        peakHeight: data.deliveryType === 'bouncer' ? 3.8 : data.deliveryType === 'yorker' ? 1.4 : 2.5,
+        duration: data.deliveryType === 'spin' ? 1.4 : 0.9,
+        trajectory: data.deliveryType,
+        lateral: data.deliveryType === 'spin' ? (Math.random() - 0.5) * 0.8 : 0
+      });
+
+      // If local player is the current striker, show batting timing UI!
+      const isStriker = (data.batsman?.id === this.myId);
+      if (isStriker) {
+        this.battingUI.show({ timeout: 2500 });
+      }
+    });
+
+    this.network.on('ball_result', (data) => {
+      this.battingUI.hide();
+      this.bowlingUI.hide();
+      this._updateScorecardUI(data.scorecard);
+
+      // Visual / Audio feedback
+      if (data.wicket) {
+        this._playOutSound();
+        this.showBigEvent('WICKET! OUT!', `${data.dismissal} - clean dismissal!`);
+        if (this.strikerAvatar) {
+          this.strikerAvatar.setPosition(1.5, 0, 8.5);
+        }
+      } else if (data.runs === 6) {
+        this._playCheerSound();
+        this.showBigEvent('SIXER! 🚀', 'Magnificent maximum into the stands!');
+        this._launchHitBall(data.direction, 35, 8.0);
+      } else if (data.runs === 4) {
+        this._playCheerSound();
+        this.showBigEvent('FOUR! 🏏', 'Crisp stroke racing across the turf!');
+        this._launchHitBall(data.direction, 26, 3.5);
+      } else if (data.runs > 0) {
+        this.showNotice(`🏃 ${data.runs} Run${data.runs > 1 ? 's' : ''} taken! Good running between wickets.`);
+        this._launchHitBall(data.direction, 12, 1.5);
+      } else if (data.wide) {
+        this.showNotice(`⚠️ WIDE BALL! 1 Extra run + ball to be re-bowled.`);
+      } else if (data.noBall) {
+        this.showNotice(`🚨 NO BALL! Extra run awarded.`);
+      } else {
+        this.showNotice(`• Dot ball! Excellent fielding.`);
+      }
+    });
+
+    this.network.on('next_batsman_needed', (data) => {
+      this._showCaptainPickBatsman(data.availableBatsmen);
+    });
+
+    this.network.on('new_batsman', (data) => {
+      this.showNotice(`🏏 New Batsman on pitch: ${data.batsman?.name}!`);
+      if (this.strikerAvatar) {
+        this.strikerAvatar.setPosition(0, 0, 8.5);
+      }
+    });
+
+    this.network.on('over_complete', (data) => {
+      this.showNotice(`🔔 Over ${data.over} complete! Total: ${data.scorecard?.runs}/${data.scorecard?.wickets}`);
+    });
+
+    this.network.on('innings_end', (data) => {
+      const inn = data.innings;
+      const card = data.scorecard;
+      this.showBigEvent(`INNINGS ${inn} OVER!`, `${card.runs} Runs / ${card.wickets} Wickets. Target: ${card.runs + 1}`);
+    });
+
+    this.network.on('game_over', (data) => {
+      this.domHud.classList.add('hidden');
+      this.domGameOver.classList.remove('hidden');
+      document.getElementById('winner-title').textContent = (data.winner === 'a' ? '🐜 ANTS WIN!' : data.winner === 'b' ? '🦗 GRASSHOPPERS WIN!' : '🤝 MATCH DRAWN!');
+      document.getElementById('winner-reason').textContent = data.reason || 'What an incredible cricket clash!';
+      this._renderFinalSummary(data.scorecard);
+    });
+
+    // Single Batting turn start
+    this.network.on('sb_turn_started', (data) => {
+      this.domLobby.classList.add('hidden');
+      this.domHud.classList.remove('hidden');
+      this._setupCharacters('a', 'b');
+      this.showNotice(`⚡ Single Batting Turn: ${data.batsman?.name} batting, ${data.bowler?.name} bowling!`);
+      this._updateScorecardUI(data.scorecard);
+    });
+
+    this.network.on('error_msg', (data) => {
+      this.showNotice(`❌ ${data.msg}`);
     });
   }
 
-  setRole(role, hunterCount = 1) {
-    this.localPlayer.setRole(role);
-    this.cameraManager.setRole(role);
-    this.updateRoleUi(role, hunterCount);
-
-    if (this.ambientLight) this.ambientLight.intensity = 0.75;
-    if (this.dirLight) this.dirLight.intensity = 1.35;
-    if (this.scene.fog) this.scene.fog.density = 0.025;
-  }
-
-  async loadLeaderboardData() {
-    if (!this.domLeaderboardList) return;
-    this.domLeaderboardList.innerHTML = '<div style="color:#aaa; padding:20px;">Loading Supabase leaderboard...</div>';
-
-    const scores = await this.supabase.getLeaderboard(10);
-    if (!scores || scores.length === 0) {
-      this.domLeaderboardList.innerHTML = `
-        <div style="color:#888; padding:20px;">
-          No match records yet. Play a match to climb the Supabase Leaderboard!
-        </div>`;
-      return;
-    }
-
-    this.domLeaderboardList.innerHTML = scores.map((s, idx) => `
-      <div class="leaderboard-item">
-        <span class="lb-rank">#${idx + 1}</span>
-        <span class="lb-name" style="color: ${s.avatar_color || '#fff'}">${s.username || 'Bob'}</span>
-        <span class="lb-stat">🏃 Escapes: ${s.runner_escapes || 0}</span>
-        <span class="lb-stat">🔨 Sweeps: ${s.hitter_clean_sweeps || 0}</span>
-      </div>
-    `).join('');
-  }
-
-  triggerLocalBatSwing() {
-    const now = Date.now();
-    if (now - this.lastSwingTime < 700) return;
-    this.lastSwingTime = now;
-
-    this.localPlayer.triggerBatSwing();
-    this.audio.playBatWhoosh();
-    this.network.swingBat();
-
-    const forward = new THREE.Vector3(
-      -Math.sin(this.cameraManager.yaw),
-      0,
-      -Math.cos(this.cameraManager.yaw)
+  _launchHitBall(direction = 0, distance = 20, height = 3) {
+    const startPos = new THREE.Vector3(0, 0.4, 8.5);
+    const angle = direction * (Math.PI / 3); // -60 to +60 deg
+    const endPos = new THREE.Vector3(
+      Math.sin(angle) * distance,
+      0.1,
+      8.5 - Math.cos(angle) * distance
     );
-
-    let objectHitFound = false;
-    for (let dist = 0.8; dist <= 2.2; dist += 0.4) {
-      const hitCheckPos = this.localPlayer.root.position.clone().add(forward.clone().multiplyScalar(dist));
-      for (const collider of this.apartment.colliders) {
-        if (collider.box.containsPoint(hitCheckPos)) {
-          this.apartment.triggerThermalEcho(collider.mesh);
-          this.network.triggerThermalEcho(collider.mesh.userData.thermalId, collider.mesh.position);
-          this.audio.playObjectHit();
-          objectHitFound = true;
-          break;
-        }
-      }
-      if (objectHitFound) break;
-    }
-
-    if (!objectHitFound) {
-      for (const prop of this.apartment.interactiveProps) {
-        if (prop.isYogaBall) {
-          const dx = prop.pos.x - this.localPlayer.root.position.x;
-          const dz = prop.pos.z - this.localPlayer.root.position.z;
-          const dist = Math.hypot(dx, dz);
-          if (dist < 2.2) {
-            prop.vel.x += forward.x * 12.0;
-            prop.vel.z += forward.z * 12.0;
-            this.apartment.triggerThermalEcho(prop.mesh);
-            this.audio.playObjectHit();
-            break;
-          }
-        }
-      }
-    }
-
-    // Hint when swinging while standing upright near the table
-    if (this.localPlayer.role === 'HITTER') {
-      const isStandingNearTable = (
-        Math.abs(this.localPlayer.root.position.x) < 2.2 &&
-        Math.abs(this.localPlayer.root.position.z) < 2.8 &&
-        !this.localPlayer.isCrawling &&
-        !this.localPlayer.isFlatFlop &&
-        this.localPlayer.spinePitch > -0.25
-      );
-      if (isStandingNearTable && now - (this.lastTableHintTime || 0) > 3500) {
-        this.lastTableHintTime = now;
-        this.showHitFeedNotice('🛡️ Tabletop blocks high swings! Bend down (Ctrl/Shift/Z) to hit underneath!');
-      }
-    }
-  }
-
-  handleRoomJoined(data) {
-    console.log('Joined room:', data);
-    if (this.domHudRoomCode) {
-      this.domHudRoomCode.textContent = data.roomCode;
-    }
-    if (this.domSelectHostHunterCount && data.hunterCount) {
-      this.domSelectHostHunterCount.value = data.hunterCount;
-    }
-    if (data.isHost) {
-      this.showHitFeedNotice(`👑 You are the HOST of ${data.roomCode}! Choose number of hunters and start match.`);
-    } else {
-      this.showHitFeedNotice(`Joined ${data.roomCode}! Waiting for Host to start match.`);
-    }
-  }
-
-  handleCountdownStarted(data) {
-    this.audio.playBuzzer();
-    this.domEndOverlay.classList.add('hidden');
-    this.domHostControls?.classList.add('hidden');
-    this.domWaitingForHost?.classList.add('hidden');
-    const hCount = data.hunterCount || (data.hitterIds ? data.hitterIds.length : 1);
-    this.showHitFeedNotice(`🚨 Selection: ${data.hitterName || 'The Hunters'} are HUNTING (${hCount} Hunter${hCount > 1 ? 's' : ''})! Round starting in 3s!`);
-  }
-
-  handleRoundStarted(data) {
-    this.roundActive = true;
-    this.domHostControls?.classList.add('hidden');
-    this.domWaitingForHost?.classList.add('hidden');
-    this.domLobbyWaitingBanner?.classList.add('hidden');
-    // Reveal round-specific HUD elements now that the match is live
-    this.domTimer?.closest('.timer-box')?.classList.remove('hidden');
-    this.domRoleBadge?.classList.remove('hidden');
-    this.domRoleDesc?.classList.remove('hidden');
-    // Show HP bar for runners
-    if (this.localPlayer.role === 'RUNNER') {
-      this.domHpBar?.classList.remove('hidden');
-      this.updateHpUi();
-    }
-    const hCount = data.hunterCount || (data.hitterIds ? data.hitterIds.length : 1);
-    this.showHitFeedNotice(`⚡ ROUND STARTED! SURVIVE 120 SECONDS (${hCount} Hunter${hCount > 1 ? 's' : ''})!`);
-  }
-
-  handleRoundEnded(data) {
-    this.roundActive = false;
-    this.domEndOverlay.classList.remove('hidden');
-    // Re-hide round-specific HUD during round-end/lobby transition
-    this.domTimer?.closest('.timer-box')?.classList.add('hidden');
-    this.domRoleBadge?.classList.add('hidden');
-    this.domRoleDesc?.classList.add('hidden');
-    this.domHpBar?.classList.add('hidden');
-    this.domLobbyWaitingBanner?.classList.remove('hidden');
-
-    if (data.winner === 'RUNNERS') {
-      this.domEndTitle.textContent = '🎉 RUNNERS SURVIVED!';
-      this.domEndTitle.style.color = '#2ed573';
-      this.domEndSubtitle.textContent = data.reason || 'The 120s clock expired! Runners victory dance!';
-      this.audio.playVictoryFanfare();
-
-      if (this.localPlayer.role === 'RUNNER' && this.localPlayer.isAlive) {
-        this.localPlayer.isDancing = true;
-      }
-    } else {
-      this.domEndTitle.textContent = '🔨 HUNTERS CLEAN SWEEP!';
-      this.domEndTitle.style.color = '#ff4757';
-      this.domEndSubtitle.textContent = data.reason || 'All runners were knocked flat out!';
-      this.audio.playVictoryFanfare();
-    }
-
-    this.supabase.recordMatch({
-      roomCode: this.network.roomCode,
-      hitterName: data.hitterName,
-      winner: data.winner,
-      duration: 120,
-      totalRunners: this.remotePlayers.size + 1
+    this.ball.launch(startPos, endPos, {
+      peakHeight: height,
+      duration: 1.2
     });
   }
 
-  handleRemoteBatSwing(data) {
-    const avatar = this.remotePlayers.get(data.hitterId);
-    if (avatar) {
-      avatar.triggerBatSwing();
-      this.audio.playBatWhoosh();
-    }
+  _setupCharacters(battingTeam, bowlingTeam) {
+    // Clean old avatars
+    if (this.strikerAvatar) this.strikerAvatar.destroy();
+    if (this.nonStrikerAvatar) this.nonStrikerAvatar.destroy();
+    if (this.bowlerAvatar) this.bowlerAvatar.destroy();
+    if (this.keeperAvatar) this.keeperAvatar.destroy();
+    this.fielders.forEach(f => f.destroy());
+    this.fielders = [];
+
+    // Batsman (Striker at crease)
+    this.strikerAvatar = new CricketCharacter(this.scene, battingTeam, 'batsman');
+    this.strikerAvatar.setPosition(0, 0, 8.5);
+    this.strikerAvatar.setRotation(Math.PI);
+
+    // Non-striker (at bowler end)
+    this.nonStrikerAvatar = new CricketCharacter(this.scene, battingTeam, 'batsman');
+    this.nonStrikerAvatar.setPosition(-1.3, 0, -8.5);
+
+    // Bowler
+    this.bowlerAvatar = new CricketCharacter(this.scene, bowlingTeam, 'bowler');
+    this.bowlerAvatar.setPosition(0, 0, -10.5);
+
+    // Wicketkeeper (behind stumps)
+    this.keeperAvatar = new CricketCharacter(this.scene, bowlingTeam, 'wicketkeeper');
+    this.keeperAvatar.setPosition(0, 0, 10.2);
+    this.keeperAvatar.setRotation(Math.PI);
+
+    // 7 Standard Fielders placed around the oval
+    const fielderPositions = [
+      { x: 5, z: 8, r: 'Point' },
+      { x: 8, z: 3, r: 'Cover' },
+      { x: 4, z: -5, r: 'Mid-off' },
+      { x: -4, z: -5, r: 'Mid-on' },
+      { x: -7, z: 3, r: 'Mid-wicket' },
+      { x: -5, z: 9, r: 'Square Leg' },
+      { x: 14, z: 12, r: 'Deep Extra Cover' }
+    ];
+
+    fielderPositions.forEach(fp => {
+      const fielder = new CricketCharacter(this.scene, bowlingTeam, 'fielder');
+      fielder.setPosition(fp.x, 0, fp.z);
+      fielder.setRotation(Math.atan2(-fp.x, 8.5 - fp.z));
+      this.fielders.push(fielder);
+    });
   }
 
-  handlePlayerHit(data) {
-    this.audio.playBatThwack();
-    this.audio.playScream(Math.floor(Math.random() * 4));
+  _updateLobbyRoster(info) {
+    if (!info) return;
 
-    this.showHitFeedNotice(`💥 ${data.victimName} got WHACKED! (-${data.damage} HP)`);
-
-    if (data.victimId === this.network.myId) {
-      this.localPlayer.hp = data.remainingHp;
-      this.localPlayer.isFlailing = true;
-      this.localPlayer.flailTimer = 3.0;
-      this.updateHpUi();
-
-      this.domFlailAlert.classList.remove('hidden');
-      setTimeout(() => this.domFlailAlert.classList.add('hidden'), 3000);
-
-      if (data.isKnockedOut) {
-        this.localPlayer.isAlive = false;
-        this.showHitFeedNotice(`💀 YOU WERE KNOCKED FLAT OUT!`);
-      }
+    // Ants (Team A)
+    this.domTeamAMembers.innerHTML = '';
+    const teamA = info.players?.teamA || [];
+    if (teamA.length === 0) {
+      this.domTeamAMembers.innerHTML = '<span class="empty-hint">Waiting for players...</span>';
     } else {
-      const remote = this.remotePlayers.get(data.victimId);
-      if (remote) {
-        remote.hp = data.remainingHp;
-        remote.isFlailing = true;
-        remote.flailTimer = 3.0;
-        if (data.isKnockedOut) {
-          remote.isAlive = false;
-        }
-      }
-    }
-  }
-
-  handleThermalEchoPulsed(data) {
-    if (data.objectId) {
-      this.apartment.triggerThermalEcho(data.objectId);
-    }
-  }
-
-  handlePlayerCampRevealed(data) {
-    if (data.playerId === this.network.myId) {
-      this.localPlayer.triggerThermalReveal(data.duration || 1.0);
-      this.showHitFeedNotice('⚠️ You stayed still for 5s! Thermal ping revealed to Hunter!');
-    } else {
-      const remote = this.remotePlayers.get(data.playerId);
-      if (remote) remote.triggerThermalReveal(data.duration || 1.0);
-    }
-
-    if (this.localPlayer.role === 'HITTER') {
-      this.showHitFeedNotice(`👁️ Thermal Ping: ${data.playerName || 'Runner'} detected camping!`);
-      this.audio.playThermalEcho();
-    }
-  }
-
-  handleGameTick(data) {
-    this.domTimer.textContent = `${data.timer}s`;
-
-    if (this.domHudRoomCode && this.network.roomCode) {
-      this.domHudRoomCode.textContent = this.network.roomCode;
-    }
-
-    // Host UI Controls Synchronization (All start options disappear once game starts)
-    const isHost = (data.hostId === this.network.myId);
-    const isLobbyState = (data.state === 'LOBBY' || data.state === 'ROUND_END');
-
-    if (this.domHostControls) {
-      if (isHost && isLobbyState) {
-        this.domHostControls.classList.remove('hidden');
-      } else {
-        this.domHostControls.classList.add('hidden');
-      }
-    }
-
-    if (this.domWaitingForHost) {
-      if (!isHost && isLobbyState) {
-        this.domWaitingForHost.classList.remove('hidden');
-      } else {
-        this.domWaitingForHost.classList.add('hidden');
-      }
-    }
-
-    if (this.domSelectHostHunterCount && document.activeElement !== this.domSelectHostHunterCount && data.hunterCount) {
-      this.domSelectHostHunterCount.value = data.hunterCount;
-    }
-
-    const activeIds = new Set();
-    const hunterCount = data.hunterCount || (data.hitterIds ? data.hitterIds.length : 1);
-
-    for (const p of data.players) {
-      activeIds.add(p.id);
-
-      if (p.id === this.network.myId) {
-        if (this.localPlayer.role !== p.role) {
-          this.setRole(p.role, hunterCount);
-        }
-        if (!p.isAlive) {
-          this.localPlayer.isAlive = false;
-        }
-      } else {
-        let remote = this.remotePlayers.get(p.id);
-        if (!remote) {
-          remote = new RagdollAvatar(this.scene, p.color || '#f5f5f5', false);
-          this.remotePlayers.set(p.id, remote);
-        }
-
-        remote.setRole(p.role);
-        remote.hp = p.hp;
-        remote.isAlive = p.isAlive;
-        remote.isFlailing = p.isFlailing;
-        remote.isFlatFlop = p.isFlatFlop;
-        remote.isCrawling = p.isCrawling;
-        remote.isSitting = p.isSitting;
-        remote.isGrabbing = p.isGrabbing;
-        remote.spinePitch = p.spinePitch;
-
-        this.remoteData.set(p.id, p);
-      }
-    }
-
-    for (const [id, avatar] of this.remotePlayers.entries()) {
-      if (!activeIds.has(id)) {
-        avatar.destroy();
-        this.remotePlayers.delete(id);
-        this.remoteData.delete(id);
-      }
-    }
-  }
-
-  updateRoleUi(role, hunterCount = 1) {
-    if (role === 'HITTER') {
-      this.domRoleBadge.textContent = (hunterCount > 1) ? `🔨 THE HUNTER (1 of ${hunterCount})` : '🔨 THE HUNTER';
-      this.domRoleBadge.className = 'role-badge hitter';
-      this.domRoleDesc.textContent = (hunterCount > 1)
-        ? `You are 1 of ${hunterCount} Hunters! Hunt down all runners and hit them with your bat!`
-        : 'You are the HUNTER! Hunt down all runners and hit them with your bat!';
-      this.domPeepDarkness.classList.add('hidden');
-      this.domHpBar.classList.add('hidden');
-    } else {
-      this.domRoleBadge.textContent = '🏃 RUNNER';
-      this.domRoleBadge.className = 'role-badge runner';
-      this.domRoleDesc.textContent = (hunterCount > 1)
-        ? `Survive 120s against ${hunterCount} Hunters! Crawl under tables, jump on beds, toggle view with V!`
-        : 'Survive 120s! Crawl under tables, jump on beds, toggle 1st/3rd view with V!';
-      this.domPeepDarkness.classList.add('hidden');
-      // Only show HP bar if the round is actually active (not in lobby waiting)
-      if (this.roundActive) {
-        this.domHpBar.classList.remove('hidden');
-        this.updateHpUi();
-      }
-    }
-  }
-
-  updateHpUi() {
-    const hp = Math.max(0, this.localPlayer.hp);
-    this.domHpFill.style.width = `${hp}%`;
-    this.domHpText.textContent = `${hp} / 100 HP`;
-    if (hp <= 25) {
-      this.domHpFill.style.background = '#ff4757';
-    } else if (hp <= 50) {
-      this.domHpFill.style.background = '#ffa502';
-    } else {
-      this.domHpFill.style.background = '#2ed573';
-    }
-  }
-
-  showHitFeedNotice(msg) {
-    const item = document.createElement('div');
-    item.className = 'hit-feed-item';
-    item.textContent = msg;
-    this.domHitFeed.appendChild(item);
-    setTimeout(() => {
-      item.remove();
-    }, 4000);
-  }
-
-  animate() {
-    requestAnimationFrame(() => this.animate());
-
-    const now = performance.now();
-    const delta = Math.min((now - this.lastTime) / 1000, 0.1);
-    this.lastTime = now;
-
-    // 1. Locomotion Input (WASD, Arrow Keys, Touch Joystick)
-    let moveX = 0;
-    let moveZ = 0;
-
-    if (this.keys['KeyW'] || this.keys['ArrowUp']) moveZ -= 1;
-    if (this.keys['KeyS'] || this.keys['ArrowDown']) moveZ += 1;
-    if (this.keys['KeyA'] || this.keys['ArrowLeft']) moveX -= 1;
-    if (this.keys['KeyD'] || this.keys['ArrowRight']) moveX += 1;
-
-    if (this.touchMove.x !== 0 || this.touchMove.y !== 0) {
-      moveX = this.touchMove.x;
-      moveZ = this.touchMove.y;
-    }
-
-    const isMoving = (Math.abs(moveX) > 0.05 || Math.abs(moveZ) > 0.05);
-
-    // Spine Pitch Controls (Q/Z / Mouse Pitch / Touch Duck)
-    if (this.keys['KeyQ']) {
-      this.localPlayer.spinePitch = Math.min(1.0, this.localPlayer.spinePitch + delta * 3.0);
-    } else if (this.keys['KeyZ'] || this.touchDuck) {
-      this.localPlayer.spinePitch = Math.max(-1.0, this.localPlayer.spinePitch - delta * 3.0);
-    } else {
-      this.localPlayer.spinePitch *= 0.9;
-    }
-
-    // Crouch / Crawl (Keyboard hold or touch toggle)
-    const keyCrawling = !!(this.keys['ControlLeft'] || this.keys['ShiftLeft']);
-    this.localPlayer.isCrawling = keyCrawling || this.touchCrawl;
-
-    // Jump (Space key when Runner)
-    const isJumping = (this.keys['Space'] && this.localPlayer.role === 'RUNNER');
-
-    const yaw = this.cameraManager.yaw;
-    const moveDir = new THREE.Vector3(
-      moveX * Math.cos(yaw) + moveZ * Math.sin(yaw),
-      0,
-      -moveX * Math.sin(yaw) + moveZ * Math.cos(yaw)
-    );
-    if (moveDir.length() > 1.0) moveDir.normalize();
-
-    if (isMoving) {
-      const targetAngle = Math.atan2(-moveDir.x, -moveDir.z);
-      this.localPlayer.root.rotation.y = targetAngle;
-    }
-
-    // 2. Physics & Collisions (Uniform 4.5 m/s)
-    const newPos = this.physics.resolvePlayerMovement(this.localPlayer, moveDir, delta, 4.5);
-    const newY = this.physics.resolveVerticalPhysics(this.localPlayer, delta, isJumping);
-
-    this.localPlayer.root.position.set(newPos.x, newY, newPos.z);
-
-    // Resolve Player-to-Player Pushing (Single-Occupant Push Physics under tables/beds)
-    this.physics.resolvePlayerPushing(this.localPlayer, this.remotePlayers, moveDir, isMoving, delta);
-
-    this.localPlayer.updateAnimation(delta, isMoving);
-
-    // 3. Sync Network Input
-    if (this.network.connected) {
-      this.network.sendInput({
-        position: { x: this.localPlayer.root.position.x, y: newY, z: this.localPlayer.root.position.z },
-        rotation: { y: this.localPlayer.root.rotation.y },
-        spinePitch: this.localPlayer.spinePitch,
-        isFlatFlop: this.localPlayer.isFlatFlop,
-        isCrawling: this.localPlayer.isCrawling,
-        isSitting: this.localPlayer.isSitting,
-        isGrabbing: this.localPlayer.isGrabbing
+      teamA.forEach(p => {
+        const isCap = (p.id === info.captainA);
+        const item = document.createElement('div');
+        item.className = 'team-member-tag';
+        item.innerHTML = `<span>🐜 ${p.name} ${p.isBot ? '(Bot)' : ''}</span>${isCap ? '<span class="captain-badge">👑 C</span>' : ''}`;
+        this.domTeamAMembers.appendChild(item);
       });
     }
 
-    // 4. Update Remote Players & AI Bots
-    for (const [id, remote] of this.remotePlayers.entries()) {
-      const data = this.remoteData.get(id);
-      if (data) {
-        const targetPos = new THREE.Vector3(data.position.x, data.position.y || 0, data.position.z);
-        const distToTarget = Math.hypot(targetPos.x - remote.root.position.x, targetPos.z - remote.root.position.z);
-        const isRemoteMoving = (distToTarget > 0.005);
+    // Grasshoppers (Team B)
+    this.domTeamBMembers.innerHTML = '';
+    const teamB = info.players?.teamB || [];
+    if (teamB.length === 0) {
+      this.domTeamBMembers.innerHTML = '<span class="empty-hint">Waiting for players...</span>';
+    } else {
+      teamB.forEach(p => {
+        const isCap = (p.id === info.captainB);
+        const item = document.createElement('div');
+        item.className = 'team-member-tag';
+        item.innerHTML = `<span>🦗 ${p.name} ${p.isBot ? '(Bot)' : ''}</span>${isCap ? '<span class="captain-badge">👑 C</span>' : ''}`;
+        this.domTeamBMembers.appendChild(item);
+      });
+    }
+  }
 
-        remote.root.position.lerp(targetPos, 0.35);
-        remote.root.rotation.y = data.rotation.y;
-        remote.spinePitch = (typeof data.spinePitch === 'number') ? data.spinePitch : 0;
-        remote.isCrawling = !!data.isCrawling;
-        remote.isFlatFlop = !!data.isFlatFlop;
-        remote.isSitting = !!data.isSitting;
-        remote.isFlailing = !!data.isFlailing;
-        remote.isAlive = (data.isAlive !== false);
+  _updateScorecardUI(card) {
+    if (!card) return;
+    this.currentScorecard = card;
 
-        remote.updateAnimation(delta, isRemoteMoving);
-      }
+    const teamAIsBatting = (card.battingTeam === 'a');
+    this.domTeamName.textContent = teamAIsBatting ? 'ANTS' : 'GRASSHOPPERS';
+    this.domTeamIcon.textContent = teamAIsBatting ? '🐜' : '🦗';
+
+    this.domRunsWickets.textContent = `${card.runs} / ${card.wickets}`;
+    this.domOvers.textContent = `(${card.overs}.${card.balls} / ${this.roomInfo?.overs || 5} ov)`;
+
+    if (card.target) {
+      const needed = Math.max(0, card.target - card.runs);
+      this.domTargetInfo.textContent = `Target: ${card.target} (Need ${needed} runs)`;
+    } else {
+      this.domTargetInfo.textContent = '1st Innings';
     }
 
-    // 5. Update Apartment Thermal Echoes
-    this.apartment.update(delta);
+    const totalBalls = card.overs * 6 + card.balls;
+    const crr = totalBalls > 0 ? ((card.runs / totalBalls) * 6).toFixed(2) : '0.00';
+    this.domCrrInfo.textContent = `CRR: ${crr}`;
 
-    // 6. Camera Update
-    this.cameraManager.update(this.localPlayer, delta);
+    // Striker
+    if (card.currentBatsman) {
+      const bStats = card.batsmen?.[card.currentBatsman.id];
+      this.domStrikerName.textContent = `${card.currentBatsman.name}*`;
+      this.domStrikerFigures.textContent = `${bStats?.runs || 0} (${bStats?.balls || 0}) [${bStats?.fours || 0}x4, ${bStats?.sixes || 0}x6]`;
+    }
 
-    // 7. Render Frame (Full 100% Screen View for Both Hunter and Runners)
-    this.renderer.autoClear = true;
-    this.renderer.setScissorTest(false);
-    this.renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+    // Non-striker
+    if (card.nonStriker) {
+      const nsStats = card.batsmen?.[card.nonStriker.id];
+      this.domNonStrikerName.textContent = card.nonStriker.name;
+      this.domNonStrikerFigures.textContent = `${nsStats?.runs || 0} (${nsStats?.balls || 0})`;
+    }
+
+    // Bowler
+    if (card.currentBowler) {
+      const bwlStats = card.bowlers?.[card.currentBowler.id];
+      this.domBowlerName.textContent = card.currentBowler.name;
+      this.domBowlerFigures.textContent = `${bwlStats?.wickets || 0}-${bwlStats?.runs || 0} (${bwlStats?.overs || 0}.${bwlStats?.balls || 0} ov)`;
+    }
+
+    // This Over Balls History
+    this.domThisOverBalls.innerHTML = '';
+    const balls = card.currentOverBalls || [];
+    if (balls.length === 0) {
+      this.domThisOverBalls.innerHTML = '<span class="ball-badge empty">-</span>';
+    } else {
+      balls.forEach(b => {
+        const span = document.createElement('span');
+        span.className = 'ball-badge';
+        if (b === '4') span.classList.add('four');
+        else if (b === '6') span.classList.add('six');
+        else if (b === 'W') span.classList.add('wicket');
+        else if (b.includes('Wd') || b.includes('Nb')) span.classList.add('extra');
+        span.textContent = b;
+        this.domThisOverBalls.appendChild(span);
+      });
+    }
+  }
+
+  _showCaptainPickBowler(bowlers, over) {
+    this.domCaptainModal.classList.remove('hidden');
+    document.getElementById('captain-modal-title').textContent = '👑 CAPTAIN: SELECT BOWLER';
+    document.getElementById('captain-modal-desc').textContent = `Choose who will bowl Over ${over}:`;
+
+    const list = document.getElementById('captain-roster-list');
+    list.innerHTML = '';
+    bowlers.forEach(b => {
+      const btn = document.createElement('button');
+      btn.className = 'roster-btn';
+      btn.innerHTML = `<span>⚾ ${b.name}</span><span>${b.isBot ? '(Bot)' : 'Human'}</span>`;
+      btn.addEventListener('click', () => {
+        this.domCaptainModal.classList.add('hidden');
+        this.network.setBowler(b.id);
+      });
+      list.appendChild(btn);
+    });
+  }
+
+  _showCaptainPickBatsman(batsmen) {
+    this.domCaptainModal.classList.remove('hidden');
+    document.getElementById('captain-modal-title').textContent = '👑 CAPTAIN: NEXT BATSMAN';
+    document.getElementById('captain-modal-desc').textContent = 'Wicket fallen! Select who bats next:';
+
+    const list = document.getElementById('captain-roster-list');
+    list.innerHTML = '';
+    batsmen.forEach(b => {
+      const btn = document.createElement('button');
+      btn.className = 'roster-btn';
+      btn.innerHTML = `<span>🏏 ${b.name}</span><span>Ready</span>`;
+      btn.addEventListener('click', () => {
+        this.domCaptainModal.classList.add('hidden');
+        this.network.setNextBatsman(b.id);
+      });
+      list.appendChild(btn);
+    });
+  }
+
+  _renderFullScorecard() {
+    const sc = this.currentScorecard;
+    const container = document.getElementById('scorecard-content');
+    if (!sc || !container) return;
+
+    let html = '';
+    const renderInnings = (card, label) => {
+      if (!card || !card.team) return '';
+      const tName = card.team === 'a' ? 'Ants' : 'Grasshoppers';
+      let out = `<h3>${label}: ${tName} (${card.runs}/${card.wickets} in ${card.overs}.${card.balls} ov)</h3>`;
+      out += `<table class="score-table">
+        <thead><tr><th>Batter</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th>Dismissal</th></tr></thead><tbody>`;
+      for (const b of Object.values(card.batsmen || {})) {
+        out += `<tr><td><strong>${b.name}</strong></td><td>${b.runs}</td><td>${b.balls}</td><td>${b.fours}</td><td>${b.sixes}</td><td>${b.dismissal || (b.isOnPitch ? 'Not Out' : 'Did Not Bat')}</td></tr>`;
+      }
+      out += `</tbody></table>`;
+      out += `<h4 style="margin-top:10px; color:#7bed9f;">Bowling</h4><table class="score-table">
+        <thead><tr><th>Bowler</th><th>O</th><th>R</th><th>W</th></tr></thead><tbody>`;
+      for (const bw of Object.values(card.bowlers || {})) {
+        if (bw.overs > 0 || bw.balls > 0 || bw.runs > 0) {
+          out += `<tr><td>${bw.name}</td><td>${bw.overs}.${bw.balls}</td><td>${bw.runs}</td><td>${bw.wickets}</td></tr>`;
+        }
+      }
+      out += `</tbody></table>`;
+      return out;
+    };
+
+    html += renderInnings(sc.inn1, 'Innings 1');
+    html += '<hr style="border-color:rgba(255,255,255,0.1); margin:14px 0;">';
+    html += renderInnings(sc.inn2, 'Innings 2');
+    container.innerHTML = html;
+  }
+
+  _renderFinalSummary(card) {
+    const summary = document.getElementById('final-summary');
+    if (!summary || !card) return;
+    const inn1 = card.inn1;
+    const inn2 = card.inn2;
+    summary.innerHTML = `
+      <div style="display:flex; justify-content:space-around; margin:16px 0; font-size:1.1rem; font-weight:bold;">
+        <div>🐜 Ants: ${inn1?.runs || 0}/${inn1?.wickets || 0}</div>
+        <div>🦗 Grasshoppers: ${inn2?.runs || 0}/${inn2?.wickets || 0}</div>
+      </div>
+    `;
+  }
+
+  showBigEvent(title, subtitle) {
+    document.getElementById('big-event-title').textContent = title;
+    document.getElementById('big-event-subtitle').textContent = subtitle;
+    this.domBigEvent.classList.remove('hidden');
+    clearTimeout(this._eventBannerTimer);
+    this._eventBannerTimer = setTimeout(() => {
+      this.domBigEvent.classList.add('hidden');
+    }, 2200);
+  }
+
+  showNotice(msg) {
+    this.domActionBanner.textContent = msg;
+  }
+
+  animate(now) {
+    requestAnimationFrame((t) => this.animate(t));
+    const delta = Math.min((now - this.lastTime) / 1000, 0.1);
+    this.lastTime = now;
+
+    // Update characters
+    if (this.strikerAvatar) this.strikerAvatar.update(delta);
+    if (this.nonStrikerAvatar) this.nonStrikerAvatar.update(delta);
+    if (this.bowlerAvatar) this.bowlerAvatar.update(delta);
+    if (this.keeperAvatar) this.keeperAvatar.update(delta);
+    this.fielders.forEach(f => f.update(delta));
+
+    // Update ball physics
+    this.ball.update(delta);
+
     this.renderer.render(this.scene, this.camera);
   }
 }
 
-// Start game when page loads
 window.addEventListener('DOMContentLoaded', () => {
-  window.game = new HittlersGame();
+  new CricketGame();
 });

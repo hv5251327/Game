@@ -1,7 +1,7 @@
 {
-  "name": "hittlers-ragdoll-game",
+  "name": "cricket-doodle-3d",
   "version": "1.0.0",
-  "description": "HITTLERS - Slapstick Ragdoll Party Horror 3D Browser Game",
+  "description": "CRICKET DOODLE 3D - Ants vs Grasshoppers Multiplayer Browser Game",
   "main": "server/index.js",
   "type": "module",
   "scripts": {
@@ -10,8 +10,8 @@
   },
   "keywords": [
     "threejs",
-    "ragdoll",
-    "slapstick",
+    "cricket",
+    "doodle",
     "multiplayer",
     "socketio",
     "webgl",

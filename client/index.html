@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>HITTLERS - Slapstick Ragdoll Party Horror 3D</title>
+  <title>CRICKET DOODLE 3D - Ants vs Grasshoppers Multiplayer</title>
   <link rel="stylesheet" href="src/styles.css">
 
-  <!-- Local and CDN Import Map for Three.js -->
+  <!-- Three.js module mapping -->
   <script type="importmap">
     {
       "imports": {
@@ -15,7 +15,7 @@
     }
   </script>
 
-  <!-- Socket.io Client with CDN fallback -->
+  <!-- Socket.io client with CDN fallback -->
   <script src="/socket.io/socket.io.js"></script>
   <script>
     if (typeof io === 'undefined') {
@@ -28,157 +28,214 @@
   <!-- WebGL 3D Canvas -->
   <div id="canvas-container"></div>
 
-  <!-- 1. Lobby Options Screen -->
-  <div id="lobby-screen">
+  <!-- 1. LOBBY SCREEN -->
+  <div id="lobby-screen" class="screen-overlay">
     <div class="lobby-card">
-      <h1 class="game-title">HITTLERS</h1>
-      <p class="game-subtitle">Slapstick Ragdoll Party Horror (Max 10 Players)</p>
-
-      <div class="form-group">
-        <label>Your Nickname</label>
-        <input type="text" id="input-nickname" class="form-input" placeholder="e.g. Bob" value="Bob">
+      <div class="doodle-header">
+        <h1 class="game-title">🏏 CRICKET DOODLE</h1>
+        <p class="game-subtitle">🐜 Ants vs 🦗 Grasshoppers 3D Multiplayer</p>
       </div>
 
-      <div class="form-group">
-        <label>Room Code (Share with Friends to Play Together)</label>
-        <div style="display: flex; gap: 8px;">
-          <input type="text" id="input-room-code" class="form-input" placeholder="e.g. ROOM-101" value="LOBBY-1" style="text-transform: uppercase;">
-          <button type="button" id="btn-rand-room" class="btn-copy-code" style="padding: 0 14px; font-size: 0.85rem; height: auto;" title="Generate Random Code">🎲 New</button>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Your Nickname</label>
+          <input type="text" id="input-nickname" class="form-input" placeholder="e.g. MasterBlaster" value="Player">
         </div>
-      </div>
 
-      <div class="form-group">
-        <label>Avatar Color</label>
-        <div class="color-picker-row">
-          <input type="color" id="input-color" class="color-input" value="#f4f2ee">
-          <span style="font-size: 0.85rem; color: #a4b0be;">Pick your plasticine skin</span>
+        <div class="form-group">
+          <label>Room Code (Share to Play Together)</label>
+          <div class="input-action-row">
+            <input type="text" id="input-room-code" class="form-input uppercase" placeholder="e.g. CRIC101" value="CRIC-1">
+            <button type="button" id="btn-rand-room" class="btn-secondary-action">🎲 New</button>
+          </div>
         </div>
-      </div>
 
-      <div class="form-group">
-        <label>Number of Hunters (Max 3)</label>
-        <select id="select-lobby-hunter-count" class="form-input">
-          <option value="1">1 Hunter</option>
-          <option value="2">2 Hunters</option>
-          <option value="3">3 Hunters (Party Horror!)</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label>Your Role Preference</label>
-        <select id="select-role" class="form-input">
-          <option value="RANDOM">🎲 Fair Random / Round Robin</option>
-          <option value="HITTER">🪓 Play as Hunter / Hitter (Testing)</option>
-          <option value="RUNNER">🏃 Play as Runner</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label>Fill With AI Bots (0 - 9)</label>
-        <input type="number" id="input-bots" class="form-input" min="0" max="9" value="9">
-      </div>
-
-      <button id="btn-join-room" class="btn-primary">🎮 JOIN / HOST ROOM</button>
-      <button id="btn-show-leaderboard" class="btn-primary btn-secondary">🏆 GLOBAL LEADERBOARD</button>
-    </div>
-  </div>
-
-  <!-- Leaderboard Modal -->
-  <div id="leaderboard-modal" class="modal-overlay hidden">
-    <div class="modal-card">
-      <h2 class="modal-title">🏆 GLOBAL LEADERBOARD</h2>
-      <p style="color:#a4b0be; font-size:0.85rem; margin-bottom:16px;">Live Match Rankings</p>
-      <div id="leaderboard-list" class="leaderboard-list">
-        <div style="color:#aaa; padding:20px;">Loading scores...</div>
-      </div>
-      <button id="btn-close-leaderboard" class="btn-primary" style="margin-top:16px;">Close</button>
-    </div>
-  </div>
-
-  <!-- 2. In-Game HUD -->
-  <div id="hud" class="hidden">
-    <div class="hud-top-bar">
-      <div class="room-code-badge" id="hud-room-badge">
-        <span>🏠 Room: <strong id="hud-room-code" style="color:#2ed573;">LOBBY-1</strong></span>
-        <button id="btn-copy-room" class="btn-copy-code" title="Copy Room Code / Invite Link">📋 Copy Link</button>
-      </div>
-      <div class="timer-box">
-        <span id="match-timer" class="timer-text">120s</span>
-      </div>
-      <div id="role-badge" class="role-badge runner">🏃 RUNNER</div>
-      <div id="role-desc" class="role-desc">Survive 120s! Crawl under tables, jump on beds, toggle 1st/3rd view with V!</div>
-      <div id="host-controls" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center;">
-        <div class="host-hunter-wrapper">
-          <label for="select-host-hunter-count" style="font-size: 0.78rem; color: #ffa502; font-weight: bold; margin-right: 6px;">🪓 Hunters (Max 3):</label>
-          <select id="select-host-hunter-count" class="host-select">
-            <option value="1">1 Hunter</option>
-            <option value="2">2 Hunters</option>
-            <option value="3">3 Hunters</option>
+        <div class="form-group">
+          <label>Match Mode</label>
+          <select id="select-game-mode" class="form-input">
+            <option value="team_match">🏆 Team Match (Ants vs Grasshoppers)</option>
+            <option value="single_batting">⚡ Single Batting (Rotate Bat & Bowl)</option>
           </select>
         </div>
-        <button id="btn-start-match" class="btn-primary" style="padding: 6px 16px; font-size: 0.85rem; margin-top: 0; pointer-events: auto; width: auto;">⚡ [HOST] Start Match</button>
-        <button id="btn-start-as-hunter" class="btn-primary btn-hitter" style="padding: 6px 14px; font-size: 0.85rem; margin-top: 0; pointer-events: auto; width: auto;">🪓 Test as Hunter</button>
+
+        <div class="form-group">
+          <label>Overs Per Innings</label>
+          <select id="select-overs" class="form-input">
+            <option value="2">2 Overs (Quick Blitz)</option>
+            <option value="5" selected>5 Overs (Standard T5)</option>
+            <option value="10">10 Overs (Super Clash)</option>
+          </select>
+        </div>
       </div>
-      <div id="waiting-for-host" class="waiting-host-notice hidden">⏳ Waiting for Host to start match...</div>
-      <div id="lobby-waiting-banner" class="lobby-waiting-banner">🎮 IN LOBBY — Waiting for host to start the round...</div>
-    </div>
 
-    <div id="hp-bar" class="hp-container">
-      <div class="hp-label">
-        <span>RUNNER HEALTH</span>
-        <span id="hp-text">100 / 100 HP</span>
+      <!-- Team Select Section (For Team Match) -->
+      <div id="team-select-section" class="team-select-container">
+        <div class="team-box team-a" id="team-a-box">
+          <div class="team-header">
+            <span class="team-icon">🐜</span>
+            <span class="team-name">ANTS (Team A)</span>
+          </div>
+          <p class="team-desc">Quick, resilient, masterful strikers</p>
+          <button id="btn-join-team-a" class="btn-team btn-team-a">Join Ants</button>
+          <div id="team-a-members" class="team-member-list">
+            <span class="empty-hint">Waiting for players...</span>
+          </div>
+        </div>
+
+        <div class="team-box team-b" id="team-b-box">
+          <div class="team-header">
+            <span class="team-icon">🦗</span>
+            <span class="team-name">GRASSHOPPERS (Team B)</span>
+          </div>
+          <p class="team-desc">High jumpers, fiery pacers, acrobatic fielders</p>
+          <button id="btn-join-team-b" class="btn-team btn-team-b">Join Grasshoppers</button>
+          <div id="team-b-members" class="team-member-list">
+            <span class="empty-hint">Waiting for players...</span>
+          </div>
+        </div>
       </div>
-      <div class="hp-bar-outer">
-        <div id="hp-fill" class="hp-bar-inner"></div>
+
+      <div class="lobby-action-row">
+        <button id="btn-connect" class="btn-primary">🎮 ENTER LOBBY</button>
+        <button id="btn-start-match" class="btn-primary btn-gold hidden">🪙 START TOSS / MATCH</button>
       </div>
-    </div>
-
-    <div class="controls-legend">
-      <div><kbd>W A S D</kbd> Move (4.5 m/s)</div>
-      <div><kbd>X</kbd> or <kbd>Space</kbd> / <kbd>Click</kbd> <strong>Swing Bat</strong></div>
-      <div><kbd>F</kbd> Sleep / Flat Flop</div>
-      <div><kbd>Ctrl / Shift</kbd> Crawl / Crouch</div>
-      <div><kbd>C</kbd> Sit  |  <kbd>E</kbd> Grab</div>
-      <div><kbd>Q / Z</kbd> Spine Pitch / Duck</div>
-      <div><kbd>V</kbd> Toggle 1st / 3rd Person View</div>
-      <div><kbd>Click</kbd> Mouse Look</div>
-    </div>
-
-    <div id="hit-feed"></div>
-    <div id="flail-alert" class="hidden">😱 PANIC SPRINT! FLAPPING ARMS!</div>
-  </div>
-
-  <!-- 3. Peep Darkness Viewport Filter -->
-  <div id="peep-darkness-mask" class="hidden">
-    <div class="peep-blackout">
-      <div class="peep-title">👁️ PEEP DARKNESS (85% BLACKOUT)</div>
-      <div class="peep-hint">Top 85% is pitch black! Bump obstacles or swing bat (<kbd style="background:rgba(255,255,255,0.2); padding:2px 8px; border-radius:4px; color:#ffa502;">X</kbd>) to trigger Thermal Echoes!</div>
-    </div>
-    <div class="peep-strip-boundary"></div>
-    <div class="peep-visible-strip"></div>
-  </div>
-
-  <!-- 4. Round End Overlay -->
-  <div id="end-overlay" class="hidden">
-    <div class="end-card">
-      <h2 id="end-title" class="end-title">🎉 RUNNERS SURVIVED!</h2>
-      <p id="end-subtitle" class="end-subtitle">The 120s timer expired! Next round starting soon...</p>
+      <p id="lobby-hint" class="lobby-hint">Connect to room to choose team and invite friends!</p>
     </div>
   </div>
 
-  <!-- 5. Mobile Virtual Touch Controls -->
-  <div id="touch-controls">
-    <div id="touch-joystick">
-      <div id="touch-knob"></div>
+  <!-- 2. TOSS MODAL -->
+  <div id="toss-modal" class="modal-overlay hidden">
+    <div class="modal-card toss-card">
+      <h2 class="modal-title">🪙 THE TOSS</h2>
+      <p id="toss-status" class="toss-status">Flipping the coin...</p>
+      
+      <div class="coin-wrapper">
+        <div id="toss-coin" class="toss-coin">
+          <div class="coin-face front">HEADS</div>
+          <div class="coin-face back">TAILS</div>
+        </div>
+      </div>
+
+      <div id="toss-call-buttons" class="toss-action-row hidden">
+        <p class="toss-instruction">Captain <span id="captain-calling-name">...</span>, call the toss:</p>
+        <div style="display: flex; gap: 12px; justify-content: center;">
+          <button id="btn-call-heads" class="btn-primary btn-toss">🪙 HEADS</button>
+          <button id="btn-call-tails" class="btn-primary btn-toss">🪙 TAILS</button>
+        </div>
+      </div>
+
+      <div id="toss-decision-buttons" class="toss-action-row hidden">
+        <p class="toss-instruction">🎉 You won the toss! Choose your decision:</p>
+        <div style="display: flex; gap: 12px; justify-content: center;">
+          <button id="btn-choose-bat" class="btn-primary btn-gold">🏏 BAT FIRST</button>
+          <button id="btn-choose-bowl" class="btn-primary btn-secondary">⚾ BOWL FIRST</button>
+        </div>
+      </div>
     </div>
-    <div class="touch-buttons-group">
-      <button id="btn-jump" class="touch-btn">JUMP</button>
-      <button id="btn-crawl" class="touch-btn">CRAWL</button>
-      <button id="btn-flop" class="touch-btn">FLOP</button>
-      <button id="btn-sit" class="touch-btn">SIT</button>
-      <button id="btn-duck" class="touch-btn">DUCK</button>
-      <button id="btn-view" class="touch-btn">1P/3P</button>
-      <button id="btn-swing" class="touch-btn btn-action">🔨 SWING BAT</button>
+  </div>
+
+  <!-- 3. CAPTAIN DECISION MODAL (Bowler Selection / Next Batsman) -->
+  <div id="captain-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h2 id="captain-modal-title" class="modal-title">👑 CAPTAIN'S CALL</h2>
+      <p id="captain-modal-desc" class="captain-desc">Pick bowler for the next over:</p>
+      <div id="captain-roster-list" class="roster-grid"></div>
+    </div>
+  </div>
+
+  <!-- 4. IN-GAME HUD -->
+  <div id="hud" class="hidden">
+    <!-- Top Cricket Scoreboard Bar -->
+    <div class="hud-top-bar">
+      <div class="scoreboard-main">
+        <div class="score-team-badge" id="hud-batting-team">
+          <span id="hud-team-icon">🐜</span>
+          <span id="hud-team-name">ANTS</span>
+        </div>
+
+        <div class="score-figures">
+          <span id="hud-runs-wickets" class="runs-wickets">0 / 0</span>
+          <span id="hud-overs" class="overs-text">(0.0 / 5 ov)</span>
+        </div>
+
+        <div class="match-info-pill">
+          <div id="hud-target-info" class="target-info">1st Innings</div>
+          <div id="hud-crr-info" class="crr-info">CRR: 0.00</div>
+        </div>
+
+        <div class="room-pill">
+          <span id="hud-room-code">CRIC-1</span>
+          <button id="btn-copy-room" class="btn-copy" title="Copy Invite Link">📋</button>
+        </div>
+      </div>
+
+      <!-- Current Players on Pitch -->
+      <div class="pitch-stats-bar">
+        <div class="batter-stat-box" id="striker-box">
+          <span class="role-marker">🏏 STRIKER:</span>
+          <strong id="striker-name">Antony*</strong>
+          <span id="striker-figures" class="stat-figures">0 (0)</span>
+        </div>
+
+        <div class="batter-stat-box" id="non-striker-box">
+          <span class="role-marker">🏃 NON-STRIKER:</span>
+          <strong id="non-striker-name">Thorax</strong>
+          <span id="non-striker-figures" class="stat-figures">0 (0)</span>
+        </div>
+
+        <div class="bowler-stat-box" id="bowler-box">
+          <span class="role-marker">⚾ BOWLER:</span>
+          <strong id="bowler-name">Hoppy</strong>
+          <span id="bowler-figures" class="stat-figures">0-0 (0.0)</span>
+        </div>
+      </div>
+
+      <!-- This Over History Ball Badges -->
+      <div class="this-over-row">
+        <span class="this-over-label">THIS OVER:</span>
+        <div id="this-over-balls" class="over-balls-container">
+          <span class="ball-badge empty">-</span>
+        </div>
+      </div>
+
+      <!-- Event Notification Banner -->
+      <div id="action-banner" class="action-banner">⚡ Welcome to Cricket Doodle! Match starting...</div>
+    </div>
+
+    <!-- Quick Scorecard Button -->
+    <button id="btn-toggle-scorecard" class="btn-hud-scorecard">📊 SCORECARD</button>
+
+    <!-- UI Mounts for Batting & Bowling Controls -->
+    <div id="game-controls-container"></div>
+  </div>
+
+  <!-- 5. FULL SCORECARD MODAL -->
+  <div id="scorecard-modal" class="modal-overlay hidden">
+    <div class="modal-card scorecard-card">
+      <div class="scorecard-header">
+        <h2>📊 MATCH SCORECARD</h2>
+        <button id="btn-close-scorecard" class="btn-close">✖</button>
+      </div>
+      <div id="scorecard-content" class="scorecard-scroll">
+        <!-- Rendered dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. CELEBRATION / WICKET POPUP -->
+  <div id="big-event-banner" class="big-event-banner hidden">
+    <div id="big-event-title" class="big-event-title">FOUR!</div>
+    <div id="big-event-subtitle" class="big-event-subtitle">Cracking shot through the covers!</div>
+  </div>
+
+  <!-- 7. GAME OVER OVERLAY -->
+  <div id="game-over-overlay" class="screen-overlay hidden">
+    <div class="game-over-card">
+      <div class="trophy-icon">🏆</div>
+      <h1 id="winner-title" class="winner-title">ANTS WIN!</h1>
+      <p id="winner-reason" class="winner-reason">Ants won by 24 runs!</p>
+      <div id="final-summary" class="final-summary"></div>
+      <button id="btn-play-again" class="btn-primary" style="margin-top:20px;">🔄 PLAY AGAIN</button>
     </div>
   </div>
 

@@ -1,119 +1,61 @@
+// NetworkClient: Socket.IO wrapper for Cricket Game
 export class NetworkClient {
-  constructor(callbacks = {}) {
+  constructor() {
     this.socket = null;
     this.myId = null;
     this.roomCode = null;
-    this.callbacks = callbacks;
-    this.connected = false;
+    this.handlers = {};
   }
 
   connect() {
-    // Socket.io is loaded via script tag / import
-    if (typeof io === 'undefined') {
-      console.warn('Socket.io library not loaded');
-      return;
-    }
-
-    this.socket = io({
-      transports: ['websocket', 'polling']
-    });
-
+    this.socket = io();
     this.socket.on('connect', () => {
-      this.connected = true;
       this.myId = this.socket.id;
-      console.log('Connected to Wobble House server. ID:', this.myId);
+      console.log('[Net] Connected:', this.myId);
+      this._emit('connected', { id: this.myId });
     });
-
-    this.socket.on('room_joined', (data) => {
-      this.myId = data.playerId;
-      this.roomCode = data.roomCode;
-      this.callbacks.onRoomJoined?.(data);
-    });
-
-    this.socket.on('room_updated', (data) => {
-      this.callbacks.onRoomUpdated?.(data);
-    });
-
-    this.socket.on('room_error', (data) => {
-      this.callbacks.onRoomError?.(data);
-    });
-
-    this.socket.on('round_countdown_started', (data) => {
-      this.callbacks.onCountdownStarted?.(data);
-    });
-
-    this.socket.on('round_started', (data) => {
-      this.callbacks.onRoundStarted?.(data);
-    });
-
-    this.socket.on('round_ended', (data) => {
-      this.callbacks.onRoundEnded?.(data);
-    });
-
-    this.socket.on('player_swung_bat', (data) => {
-      this.callbacks.onPlayerSwungBat?.(data);
-    });
-
-    this.socket.on('player_hit', (data) => {
-      this.callbacks.onPlayerHit?.(data);
-    });
-
-    this.socket.on('thermal_echo_pulsed', (data) => {
-      this.callbacks.onThermalEchoPulsed?.(data);
-    });
-
-    this.socket.on('player_camp_revealed', (data) => {
-      this.callbacks.onPlayerCampRevealed?.(data);
-    });
-
-    this.socket.on('game_tick', (data) => {
-      this.callbacks.onGameTick?.(data);
-    });
-
     this.socket.on('disconnect', () => {
-      this.connected = false;
-      console.log('Disconnected from server');
+      console.log('[Net] Disconnected');
+      this._emit('disconnected', {});
+    });
+    // Forward all server events
+    const events = [
+      'room_joined','player_joined','player_left','team_updated',
+      'toss_started','toss_result','toss_decision_needed','toss_decision',
+      'innings_setup','batting_order_set','bowling_order_needed','over_started',
+      'delivery','ball_result','wicket','over_complete','innings_end',
+      'game_over','sb_turn_started','new_batsman','next_batsman_needed',
+      'bowler_needed','bowl_now','error_msg'
+    ];
+    events.forEach(ev => {
+      this.socket.on(ev, (data) => this._emit(ev, data));
     });
   }
 
-  joinRoom(roomCode, nickname, color, botCount = 0, preferredRole = 'RANDOM', autoStart = false, hunterCount = 1) {
-    if (!this.socket) this.connect();
-    this.socket.emit('join_room', {
-      roomCode,
-      nickname,
-      color,
-      botCount,
-      preferredRole,
-      forceHitter: (preferredRole === 'HITTER'),
-      autoStart,
-      hunterCount
-    });
+  on(event, handler) {
+    if (!this.handlers[event]) this.handlers[event] = [];
+    this.handlers[event].push(handler);
   }
 
-  startGame(forceHitter = false) {
-    this.socket?.emit('start_game', {
-      forceHitter,
-      preferredRole: forceHitter ? 'HITTER' : 'RANDOM'
-    });
+  _emit(event, data) {
+    if (this.handlers[event]) {
+      this.handlers[event].forEach(h => h(data));
+    }
   }
 
-  setHunterCount(count) {
-    this.socket?.emit('set_hunter_count', { count });
+  joinRoom(roomCode, name, color, mode, overs) {
+    this.roomCode = roomCode;
+    this.socket.emit('join_room', { roomCode, name, color, mode, overs });
   }
 
-  setBots(count) {
-    this.socket?.emit('set_bots', { count });
-  }
-
-  sendInput(inputData) {
-    this.socket?.emit('player_input', inputData);
-  }
-
-  swingBat() {
-    this.socket?.emit('bat_swing');
-  }
-
-  triggerThermalEcho(objectId, hitPos) {
-    this.socket?.emit('thermal_echo_trigger', { objectId, hitPos });
-  }
+  selectTeam(team) { this.socket.emit('select_team', { team }); }
+  startToss() { this.socket.emit('start_toss'); }
+  startSingleBatting(overs) { this.socket.emit('start_single_batting', { overs }); }
+  tossCAll(call) { this.socket.emit('toss_call', { call }); }
+  tossDecision(choice) { this.socket.emit('toss_decision', { choice }); }
+  setBowler(bowlerId) { this.socket.emit('set_bowler', { bowlerId }); }
+  setBattingOrder(order) { this.socket.emit('set_batting_order', { order }); }
+  bowl(data) { this.socket.emit('bowl', data); }
+  bat(data) { this.socket.emit('bat', data); }
+  setNextBatsman(batsmanId) { this.socket.emit('set_next_batsman', { batsmanId }); }
 }

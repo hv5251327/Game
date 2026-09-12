@@ -10,708 +10,1158 @@ const ROOT_DIR = path.resolve(__dirname, '..');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: '*', methods: ['GET', 'POST'] }
-});
-
+const io = new Server(server, { cors: { origin: '*', methods: ['GET', 'POST'] } });
 const PORT = process.env.PORT || 3000;
 
 app.use(express.static(path.join(ROOT_DIR, 'client')));
 app.use('/node_modules', express.static(path.join(ROOT_DIR, 'node_modules')));
 
-// Game Balance Constants
-const MAX_PLAYERS = 10;
-const ROUND_DURATION = 120;
-const COUNTDOWN_DURATION = 3;
-const ROUND_END_DURATION = 6;
-const BAT_DAMAGE = 25;
-const BAT_RANGE = 2.6;
-const BASE_SPEED = 4.5;
-const FLAIL_DURATION = 3.0;
+// --- Constants ---
+const DEFAULT_OVERS = 5;
+const TEAM_SIZE = 11;
+const BOT_NAMES_A = ['Antony', 'Pipsqueak', 'Thorax', 'Mandible', 'Bullet', 'Firebug', 'Carpenter', 'Stinger', 'Weaver', 'Sugar', 'Army'];
+const BOT_NAMES_B = ['Hoppy', 'Locust', 'Leaper', 'Cricket', 'Chirpy', 'Springy', 'Meadow', 'Katydid', 'Greenie', 'Jumper', 'Glider'];
+const BOT_COLORS_A = ['#3d1a00', '#5c2d0a', '#7a3d12', '#4a2000', '#6b2f0d', '#2b1202', '#482006'];
+const BOT_COLORS_B = ['#1a4a1a', '#2d6b2d', '#1f5c1f', '#2a7a2a', '#155a15', '#338033', '#1e661e'];
 
 const rooms = new Map();
 
-class GameRoom {
-  constructor(roomCode) {
-    this.code = roomCode;
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+class CricketRoom {
+  constructor(code, mode = 'team_match', overs = DEFAULT_OVERS) {
+    this.code = code;
+    this.mode = mode; // 'team_match' | 'single_batting'
+    this.overs = parseInt(overs, 10) || DEFAULT_OVERS;
+    this.state = 'LOBBY'; // 'LOBBY' | 'TOSS' | 'CAPTAIN_SETUP' | 'PLAYING' | 'INNINGS_BREAK' | 'GAME_OVER'
+
     this.players = new Map();
-    this.hitterHistory = new Set();
-    this.currentHitterId = null;
-    this.currentHitterIds = new Set();
-    this.hunterCount = 1; // Host selectable 1 - 3 hunters (max 3)
-    this.hostId = null; // First player who creates/joins becomes Host
-    this.state = 'LOBBY';
-    this.timer = 0;
-    this.roundWinner = null;
-    this.tickInterval = null;
-    this.lastTick = Date.now();
-    this.bots = new Map();
-    this.botNames = ['Fluffy', 'Wobbles', 'Noodle', 'Jelly', 'Butter', 'Dizzy', 'Bonkers', 'Pancake', 'Spud'];
-    this.botColors = ['#f4f2ee', '#ff4757', '#2ed573', '#ffa502', '#1e90ff', '#9b59b6', '#00d2d3', '#ff6b81', '#70a1ff'];
+    this.teamA = []; // Ants
+    this.teamB = []; // Grasshoppers
+    this.captainA = null;
+    this.captainB = null;
+    this.hostId = null;
 
-    this.lastSoundLocation = null;
-    this.soundInvestigateTimer = 0;
+    // Current innings
+    this.currentInnings = 1;
+    this.battingTeam = null; // 'a' | 'b'
+    this.bowlingTeam = null; // 'a' | 'b'
+    this.battingOrder = [];
+    this.currentBatsmanIdx = 0;
+    this.currentNonStrikerIdx = 1;
+    this.currentBowler = null;
+    this.currentOver = 0;
+    this.currentBall = 0;
+    this.ballInFlight = false;
+    this.pendingBall = null;
+    this.target = null;
+    this.pendingBowlerRequest = false;
+    this.pendingNextBatsman = false;
 
-    this.startTickLoop();
+    // Single batting mode
+    this.sbQueue = [];
+    this.sbCurrentBatsmanIdx = 0;
+    this.sbCurrentBowlerIdx = 1;
+
+    // Scorecard
+    this.scorecard = {
+      innings1: this._newInningsCard(),
+      innings2: this._newInningsCard(),
+      singleBatting: {}
+    };
+
+    // Toss
+    this.tossWinner = null;
+    this.tossCoinResult = null;
+
+    this.tickInterval = setInterval(() => this._tick(), 200);
   }
 
-  addPlayer(socketId, name, color, isBot = false, preferredRole = 'RANDOM') {
-    if (this.players.size >= MAX_PLAYERS) return null;
+  _newInningsCard() {
+    return {
+      team: null, runs: 0, wickets: 0, overs: 0, balls: 0, extras: 0,
+      batsmen: {}, bowlers: {}, fallOfWickets: [], currentOverBalls: []
+    };
+  }
 
-    if (!isBot && !this.hostId) {
-      this.hostId = socketId;
+  _currentCard() {
+    return this.currentInnings === 1 ? this.scorecard.innings1 : this.scorecard.innings2;
+  }
+
+  stop() {
+    clearInterval(this.tickInterval);
+    rooms.delete(this.code);
+  }
+
+  _tick() {
+    if (this.state !== 'PLAYING') return;
+
+    // If ball is not in flight and bowler is bot, auto-bowl
+    if (!this.ballInFlight && !this.pendingBowlerRequest && !this.pendingNextBatsman) {
+      const bowler = this.players.get(this.currentBowler);
+      if (bowler && bowler.isBot && !this._botBowlingTimer) {
+        this._botBowlingTimer = setTimeout(() => {
+          this._botBowlingTimer = null;
+          this._botBowl(this.currentBowler);
+        }, 1000 + Math.random() * 800);
+      }
     }
+  }
 
-    const spawnRadius = 2.4;
-    const angle = (this.players.size / MAX_PLAYERS) * Math.PI * 2;
-    const spawnX = Math.cos(angle) * spawnRadius;
-    const spawnZ = Math.sin(angle) * spawnRadius;
+  addPlayer(socketId, name, color, isBot = false, team = null) {
+    if (this.players.size >= TEAM_SIZE * 2) return null;
+    if (!isBot && !this.hostId) this.hostId = socketId;
 
     const player = {
       id: socketId,
-      name: name || (isBot ? `Bot-${Math.floor(Math.random() * 1000)}` : `Player ${this.players.size + 1}`),
-      color: color || '#f4f2ee',
-      role: 'RUNNER',
-      preferredRole: preferredRole || 'RANDOM',
-      hp: 100,
-      maxHp: 100,
-      isAlive: true,
-      isFlailing: false,
-      flailTimer: 0,
-      isFlatFlop: false,
-      isCrawling: false,
-      isSitting: false,
-      isGrabbing: false,
-      spinePitch: 0,
-      position: { x: spawnX, y: 0, z: spawnZ },
-      rotation: { y: Math.random() * Math.PI * 2 },
-      velocity: { x: 0, y: 0, z: 0 },
-      isBot: isBot,
-      lastSwingTime: 0,
-      score: 0,
-      botWanderAngle: Math.random() * Math.PI * 2,
-      botTurnTimer: Math.random() * 2.0,
-      botSwingCooldown: Math.random() * 2.0,
-      stationaryTimer: 0,
-      lastStationaryPos: { x: spawnX, y: 0, z: spawnZ }
+      name: name || `Player-${this.players.size + 1}`,
+      color: color || (team === 'a' ? '#5c2d0a' : '#2d6b2d'),
+      isBot,
+      team,
+      stats: {
+        runs: 0, balls: 0, fours: 0, sixes: 0, dismissed: false, dismissal: '',
+        wickets: 0, runsConceded: 0, overs: 0, ballsBowled: 0
+      }
     };
-
     this.players.set(socketId, player);
-    if (isBot) this.bots.set(socketId, player);
+
+    if (team === 'a') {
+      this.teamA.push(socketId);
+      if (!this.captainA) this.captainA = socketId;
+    } else if (team === 'b') {
+      this.teamB.push(socketId);
+      if (!this.captainB) this.captainB = socketId;
+    }
 
     return player;
   }
 
   removePlayer(socketId) {
+    const p = this.players.get(socketId);
+    if (!p) return;
     this.players.delete(socketId);
-    this.bots.delete(socketId);
-    this.hitterHistory.delete(socketId);
-    this.currentHitterIds.delete(socketId);
+    this.teamA = this.teamA.filter(id => id !== socketId);
+    this.teamB = this.teamB.filter(id => id !== socketId);
 
     if (this.hostId === socketId) {
-      const nextRealPlayer = Array.from(this.players.values()).find(p => !p.isBot && p.id !== socketId);
-      this.hostId = nextRealPlayer ? nextRealPlayer.id : null;
+      const next = Array.from(this.players.values()).find(x => !x.isBot);
+      this.hostId = next ? next.id : null;
+    }
+    if (this.captainA === socketId) {
+      const nextA = this.teamA.find(id => !this.players.get(id)?.isBot) || this.teamA[0] || null;
+      this.captainA = nextA;
+    }
+    if (this.captainB === socketId) {
+      const nextB = this.teamB.find(id => !this.players.get(id)?.isBot) || this.teamB[0] || null;
+      this.captainB = nextB;
     }
 
-    const remainingHunters = Array.from(this.currentHitterIds).filter(id => this.players.has(id));
-    if (remainingHunters.length === 0 && (this.state === 'HUNTING' || this.state === 'COUNTDOWN')) {
-      this.endRound('RUNNERS', 'All Hitters disconnected! Runners win!');
-    } else if (this.players.size === 0) {
+    if (Array.from(this.players.values()).filter(x => !x.isBot).length === 0) {
       this.stop();
-      rooms.delete(this.code);
     }
   }
 
-  setBotCount(targetCount) {
-    const realPlayers = Array.from(this.players.values()).filter(p => !p.isBot);
-    const maxAllowedBots = Math.max(0, MAX_PLAYERS - realPlayers.length);
-    const count = Math.min(Math.max(0, targetCount), maxAllowedBots);
+  assignTeam(socketId, team) {
+    const p = this.players.get(socketId);
+    if (!p || this.state !== 'LOBBY') return false;
 
-    const currentBots = Array.from(this.bots.keys());
-    while (currentBots.length > count) {
-      const botId = currentBots.pop();
-      this.removePlayer(botId);
+    this.teamA = this.teamA.filter(id => id !== socketId);
+    this.teamB = this.teamB.filter(id => id !== socketId);
+    p.team = team;
+
+    if (team === 'a') {
+      if (this.teamA.length >= TEAM_SIZE) return false;
+      this.teamA.push(socketId);
+      if (!this.captainA || this.players.get(this.captainA)?.isBot) this.captainA = socketId;
+    } else if (team === 'b') {
+      if (this.teamB.length >= TEAM_SIZE) return false;
+      this.teamB.push(socketId);
+      if (!this.captainB || this.players.get(this.captainB)?.isBot) this.captainB = socketId;
     }
-
-    let botIndex = currentBots.length;
-    while (this.bots.size < count && this.players.size < MAX_PLAYERS) {
-      const botId = `bot_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-      const name = this.botNames[botIndex % this.botNames.length];
-      const color = this.botColors[botIndex % this.botColors.length];
-      this.addPlayer(botId, name, color, true);
-      botIndex++;
-    }
-  }
-
-  selectNextHitter(forcedPlayerId = null) {
-    const playerList = Array.from(this.players.values());
-    if (playerList.length === 0) return null;
-
-    // Number of hunters: host selection (1..3), clamped by available players
-    const maxRequested = Math.min(3, Math.max(1, this.hunterCount || 1));
-    const targetCount = (playerList.length === 1) ? 1 : Math.min(maxRequested, Math.max(1, playerList.length - 1));
-
-    const chosen = [];
-
-    // 1. Force requested hitter first if specified (e.g. Test as Hunter button)
-    if (forcedPlayerId && this.players.has(forcedPlayerId)) {
-      chosen.push(forcedPlayerId);
-    }
-
-    // 2. Add players who preferred HITTER
-    const hunterRequesters = playerList.filter(p => !p.isBot && p.preferredRole === 'HITTER' && !chosen.includes(p.id));
-    for (const p of hunterRequesters) {
-      if (chosen.length >= targetCount) break;
-      chosen.push(p.id);
-    }
-
-    // 3. Fill remaining hunter slots using fair round-robin history
-    while (chosen.length < targetCount) {
-      let candidates = playerList.filter(p => !chosen.includes(p.id) && !this.hitterHistory.has(p.id));
-      if (candidates.length === 0) {
-        this.hitterHistory.clear();
-        candidates = playerList.filter(p => !chosen.includes(p.id));
-        if (candidates.length === 0) break;
-      }
-      const pick = candidates[Math.floor(Math.random() * candidates.length)];
-      chosen.push(pick.id);
-      this.hitterHistory.add(pick.id);
-    }
-
-    for (const id of chosen) {
-      this.hitterHistory.add(id);
-    }
-
-    this.currentHitterIds = new Set(chosen);
-    this.currentHitterId = chosen[0] || null;
-
-    for (const player of playerList) {
-      player.role = this.currentHitterIds.has(player.id) ? 'HITTER' : 'RUNNER';
-      player.hp = 100;
-      player.isAlive = true;
-      player.isFlailing = false;
-      player.flailTimer = 0;
-      player.isFlatFlop = false;
-      player.isCrawling = false;
-      player.isSitting = false;
-    }
-
-    return chosen;
-  }
-
-  startCountdown(forcedHitterId = null) {
-    if (this.players.size < 1) return false;
-
-    this.selectNextHitter(forcedHitterId);
-    this.state = 'COUNTDOWN';
-    this.timer = COUNTDOWN_DURATION;
-    this.roundWinner = null;
-    this.lastSoundLocation = null;
-    this.soundInvestigateTimer = 0;
-
-    const playerList = Array.from(this.players.values());
-    const count = playerList.length;
-    playerList.forEach((player, idx) => {
-      const angle = (idx / count) * Math.PI * 2;
-      const rad = 3.2;
-      player.position = { x: Math.cos(angle) * rad, y: 0, z: Math.sin(angle) * rad };
-      player.rotation.y = angle + Math.PI;
-    });
-
-    const hitterNames = Array.from(this.currentHitterIds).map(id => this.players.get(id)?.name || 'Hitter');
-
-    io.to(this.code).emit('round_countdown_started', {
-      hitterId: this.currentHitterId,
-      hitterIds: Array.from(this.currentHitterIds),
-      hitterNames: hitterNames,
-      hitterName: hitterNames.join(' & ') || 'The Hunter(s)',
-      hunterCount: this.currentHitterIds.size,
-      duration: COUNTDOWN_DURATION
-    });
-
     return true;
   }
 
-  startRound() {
-    this.state = 'HUNTING';
-    this.timer = ROUND_DURATION;
-    io.to(this.code).emit('round_started', {
-      hitterId: this.currentHitterId,
-      hitterIds: Array.from(this.currentHitterIds),
-      hunterCount: this.currentHitterIds.size,
-      duration: ROUND_DURATION
+  fillBotsForTeam(team) {
+    const arr = team === 'a' ? this.teamA : this.teamB;
+    const names = team === 'a' ? BOT_NAMES_A : BOT_NAMES_B;
+    const colors = team === 'a' ? BOT_COLORS_A : BOT_COLORS_B;
+    const needed = TEAM_SIZE - arr.length;
+
+    for (let i = 0; i < needed; i++) {
+      const botId = `bot_${team}_${Date.now()}_${i}`;
+      const botName = names[i % names.length] + ' (Bot)';
+      const bot = this.addPlayer(botId, botName, colors[i % colors.length], true, team);
+      if (bot) {
+        if (team === 'a' && !this.captainA) this.captainA = botId;
+        if (team === 'b' && !this.captainB) this.captainB = botId;
+      }
+    }
+  }
+
+  startToss() {
+    if (this.mode === 'single_batting') {
+      this.startSingleBatting();
+      return true;
+    }
+
+    // Fill bots so each team has full 11 players
+    this.fillBotsForTeam('a');
+    this.fillBotsForTeam('b');
+
+    this.state = 'TOSS';
+    this.tossCoinResult = Math.random() < 0.5 ? 'heads' : 'tails';
+
+    io.to(this.code).emit('toss_started', {
+      captainA: this._playerInfo(this.captainA),
+      captainB: this._playerInfo(this.captainB),
+      players: this._allPlayersInfo(),
+      roomInfo: this.getRoomInfo()
     });
+    return true;
   }
 
-  endRound(winnerRole, reason = '') {
-    this.state = 'ROUND_END';
-    this.timer = ROUND_END_DURATION;
-    this.roundWinner = winnerRole;
+  handleTossCall(socketId, call) {
+    if (this.state !== 'TOSS') return;
+    if (socketId !== this.captainA && socketId !== this.captainB) return;
 
-    const hitterNames = Array.from(this.currentHitterIds).map(id => this.players.get(id)?.name || 'Hitter');
+    const won = (call === this.tossCoinResult);
+    const winner = won ? socketId : (socketId === this.captainA ? this.captainB : this.captainA);
+    this.tossWinner = winner;
 
-    io.to(this.code).emit('round_ended', {
-      winner: winnerRole,
-      hitterId: this.currentHitterId,
-      hitterIds: Array.from(this.currentHitterIds),
-      hitterName: hitterNames.join(' & ') || 'The Hunters',
-      reason: reason
+    io.to(this.code).emit('toss_result', {
+      call,
+      result: this.tossCoinResult,
+      winner: this._playerInfo(winner),
+      coinResult: this.tossCoinResult
     });
-  }
 
-  handleBatSwing(hitterId) {
-    const hitter = this.players.get(hitterId);
-    if (!hitter || hitter.role !== 'HITTER' || !hitter.isAlive) return;
-
-    const now = Date.now();
-    if (now - hitter.lastSwingTime < 700) return;
-    hitter.lastSwingTime = now;
-
-    io.to(this.code).emit('player_swung_bat', { hitterId });
-
-    const swingDirX = -Math.sin(hitter.rotation.y);
-    const swingDirZ = -Math.cos(hitter.rotation.y);
-
-    for (const [id, runner] of this.players.entries()) {
-      if (id === hitterId || runner.role === 'HITTER' || !runner.isAlive) continue;
-
-      const dx = runner.position.x - hitter.position.x;
-      const dz = runner.position.z - hitter.position.z;
-      const dist = Math.hypot(dx, dz);
-
-      if (dist <= BAT_RANGE) {
-        const dot = (dx * swingDirX + dz * swingDirZ) / (dist || 1);
-        if (dot > 0.05) {
-          // Check if runner is protected under the middle table
-          const isRunnerUnderTable = (
-            Math.abs(runner.position.x) <= 0.85 &&
-            Math.abs(runner.position.z) <= 1.35 &&
-            (runner.isCrawling || runner.isFlatFlop || (runner.position.y || 0) < 0.7)
-          );
-
-          if (isRunnerUnderTable) {
-            // Hitter cannot hit from top; hitter has to bend down (crouch/crawl, flat-flop, or duck with spinePitch)
-            const isHitterBending = (
-              hitter.isCrawling ||
-              hitter.isFlatFlop ||
-              (typeof hitter.spinePitch === 'number' && hitter.spinePitch <= -0.25)
-            );
-
-            if (!isHitterBending) {
-              // Tabletop blocks the hit!
-              continue;
-            }
-          }
-
-          runner.hp = Math.max(0, runner.hp - BAT_DAMAGE);
-          runner.isFlailing = true;
-          runner.flailTimer = FLAIL_DURATION;
-
-          this.lastSoundLocation = { x: runner.position.x, z: runner.position.z };
-          this.soundInvestigateTimer = 3.5;
-
-          const knockback = 7.0;
-          runner.velocity.x += (dx / (dist || 1)) * knockback;
-          runner.velocity.z += (dz / (dist || 1)) * knockback;
-
-          if (runner.hp <= 0) {
-            runner.isAlive = false;
-            runner.isFlatFlop = true;
-          }
-
-          io.to(this.code).emit('player_hit', {
-            victimId: runner.id,
-            victimName: runner.name,
-            hitterId: hitter.id,
-            remainingHp: runner.hp,
-            damage: BAT_DAMAGE,
-            isKnockedOut: !runner.isAlive
-          });
-
-          const aliveRunners = Array.from(this.players.values()).filter(p => p.role === 'RUNNER' && p.isAlive);
-          if (aliveRunners.length === 0) {
-            this.endRound('HITTER', 'All runners knocked out! Clean sweep!');
-          }
-        }
-      }
+    const winnerPlayer = this.players.get(winner);
+    if (winnerPlayer && winnerPlayer.isBot) {
+      setTimeout(() => this.handleTossDecision(winner, 'bat'), 1500);
+    } else {
+      io.to(winner).emit('toss_decision_needed', {});
     }
   }
 
-  updateBots(delta) {
-    if (this.state !== 'HUNTING' && this.state !== 'LOBBY') return;
+  handleTossDecision(socketId, choice) {
+    if (this.state !== 'TOSS' || socketId !== this.tossWinner) return;
 
-    const bounds = 10.5;
+    const winnerTeam = this.players.get(socketId)?.team || 'a';
+    const otherTeam = winnerTeam === 'a' ? 'b' : 'a';
 
-    if (this.soundInvestigateTimer > 0) {
-      this.soundInvestigateTimer -= delta;
-      if (this.soundInvestigateTimer <= 0) this.lastSoundLocation = null;
+    if (choice === 'bat') {
+      this.battingTeam = winnerTeam;
+      this.bowlingTeam = otherTeam;
+    } else {
+      this.battingTeam = otherTeam;
+      this.bowlingTeam = winnerTeam;
     }
 
-    for (const [botId, bot] of this.bots.entries()) {
-      if (!bot.isAlive) continue;
+    io.to(this.code).emit('toss_decision', {
+      winner: this._playerInfo(socketId),
+      choice,
+      battingTeam: this.battingTeam,
+      bowlingTeam: this.bowlingTeam
+    });
 
-      if (bot.isFlailing) {
-        bot.flailTimer -= delta;
-        if (bot.flailTimer <= 0) bot.isFlailing = false;
-      }
-
-      bot.botTurnTimer = (bot.botTurnTimer || 0) - delta;
-      bot.botSwingCooldown = (bot.botSwingCooldown || 0) - delta;
-
-      // 1. Blind AI Hitter: Investigates sounds or hunts nearby runners
-      if (bot.role === 'HITTER') {
-        let targetAngle = bot.rotation.y;
-
-        if (this.lastSoundLocation && this.soundInvestigateTimer > 0) {
-          const dx = this.lastSoundLocation.x - bot.position.x;
-          const dz = this.lastSoundLocation.z - bot.position.z;
-          targetAngle = Math.atan2(-dx, -dz) + Math.sin(Date.now() * 0.003) * 0.3;
-        } else {
-          let nearestRunner = null;
-          let minRunnerDist = Infinity;
-          for (const p of this.players.values()) {
-            if (p.role === 'RUNNER' && p.isAlive) {
-              const d = Math.hypot(p.position.x - bot.position.x, p.position.z - bot.position.z);
-              if (d < minRunnerDist) {
-                minRunnerDist = d;
-                nearestRunner = p;
-              }
-            }
-          }
-
-          if (nearestRunner && minRunnerDist < 4.5) {
-            const dx = nearestRunner.position.x - bot.position.x;
-            const dz = nearestRunner.position.z - bot.position.z;
-            targetAngle = Math.atan2(-dx, -dz);
-          } else {
-            if (bot.botTurnTimer <= 0) {
-              bot.botTurnTimer = 1.8 + Math.random() * 2.5;
-              bot.botWanderAngle = bot.rotation.y + (Math.random() - 0.5) * 2.5;
-            }
-            targetAngle = bot.botWanderAngle || bot.rotation.y;
-          }
-        }
-
-        bot.rotation.y = targetAngle;
-        const speed = BASE_SPEED * 0.85;
-        bot.position.x += -Math.sin(bot.rotation.y) * speed * delta;
-        bot.position.z += -Math.cos(bot.rotation.y) * speed * delta;
-
-        // Bend down if near the middle table to hit underneath
-        if (Math.abs(bot.position.x) < 2.0 && Math.abs(bot.position.z) < 2.6) {
-          bot.isCrawling = true;
-          bot.spinePitch = -0.6;
-        } else {
-          bot.isCrawling = false;
-          bot.spinePitch = 0;
-        }
-
-        if (this.state === 'HUNTING' && bot.botSwingCooldown <= 0) {
-          bot.botSwingCooldown = 1.2 + Math.random() * 1.5;
-          this.handleBatSwing(botId);
-        }
-      }
-      // 2. AI Runner: Flees from active hunters
-      else if (bot.role === 'RUNNER') {
-        let nearestHitter = null;
-        let minDist = Infinity;
-        for (const hid of this.currentHitterIds) {
-          const h = this.players.get(hid);
-          if (h && h.isAlive) {
-            const d = Math.hypot(bot.position.x - h.position.x, bot.position.z - h.position.z);
-            if (d < minDist) {
-              minDist = d;
-              nearestHitter = h;
-            }
-          }
-        }
-
-        let speed = BASE_SPEED * 0.5;
-
-        if (nearestHitter && this.state === 'HUNTING' && minDist < 6.5) {
-          // Flee directly away from nearest hunter
-          const dx = bot.position.x - nearestHitter.position.x;
-          const dz = bot.position.z - nearestHitter.position.z;
-          bot.rotation.y = Math.atan2(-dx, -dz);
-          speed = BASE_SPEED * 0.95;
-
-          if (Math.abs(bot.position.x) < 1.4 && Math.abs(bot.position.z) < 1.8) {
-            bot.isCrawling = true;
-          }
-        } else {
-          if (bot.botTurnTimer <= 0) {
-            bot.botTurnTimer = 2.0 + Math.random() * 3.0;
-            bot.botWanderAngle = bot.rotation.y + (Math.random() - 0.5) * 2.0;
-          }
-          bot.rotation.y = bot.botWanderAngle || bot.rotation.y;
-          speed = BASE_SPEED * 0.45;
-        }
-
-        bot.position.x += -Math.sin(bot.rotation.y) * speed * delta;
-        bot.position.z += -Math.cos(bot.rotation.y) * speed * delta;
-
-        if (Math.random() < 0.005) bot.isCrawling = !bot.isCrawling;
-      }
-
-      if (Math.abs(bot.position.x) > bounds) {
-        bot.position.x = Math.sign(bot.position.x) * bounds;
-        bot.botWanderAngle = Math.PI - bot.rotation.y + (Math.random() - 0.5);
-        bot.rotation.y = bot.botWanderAngle;
-        bot.botTurnTimer = 1.0;
-      }
-      if (Math.abs(bot.position.z) > bounds) {
-        bot.position.z = Math.sign(bot.position.z) * bounds;
-        bot.botWanderAngle = -bot.rotation.y + (Math.random() - 0.5);
-        bot.rotation.y = bot.botWanderAngle;
-        bot.botTurnTimer = 1.0;
-      }
-    }
+    setTimeout(() => this._setupInnings(1), 1500);
   }
 
-  update(delta) {
-    if (this.state === 'COUNTDOWN') {
-      this.timer -= delta;
-      if (this.timer <= 0) this.startRound();
-    } else if (this.state === 'HUNTING') {
-      this.timer -= delta;
-      if (this.timer <= 0) this.endRound('RUNNERS', 'Time expired! Runners survived the Hitter!');
-    } else if (this.state === 'ROUND_END') {
-      this.timer -= delta;
-      if (this.timer <= 0) this.startCountdown();
+  _setupInnings(inningsNum) {
+    this.currentInnings = inningsNum;
+    const card = this._currentCard();
+    card.team = this.battingTeam;
+    this.state = 'CAPTAIN_SETUP';
+
+    const battingIds = this.battingTeam === 'a' ? [...this.teamA] : [...this.teamB];
+    this.battingOrder = battingIds;
+    this.currentBatsmanIdx = 0;
+    this.currentNonStrikerIdx = 1;
+    this.currentOver = 0;
+    this.currentBall = 0;
+    this.ballInFlight = false;
+    this.pendingBowlerRequest = false;
+    this.pendingNextBatsman = false;
+
+    // Initialize batsmen scorecard
+    for (const id of this.battingOrder) {
+      const p = this.players.get(id);
+      if (p) {
+        card.batsmen[id] = {
+          id: p.id,
+          name: p.name,
+          runs: 0,
+          balls: 0,
+          fours: 0,
+          sixes: 0,
+          dismissed: false,
+          dismissal: '',
+          isOnPitch: false
+        };
+      }
     }
+    if (this.battingOrder[0] && card.batsmen[this.battingOrder[0]]) card.batsmen[this.battingOrder[0]].isOnPitch = true;
+    if (this.battingOrder[1] && card.batsmen[this.battingOrder[1]]) card.batsmen[this.battingOrder[1]].isOnPitch = true;
 
-    this.updateBots(delta);
-
-    // 10-Second Anti-Camp Stationary Detection for Runners -> 1.0s Thermal Reveal
-    if (this.state === 'HUNTING') {
-      for (const player of this.players.values()) {
-        if (player.role === 'RUNNER' && player.isAlive) {
-          if (!player.lastStationaryPos) {
-            player.lastStationaryPos = { ...player.position };
-            player.stationaryTimer = 0;
-          }
-
-          const distMoved = Math.hypot(
-            player.position.x - player.lastStationaryPos.x,
-            player.position.z - player.lastStationaryPos.z
-          );
-
-          if (distMoved < 0.35) {
-            player.stationaryTimer = (player.stationaryTimer || 0) + delta;
-            if (player.stationaryTimer >= 5.0) {
-              player.stationaryTimer = 0;
-              player.lastStationaryPos = { ...player.position };
-              io.to(this.code).emit('player_camp_revealed', {
-                playerId: player.id,
-                playerName: player.name,
-                duration: 1.0,
-                position: player.position
-              });
-            }
-          } else {
-            player.stationaryTimer = 0;
-            player.lastStationaryPos = { ...player.position };
-          }
-        }
+    // Initialize bowlers scorecard
+    const bowlingIds = this.bowlingTeam === 'a' ? [...this.teamA] : [...this.teamB];
+    for (const id of bowlingIds) {
+      const p = this.players.get(id);
+      if (p) {
+        card.bowlers[id] = {
+          id: p.id,
+          name: p.name,
+          wickets: 0,
+          runs: 0,
+          overs: 0,
+          balls: 0,
+          maidens: 0
+        };
       }
     }
 
-    for (const player of this.players.values()) {
-      if (player.isFlailing) {
-        player.flailTimer -= delta;
-        if (player.flailTimer <= 0) player.isFlailing = false;
-      }
-      player.velocity.x *= 0.88;
-      player.velocity.z *= 0.88;
-      player.position.x += player.velocity.x * delta;
-      player.position.z += player.velocity.z * delta;
-    }
-  }
+    const battingCaptain = this.battingTeam === 'a' ? this.captainA : this.captainB;
+    const bowlingCaptain = this.bowlingTeam === 'a' ? this.captainA : this.captainB;
 
-  startTickLoop() {
-    this.tickInterval = setInterval(() => {
-      const now = Date.now();
-      const delta = (now - this.lastTick) / 1000;
-      this.lastTick = now;
+    io.to(this.code).emit('innings_setup', {
+      innings: inningsNum,
+      battingTeam: this.battingTeam,
+      bowlingTeam: this.bowlingTeam,
+      battingCaptain: this._playerInfo(battingCaptain),
+      bowlingCaptain: this._playerInfo(bowlingCaptain),
+      battingOrder: this.battingOrder.map(id => this._playerInfo(id)),
+      target: this.target,
+      scorecard: this._scorecardSnapshot()
+    });
 
-      this.update(delta);
-
-      const playersArray = Array.from(this.players.values()).map(p => ({
-        id: p.id,
-        name: p.name,
-        color: p.color,
-        role: p.role,
-        hp: p.hp,
-        isAlive: p.isAlive,
-        isFlailing: p.isFlailing,
-        isFlatFlop: p.isFlatFlop,
-        isCrawling: p.isCrawling,
-        isSitting: p.isSitting,
-        isGrabbing: p.isGrabbing,
-        spinePitch: p.spinePitch,
-        position: p.position,
-        rotation: p.rotation,
-        isBot: p.isBot
-      }));
-
-      io.to(this.code).emit('game_tick', {
-        state: this.state,
-        timer: Math.ceil(this.timer),
-        hitterId: this.currentHitterId,
-        hitterIds: Array.from(this.currentHitterIds),
-        hunterCount: this.hunterCount,
-        hostId: this.hostId,
-        players: playersArray,
-        roundWinner: this.roundWinner
+    const bowlingCaptainPlayer = this.players.get(bowlingCaptain);
+    if (bowlingCaptainPlayer && bowlingCaptainPlayer.isBot) {
+      setTimeout(() => this._autoPickBowler(), 1200);
+    } else {
+      io.to(bowlingCaptain).emit('bowling_order_needed', {
+        over: 1,
+        bowlingTeam: this.bowlingTeam,
+        bowlers: bowlingIds.map(id => this._playerInfo(id))
       });
-    }, 1000 / 30);
+    }
   }
 
-  stop() {
-    if (this.tickInterval) {
-      clearInterval(this.tickInterval);
-      this.tickInterval = null;
+  _autoPickBowler() {
+    const bowlingIds = this.bowlingTeam === 'a' ? this.teamA : this.teamB;
+    const maxOvers = Math.ceil(this.overs / 2);
+    const card = this._currentCard();
+
+    let bowlerId = bowlingIds.find(id => id !== this.currentBowler && (card.bowlers[id]?.overs || 0) < maxOvers);
+    if (!bowlerId) bowlerId = bowlingIds[0];
+
+    this.startOver(null, bowlerId);
+  }
+
+  setBattingOrder(socketId, order) {
+    const captain = this.battingTeam === 'a' ? this.captainA : this.captainB;
+    if (socketId !== captain) return;
+
+    const battingIds = this.battingTeam === 'a' ? this.teamA : this.teamB;
+    const valid = Array.isArray(order) && order.length === battingIds.length && order.every(id => battingIds.includes(id));
+    if (!valid) return;
+
+    this.battingOrder = order;
+    io.to(this.code).emit('batting_order_set', {
+      order: order.map(id => this._playerInfo(id))
+    });
+  }
+
+  startOver(socketId, bowlerId) {
+    const bowlingCaptain = this.bowlingTeam === 'a' ? this.captainA : this.captainB;
+    if (socketId && socketId !== bowlingCaptain) return;
+
+    this.currentBowler = bowlerId;
+    this.state = 'PLAYING';
+    this.pendingBowlerRequest = false;
+    this.currentBall = 0;
+    this.ballInFlight = false;
+
+    const card = this._currentCard();
+    card.currentOverBalls = [];
+
+    const batsman = this.battingOrder[this.currentBatsmanIdx];
+    const nonStriker = this.battingOrder[this.currentNonStrikerIdx];
+
+    io.to(this.code).emit('over_started', {
+      over: this.currentOver + 1,
+      totalOvers: this.overs,
+      bowler: this._playerInfo(bowlerId),
+      batsman: this._playerInfo(batsman),
+      nonStriker: this._playerInfo(nonStriker),
+      scorecard: this._scorecardSnapshot()
+    });
+
+    setTimeout(() => this._requestNextBall(), 800);
+  }
+
+  handleBowl(socketId, data) {
+    if (this.state !== 'PLAYING' || socketId !== this.currentBowler || this.ballInFlight) return;
+
+    this.ballInFlight = true;
+    this.pendingBall = { ...data, bowlerId: socketId };
+
+    const batsmanId = this.mode === 'single_batting'
+      ? this.sbQueue[this.sbCurrentBatsmanIdx]
+      : this.battingOrder[this.currentBatsmanIdx];
+
+    io.to(this.code).emit('delivery', {
+      bowler: this._playerInfo(socketId),
+      batsman: this._playerInfo(batsmanId),
+      landingZone: data.landingZone,
+      deliveryType: data.deliveryType,
+      over: this.currentOver + 1,
+      ball: this.currentBall + 1
+    });
+
+    const batsmanPlayer = this.players.get(batsmanId);
+    if (batsmanPlayer && batsmanPlayer.isBot) {
+      setTimeout(() => this._botBat(batsmanId, data), 700 + Math.random() * 600);
+    } else {
+      // Batsman client has 3.5 seconds to hit, or auto-miss/defend
+      clearTimeout(this._batTimeout);
+      this._batTimeout = setTimeout(() => {
+        if (this.ballInFlight) {
+          this._botBat(batsmanId, data);
+        }
+      }, 3500);
     }
+  }
+
+  handleBat(socketId, data) {
+    const batsmanId = this.mode === 'single_batting'
+      ? this.sbQueue[this.sbCurrentBatsmanIdx]
+      : this.battingOrder[this.currentBatsmanIdx];
+
+    if (!this.ballInFlight || socketId !== batsmanId) return;
+    clearTimeout(this._batTimeout);
+    this._resolveBall(data, this.pendingBall);
+  }
+
+  _botBowl(bowlerId) {
+    if (this.ballInFlight || this.state !== 'PLAYING' || this.currentBowler !== bowlerId) return;
+
+    const deliveryTypes = ['pace', 'spin', 'yorker', 'bouncer'];
+    const dt = deliveryTypes[Math.floor(Math.random() * deliveryTypes.length)];
+    const lz = {
+      x: (Math.random() - 0.5) * 1.5,
+      z: 0.2 + Math.random() * 0.5
+    };
+    this.handleBowl(bowlerId, {
+      landingZone: lz,
+      deliveryType: dt,
+      accuracy: 0.6 + Math.random() * 0.35
+    });
+  }
+
+  _botBat(batsmanId, bowlData) {
+    if (!this.ballInFlight) return;
+    const shotTypes = ['drive', 'loft', 'sweep', 'cut', 'defend'];
+    const shot = shotTypes[Math.floor(Math.random() * shotTypes.length)];
+    const timing = 0.4 + Math.random() * 0.5;
+    const direction = (Math.random() - 0.5) * 1.8;
+    this._resolveBall({
+      shotType: shot,
+      timing,
+      direction,
+      power: 0.4 + Math.random() * 0.5
+    }, bowlData);
+  }
+
+  _resolveBall(batData, bowlData) {
+    this.ballInFlight = false;
+    const card = this._currentCard();
+
+    const batsmanId = this.mode === 'single_batting'
+      ? this.sbQueue[this.sbCurrentBatsmanIdx]
+      : this.battingOrder[this.currentBatsmanIdx];
+    const bowlerId = this.currentBowler;
+
+    const result = this._computeOutcome(batData, bowlData);
+
+    let legalBall = true;
+    let runs = 0;
+    let extras = 0;
+    let wicket = false;
+    let dismissal = '';
+
+    if (result.wide) {
+      extras = 1;
+      legalBall = false;
+      card.extras++;
+      card.runs++;
+      if (card.bowlers[bowlerId]) card.bowlers[bowlerId].runs++;
+      card.currentOverBalls.push('Wd');
+    } else if (result.noBall) {
+      extras = 1;
+      legalBall = false;
+      runs = result.runs || 0;
+      card.extras++;
+      card.runs += runs + 1;
+      if (card.batsmen[batsmanId]) {
+        card.batsmen[batsmanId].runs += runs;
+        card.batsmen[batsmanId].balls++;
+      }
+      if (card.bowlers[bowlerId]) card.bowlers[bowlerId].runs += runs + 1;
+      card.currentOverBalls.push(`Nb+${runs}`);
+    } else if (result.wicket) {
+      wicket = true;
+      dismissal = result.dismissal;
+      legalBall = true;
+      this.currentBall++;
+      card.balls++;
+      card.wickets++;
+      card.currentOverBalls.push('W');
+
+      if (card.batsmen[batsmanId]) {
+        card.batsmen[batsmanId].dismissed = true;
+        card.batsmen[batsmanId].dismissal = dismissal;
+        card.batsmen[batsmanId].balls++;
+        card.batsmen[batsmanId].isOnPitch = false;
+      }
+      if (card.bowlers[bowlerId] && (dismissal === 'Bowled' || dismissal === 'LBW' || dismissal === 'Caught' || dismissal === 'Stumped')) {
+        card.bowlers[bowlerId].wickets++;
+        card.bowlers[bowlerId].balls++;
+      }
+      card.fallOfWickets.push({
+        wicket: card.wickets,
+        runs: card.runs,
+        batsmanId,
+        batsmanName: this.players.get(batsmanId)?.name,
+        over: `${this.currentOver}.${this.currentBall}`
+      });
+    } else {
+      legalBall = true;
+      this.currentBall++;
+      card.balls++;
+      runs = result.runs;
+      card.runs += runs;
+      card.currentOverBalls.push(runs === 0 ? '•' : runs.toString());
+
+      if (card.batsmen[batsmanId]) {
+        card.batsmen[batsmanId].runs += runs;
+        card.batsmen[batsmanId].balls++;
+        if (runs === 4) card.batsmen[batsmanId].fours++;
+        if (runs === 6) card.batsmen[batsmanId].sixes++;
+      }
+      if (card.bowlers[bowlerId]) {
+        card.bowlers[bowlerId].runs += runs;
+        card.bowlers[bowlerId].balls++;
+      }
+
+      // Strike rotation on odd runs in team mode
+      if (runs % 2 === 1 && this.mode !== 'single_batting') {
+        this._rotateStrike();
+      }
+    }
+
+    // Single Batting stats record
+    if (this.mode === 'single_batting') {
+      if (!this.scorecard.singleBatting[batsmanId]) {
+        this.scorecard.singleBatting[batsmanId] = { name: this.players.get(batsmanId)?.name, runs: 0, balls: 0, fours: 0, sixes: 0, wickets: 0 };
+      }
+      const bStats = this.scorecard.singleBatting[batsmanId];
+      bStats.runs += runs;
+      if (legalBall) bStats.balls++;
+      if (runs === 4) bStats.fours++;
+      if (runs === 6) bStats.sixes++;
+
+      if (wicket) {
+        if (!this.scorecard.singleBatting[bowlerId]) {
+          this.scorecard.singleBatting[bowlerId] = { name: this.players.get(bowlerId)?.name, runs: 0, balls: 0, fours: 0, sixes: 0, wickets: 0 };
+        }
+        this.scorecard.singleBatting[bowlerId].wickets++;
+      }
+    }
+
+    const snap = this._scorecardSnapshot();
+
+    io.to(this.code).emit('ball_result', {
+      runs,
+      extras,
+      wicket,
+      dismissal,
+      legalBall,
+      resultType: result.type,
+      wide: result.wide || false,
+      noBall: result.noBall || false,
+      batsmanId,
+      bowlerId,
+      shotType: batData.shotType,
+      direction: batData.direction,
+      timing: batData.timing,
+      ballPath: result.ballPath,
+      scorecard: snap
+    });
+
+    if (this.mode === 'single_batting') {
+      this._handleSingleBattingProgress(wicket);
+      return;
+    }
+
+    // Wicket handling in Team Match
+    if (wicket) {
+      this._handleWicket(batsmanId, dismissal);
+      return;
+    }
+
+    // Target check in 2nd innings
+    if (this.currentInnings === 2 && this.target && card.runs >= this.target) {
+      const winner = this.battingTeam === 'a' ? 'Ants (Team A)' : 'Grasshoppers (Team B)';
+      this._endGame(this.battingTeam, `${winner} won by ${TEAM_SIZE - card.wickets} wickets!`);
+      return;
+    }
+
+    // End of over check
+    if (legalBall && this.currentBall >= 6) {
+      this._endOver();
+      return;
+    }
+
+    setTimeout(() => this._requestNextBall(), 1500);
+  }
+
+  _computeOutcome(bat, bowl) {
+    const timing = clamp(bat.timing || 0.5, 0, 1);
+    const power = clamp(bat.power || 0.5, 0, 1);
+    const direction = bat.direction || 0;
+    const shotType = bat.shotType || 'drive';
+    const deliveryType = bowl.deliveryType || 'pace';
+    const accuracy = clamp(bowl.accuracy || 0.7, 0, 1);
+
+    // Wide check: bowler missed landing zone by a lot
+    if (accuracy < 0.22 && Math.abs(bowl.landingZone?.x || 0) > 0.85) {
+      return { type: 'wide', wide: true, runs: 0, ballPath: 'wide' };
+    }
+
+    // Timing score: sweet spot around 0.55 - 0.75
+    const sweetCenter = 0.65;
+    const timingDiff = Math.abs(timing - sweetCenter);
+    const isPerfect = timingDiff < 0.08;
+    const isGood = timingDiff < 0.20;
+    const isEarly = timing < 0.35;
+    const isLate = timing > 0.85;
+    const missHit = isEarly || isLate;
+
+    // Yorker delivery logic
+    if (deliveryType === 'yorker') {
+      if (shotType === 'defend' || isPerfect) {
+        return { type: 'runs', runs: isPerfect ? 1 : 0, ballPath: 'yorker_defended' };
+      }
+      if (missHit || (!isGood && shotType === 'loft')) {
+        return { type: 'wicket', wicket: true, dismissal: 'Bowled', ballPath: 'bowled' };
+      }
+    }
+
+    // Bouncer delivery logic
+    if (deliveryType === 'bouncer') {
+      if (shotType === 'sweep') {
+        return { type: 'wicket', wicket: true, dismissal: 'Caught', ballPath: 'top_edge_caught' };
+      }
+      if (shotType === 'cut' && isGood) {
+        return { type: 'runs', runs: 4, ballPath: 'upper_cut_four' };
+      }
+    }
+
+    // Shot type specific mechanics
+    if (shotType === 'defend') {
+      return { type: 'runs', runs: Math.random() < 0.25 ? 1 : 0, ballPath: 'defended' };
+    }
+
+    if (shotType === 'loft') {
+      if (isPerfect && power > 0.6) {
+        return { type: 'runs', runs: 6, ballPath: 'maximum_six' };
+      } else if (isGood) {
+        return { type: 'runs', runs: Math.random() < 0.6 ? 4 : 6, ballPath: 'lofted_boundary' };
+      } else if (missHit) {
+        return { type: 'wicket', wicket: true, dismissal: 'Caught', ballPath: 'caught_in_deep' };
+      } else {
+        return { type: 'runs', runs: Math.random() < 0.5 ? 2 : 1, ballPath: 'lofted_short' };
+      }
+    }
+
+    if (shotType === 'sweep') {
+      if (isGood) {
+        return { type: 'runs', runs: Math.random() < 0.65 ? 4 : 2, ballPath: 'sweep_fine_leg' };
+      } else if (missHit) {
+        return { type: 'wicket', wicket: true, dismissal: Math.random() < 0.5 ? 'LBW' : 'Bowled', ballPath: 'missed_sweep' };
+      } else {
+        return { type: 'runs', runs: 1, ballPath: 'sweep_single' };
+      }
+    }
+
+    if (shotType === 'cut') {
+      if (isGood) {
+        return { type: 'runs', runs: Math.random() < 0.5 ? 4 : 2, ballPath: 'cut_past_point' };
+      } else if (missHit) {
+        return { type: 'wicket', wicket: true, dismissal: 'Caught', ballPath: 'edged_to_keeper' };
+      } else {
+        return { type: 'runs', runs: 1, ballPath: 'cut_single' };
+      }
+    }
+
+    // Default: Drive
+    if (isPerfect) {
+      return { type: 'runs', runs: 4, ballPath: 'cover_drive_four' };
+    } else if (isGood) {
+      const rand = Math.random();
+      const r = rand < 0.35 ? 4 : rand < 0.7 ? 2 : 1;
+      return { type: 'runs', runs: r, ballPath: 'drive_gap' };
+    } else if (missHit) {
+      const randWicket = Math.random();
+      if (randWicket < 0.45) {
+        return { type: 'wicket', wicket: true, dismissal: Math.random() < 0.5 ? 'Bowled' : 'LBW', ballPath: 'bowled' };
+      } else {
+        return { type: 'runs', runs: 0, ballPath: 'dot_ball' };
+      }
+    }
+
+    return { type: 'runs', runs: Math.random() < 0.5 ? 1 : 0, ballPath: 'drive_straight' };
+  }
+
+  _rotateStrike() {
+    const temp = this.currentBatsmanIdx;
+    this.currentBatsmanIdx = this.currentNonStrikerIdx;
+    this.currentNonStrikerIdx = temp;
+  }
+
+  _handleWicket(batsmanId, dismissal) {
+    const card = this._currentCard();
+
+    io.to(this.code).emit('wicket', {
+      batsmanId,
+      batsmanName: this.players.get(batsmanId)?.name,
+      dismissal,
+      scorecard: this._scorecardSnapshot()
+    });
+
+    // Check All Out
+    if (card.wickets >= TEAM_SIZE - 1) {
+      this._endInnings();
+      return;
+    }
+
+    // Find next available batsman
+    const nextIdx = this.battingOrder.findIndex((id, idx) =>
+      idx > 1 && !card.batsmen[id]?.dismissed && id !== this.battingOrder[this.currentNonStrikerIdx]
+    );
+
+    if (nextIdx === -1) {
+      this._endInnings();
+      return;
+    }
+
+    const battingCaptain = this.battingTeam === 'a' ? this.captainA : this.captainB;
+    const battingCaptainPlayer = this.players.get(battingCaptain);
+
+    if (battingCaptainPlayer && battingCaptainPlayer.isBot) {
+      this.currentBatsmanIdx = nextIdx;
+      const nextId = this.battingOrder[nextIdx];
+      if (card.batsmen[nextId]) card.batsmen[nextId].isOnPitch = true;
+      io.to(this.code).emit('new_batsman', { batsman: this._playerInfo(nextId) });
+      setTimeout(() => this._requestNextBall(), 1200);
+    } else {
+      this.pendingNextBatsman = true;
+      io.to(battingCaptain).emit('next_batsman_needed', {
+        availableBatsmen: this.battingOrder
+          .filter(id => !card.batsmen[id]?.dismissed && id !== this.battingOrder[this.currentNonStrikerIdx])
+          .map(id => this._playerInfo(id))
+      });
+    }
+  }
+
+  setNextBatsman(socketId, nextBatsmanId) {
+    const captain = this.battingTeam === 'a' ? this.captainA : this.captainB;
+    if (socketId !== captain || !this.pendingNextBatsman) return;
+
+    const idx = this.battingOrder.indexOf(nextBatsmanId);
+    if (idx === -1) return;
+
+    this.currentBatsmanIdx = idx;
+    this.pendingNextBatsman = false;
+    const card = this._currentCard();
+    if (card.batsmen[nextBatsmanId]) card.batsmen[nextBatsmanId].isOnPitch = true;
+
+    io.to(this.code).emit('new_batsman', { batsman: this._playerInfo(nextBatsmanId) });
+    setTimeout(() => this._requestNextBall(), 1000);
+  }
+
+  _requestNextBall() {
+    if (this.state !== 'PLAYING') return;
+
+    const bowlerPlayer = this.players.get(this.currentBowler);
+    if (bowlerPlayer && bowlerPlayer.isBot) {
+      this._botBowl(this.currentBowler);
+    } else if (this.currentBowler) {
+      const batsmanId = this.mode === 'single_batting'
+        ? this.sbQueue[this.sbCurrentBatsmanIdx]
+        : this.battingOrder[this.currentBatsmanIdx];
+
+      io.to(this.currentBowler).emit('bowl_now', {
+        batsman: this._playerInfo(batsmanId),
+        over: this.currentOver + 1,
+        ball: this.currentBall + 1,
+        scorecard: this._scorecardSnapshot()
+      });
+    }
+  }
+
+  _endOver() {
+    const card = this._currentCard();
+    this.currentOver++;
+    card.overs = this.currentOver;
+    this.currentBall = 0;
+
+    // Over strike rotation
+    this._rotateStrike();
+
+    if (card.bowlers[this.currentBowler]) {
+      card.bowlers[this.currentBowler].overs++;
+      card.bowlers[this.currentBowler].balls = 0;
+    }
+
+    const snap = this._scorecardSnapshot();
+    io.to(this.code).emit('over_complete', {
+      over: this.currentOver,
+      totalOvers: this.overs,
+      scorecard: snap
+    });
+
+    if (this.currentOver >= this.overs) {
+      this._endInnings();
+      return;
+    }
+
+    // Captain picks bowler for next over
+    this.state = 'CAPTAIN_SETUP';
+    this.pendingBowlerRequest = true;
+
+    const bowlingCaptain = this.bowlingTeam === 'a' ? this.captainA : this.captainB;
+    const bowlingCaptainPlayer = this.players.get(bowlingCaptain);
+
+    if (bowlingCaptainPlayer && bowlingCaptainPlayer.isBot) {
+      setTimeout(() => this._autoPickBowler(), 1200);
+    } else {
+      const bowlingIds = this.bowlingTeam === 'a' ? this.teamA : this.teamB;
+      io.to(bowlingCaptain).emit('bowler_needed', {
+        over: this.currentOver + 1,
+        bowlers: bowlingIds.map(id => this._playerInfo(id)),
+        scorecard: snap
+      });
+    }
+  }
+
+  _endInnings() {
+    const card = this._currentCard();
+    const snap = this._scorecardSnapshot();
+
+    io.to(this.code).emit('innings_end', {
+      innings: this.currentInnings,
+      battingTeam: this.battingTeam,
+      scorecard: snap
+    });
+
+    if (this.currentInnings === 1) {
+      this.target = card.runs + 1;
+      // Swap batting and bowling teams
+      const prevBatting = this.battingTeam;
+      this.battingTeam = this.bowlingTeam;
+      this.bowlingTeam = prevBatting;
+
+      this.state = 'INNINGS_BREAK';
+      setTimeout(() => this._setupInnings(2), 3500);
+    } else {
+      // End of Match
+      const inn1 = this.scorecard.innings1;
+      const inn2 = this.scorecard.innings2;
+
+      let winner = null;
+      let reason = '';
+
+      if (inn2.runs >= this.target) {
+        winner = this.battingTeam;
+        const winnerName = winner === 'a' ? 'Ants (Team A)' : 'Grasshoppers (Team B)';
+        reason = `🏆 ${winnerName} won by ${TEAM_SIZE - inn2.wickets} wickets!`;
+      } else if (inn2.runs === inn1.runs) {
+        winner = 'TIE';
+        reason = `🤝 MATCH TIED! Both teams scored ${inn1.runs} runs!`;
+      } else {
+        winner = this.bowlingTeam;
+        const winnerName = winner === 'a' ? 'Ants (Team A)' : 'Grasshoppers (Team B)';
+        const diff = inn1.runs - inn2.runs;
+        reason = `🏆 ${winnerName} won by ${diff} run${diff !== 1 ? 's' : ''}!`;
+      }
+
+      this._endGame(winner, reason);
+    }
+  }
+
+  _endGame(winner, reason) {
+    this.state = 'GAME_OVER';
+    io.to(this.code).emit('game_over', {
+      winner,
+      reason,
+      scorecard: this._scorecardSnapshot()
+    });
+  }
+
+  // --- Single Batting Mode ---
+  startSingleBatting() {
+    this.mode = 'single_batting';
+    const realPlayers = Array.from(this.players.values()).filter(p => !p.isBot);
+
+    this.sbQueue = realPlayers.map(p => p.id);
+
+    // If fewer than 4 players, fill up with bot fielders/bowlers
+    const totalWanted = 8;
+    const needed = totalWanted - this.sbQueue.length;
+    for (let i = 0; i < needed; i++) {
+      const bId = `sb_bot_${Date.now()}_${i}`;
+      const bName = BOT_NAMES_B[i % BOT_NAMES_B.length] + ' (Bot)';
+      this.addPlayer(bId, bName, '#2d6b2d', true, 'b');
+      this.sbQueue.push(bId);
+    }
+
+    this.battingTeam = 'a';
+    this.bowlingTeam = 'b';
+    this.sbCurrentBatsmanIdx = 0;
+    this.sbCurrentBowlerIdx = 1;
+    this.currentOver = 0;
+    this.currentBall = 0;
+    this.state = 'PLAYING';
+
+    for (const id of this.sbQueue) {
+      this.scorecard.singleBatting[id] = {
+        name: this.players.get(id)?.name,
+        runs: 0,
+        balls: 0,
+        fours: 0,
+        sixes: 0,
+        wickets: 0
+      };
+    }
+
+    this._sbStartTurn();
+  }
+
+  _sbStartTurn() {
+    const batsmanId = this.sbQueue[this.sbCurrentBatsmanIdx];
+    const bowlerId = this.sbQueue[this.sbCurrentBowlerIdx % this.sbQueue.length];
+    this.currentBowler = bowlerId;
+    this.currentBall = 0;
+    this.currentOver = 0;
+    this.ballInFlight = false;
+
+    io.to(this.code).emit('sb_turn_started', {
+      batsman: this._playerInfo(batsmanId),
+      bowler: this._playerInfo(bowlerId),
+      overs: this.overs,
+      scorecard: this._scorecardSnapshot()
+    });
+
+    setTimeout(() => this._requestNextBall(), 1000);
+  }
+
+  _handleSingleBattingProgress(wicket) {
+    if (wicket || this.currentBall >= this.overs * 6) {
+      // Turn over, next batsman in queue
+      this.sbCurrentBatsmanIdx++;
+      this.sbCurrentBowlerIdx++;
+
+      if (this.sbCurrentBatsmanIdx >= this.sbQueue.length) {
+        // Everyone has batted! Determine winner
+        let highest = -1;
+        let winnerId = null;
+        for (const [id, stats] of Object.entries(this.scorecard.singleBatting)) {
+          if (stats.runs > highest) {
+            highest = stats.runs;
+            winnerId = id;
+          }
+        }
+        const winnerName = this.players.get(winnerId)?.name || 'Player';
+        this._endGame(winnerId, `🏆 ${winnerName} won Single Batting with ${highest} runs!`);
+        return;
+      }
+
+      setTimeout(() => this._sbStartTurn(), 2000);
+    } else {
+      setTimeout(() => this._requestNextBall(), 1200);
+    }
+  }
+
+  _playerInfo(id) {
+    if (!id) return null;
+    const p = this.players.get(id);
+    if (!p) return { id, name: 'Unknown', color: '#fff', isBot: true, team: null };
+    return { id: p.id, name: p.name, color: p.color, isBot: p.isBot, team: p.team };
+  }
+
+  _allPlayersInfo() {
+    const res = { teamA: [], teamB: [] };
+    for (const id of this.teamA) res.teamA.push(this._playerInfo(id));
+    for (const id of this.teamB) res.teamB.push(this._playerInfo(id));
+    return res;
+  }
+
+  _scorecardSnapshot() {
+    const card = this._currentCard();
+    const batsmanId = this.mode === 'single_batting'
+      ? this.sbQueue[this.sbCurrentBatsmanIdx]
+      : this.battingOrder[this.currentBatsmanIdx];
+    const nonStrikerId = this.mode === 'single_batting'
+      ? null
+      : this.battingOrder[this.currentNonStrikerIdx];
+
+    return {
+      mode: this.mode,
+      innings: this.currentInnings,
+      battingTeam: this.battingTeam,
+      bowlingTeam: this.bowlingTeam,
+      runs: card?.runs || 0,
+      wickets: card?.wickets || 0,
+      overs: this.currentOver,
+      balls: this.currentBall,
+      extras: card?.extras || 0,
+      target: this.target,
+      currentOverBalls: card?.currentOverBalls || [],
+      batsmen: card?.batsmen || {},
+      bowlers: card?.bowlers || {},
+      currentBatsman: this._playerInfo(batsmanId),
+      nonStriker: this._playerInfo(nonStrikerId),
+      currentBowler: this._playerInfo(this.currentBowler),
+      singleBatting: this.scorecard.singleBatting,
+      inn1: this.scorecard.innings1,
+      inn2: this.scorecard.innings2
+    };
+  }
+
+  getRoomInfo() {
+    return {
+      code: this.code,
+      state: this.state,
+      mode: this.mode,
+      overs: this.overs,
+      hostId: this.hostId,
+      captainA: this.captainA,
+      captainB: this.captainB,
+      players: this._allPlayersInfo(),
+      allPlayers: Array.from(this.players.values()).map(p => ({
+        id: p.id, name: p.name, color: p.color, isBot: p.isBot, team: p.team
+      }))
+    };
   }
 }
 
+function findRoom(socketId) {
+  for (const room of rooms.values()) {
+    if (room.players.has(socketId)) return room;
+  }
+  return null;
+}
+
 io.on('connection', (socket) => {
-  let currentRoomCode = null;
+  console.log(`[+] Socket connected: ${socket.id}`);
 
-  socket.on('join_room', ({ roomCode, nickname, color, botCount, autoStart, preferredRole, forceHitter, hunterCount }) => {
-    const code = (roomCode || 'LOBBY-1').toUpperCase();
-    socket.join(code);
-    currentRoomCode = code;
-
+  socket.on('join_room', (data) => {
+    const { roomCode, name, color, mode, overs, team } = data;
+    const code = (roomCode || 'CRICKET-1').toUpperCase();
     let room = rooms.get(code);
     if (!room) {
-      room = new GameRoom(code);
+      room = new CricketRoom(code, mode || 'team_match', overs || DEFAULT_OVERS);
       rooms.set(code, room);
+      console.log(`[Room] Created room: ${code}`);
     }
 
-    if (typeof hunterCount === 'number') {
-      room.hunterCount = Math.min(3, Math.max(1, parseInt(hunterCount) || 1));
+    if (room.state !== 'LOBBY') {
+      socket.emit('error_msg', { msg: 'Game already in progress in this room!' });
+      return;
     }
 
-    const rolePref = forceHitter ? 'HITTER' : (preferredRole || 'RANDOM');
-    const player = room.addPlayer(socket.id, nickname, color, false, rolePref);
-    if (typeof botCount === 'number') {
-      room.setBotCount(botCount);
+    socket.join(code);
+    const p = room.addPlayer(socket.id, name, color, false, team);
+    if (!p) {
+      socket.emit('error_msg', { msg: 'Room is full (max 22 players)!' });
+      return;
     }
 
-    const isHost = (socket.id === room.hostId);
-
-    socket.emit('room_joined', {
-      playerId: socket.id,
-      roomCode: code,
-      player: player,
-      state: room.state,
-      hitterId: room.currentHitterId,
-      hitterIds: Array.from(room.currentHitterIds),
-      hunterCount: room.hunterCount,
-      hostId: room.hostId,
-      isHost: isHost
-    });
-
-    // If autoStart is requested AND this player is the host, start countdown
-    if (autoStart && isHost && room.state === 'LOBBY') {
-      setTimeout(() => {
-        room.startCountdown(forceHitter ? socket.id : null);
-      }, 400);
-    }
+    socket.emit('room_joined', room.getRoomInfo());
+    io.to(code).emit('team_updated', room.getRoomInfo());
   });
 
-  socket.on('start_game', ({ forceHitter, preferredRole } = {}) => {
-    if (!currentRoomCode) return;
-    const room = rooms.get(currentRoomCode);
-    if (room) {
-      // ONLY the room host can start the match!
-      if (room.hostId && socket.id !== room.hostId) {
-        socket.emit('room_error', { message: 'Only the room host can start the match.' });
-        return;
-      }
-      const shouldForce = forceHitter || (preferredRole === 'HITTER');
-      room.startCountdown(shouldForce ? socket.id : null);
-    }
-  });
-
-  socket.on('set_hunter_count', ({ count }) => {
-    if (!currentRoomCode) return;
-    const room = rooms.get(currentRoomCode);
-    if (room) {
-      // ONLY the room host can configure hunter count
-      if (room.hostId && socket.id !== room.hostId) {
-        socket.emit('room_error', { message: 'Only the room host can change hunter count.' });
-        return;
-      }
-      room.hunterCount = Math.min(3, Math.max(1, parseInt(count) || 1));
-      io.to(currentRoomCode).emit('room_hunter_count_updated', {
-        hunterCount: room.hunterCount
-      });
-    }
-  });
-
-  socket.on('set_bots', ({ count }) => {
-    if (!currentRoomCode) return;
-    const room = rooms.get(currentRoomCode);
-    if (room) {
-      room.setBotCount(count);
-    }
-  });
-
-  socket.on('player_input', (inputData) => {
-    if (!currentRoomCode) return;
-    const room = rooms.get(currentRoomCode);
+  socket.on('select_team', (data) => {
+    const room = findRoom(socket.id);
     if (!room) return;
-
-    const player = room.players.get(socket.id);
-    if (!player || !player.isAlive) return;
-
-    if (inputData.position) {
-      player.position.x = inputData.position.x;
-      player.position.y = inputData.position.y;
-      player.position.z = inputData.position.z;
-    }
-    if (inputData.rotation) {
-      player.rotation.y = inputData.rotation.y;
-    }
-    if (typeof inputData.spinePitch === 'number') player.spinePitch = inputData.spinePitch;
-    if (typeof inputData.isFlatFlop === 'boolean') player.isFlatFlop = inputData.isFlatFlop;
-    if (typeof inputData.isCrawling === 'boolean') player.isCrawling = inputData.isCrawling;
-    if (typeof inputData.isSitting === 'boolean') player.isSitting = inputData.isSitting;
-    if (typeof inputData.isGrabbing === 'boolean') player.isGrabbing = inputData.isGrabbing;
+    const ok = room.assignTeam(socket.id, data.team);
+    if (ok) io.to(room.code).emit('team_updated', room.getRoomInfo());
   });
 
-  socket.on('bat_swing', () => {
-    if (!currentRoomCode) return;
-    const room = rooms.get(currentRoomCode);
-    if (room) {
-      room.handleBatSwing(socket.id);
-    }
+  socket.on('start_toss', () => {
+    const room = findRoom(socket.id);
+    if (!room || room.hostId !== socket.id) return;
+    room.startToss();
   });
 
-  socket.on('thermal_echo_trigger', ({ objectId, hitPos }) => {
-    if (!currentRoomCode) return;
-    io.to(currentRoomCode).emit('thermal_echo_pulsed', {
-      objectId,
-      hitPos,
-      senderId: socket.id
-    });
+  socket.on('start_single_batting', (data) => {
+    const room = findRoom(socket.id);
+    if (!room || room.hostId !== socket.id) return;
+    if (data?.overs) room.overs = parseInt(data.overs, 10) || DEFAULT_OVERS;
+    room.startSingleBatting();
+  });
+
+  socket.on('toss_call', (data) => {
+    const room = findRoom(socket.id);
+    if (!room) return;
+    room.handleTossCall(socket.id, data.call);
+  });
+
+  socket.on('toss_decision', (data) => {
+    const room = findRoom(socket.id);
+    if (!room) return;
+    room.handleTossDecision(socket.id, data.choice);
+  });
+
+  socket.on('set_batting_order', (data) => {
+    const room = findRoom(socket.id);
+    if (!room) return;
+    room.setBattingOrder(socket.id, data.order);
+  });
+
+  socket.on('set_bowler', (data) => {
+    const room = findRoom(socket.id);
+    if (!room) return;
+    room.startOver(socket.id, data.bowlerId);
+  });
+
+  socket.on('bowl', (data) => {
+    const room = findRoom(socket.id);
+    if (!room) return;
+    room.handleBowl(socket.id, data);
+  });
+
+  socket.on('bat', (data) => {
+    const room = findRoom(socket.id);
+    if (!room) return;
+    room.handleBat(socket.id, data);
+  });
+
+  socket.on('set_next_batsman', (data) => {
+    const room = findRoom(socket.id);
+    if (!room) return;
+    room.setNextBatsman(socket.id, data.batsmanId);
   });
 
   socket.on('disconnect', () => {
-    if (currentRoomCode) {
-      const room = rooms.get(currentRoomCode);
-      if (room) {
-        room.removePlayer(socket.id);
-      }
+    console.log(`[-] Disconnected: ${socket.id}`);
+    const room = findRoom(socket.id);
+    if (room) {
+      room.removePlayer(socket.id);
+      io.to(room.code).emit('team_updated', room.getRoomInfo());
     }
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`====================================================`);
-  console.log(`🎮 HITTLERS Game Server running on port ${PORT}`);
-  console.log(`🌐 Local URL: http://localhost:${PORT}`);
-  console.log(`====================================================`);
-});
+server.listen(PORT, () => console.log(`🏏 Cricket Server live on port ${PORT}`));
