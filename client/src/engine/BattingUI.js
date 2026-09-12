@@ -10,6 +10,8 @@ export class BattingUI {
     this.barDirection = 1;
     this.barSpeed = 2.2;
     this.onSwing = null;
+    this.stance = { hand: 'RHB', depth: 'normal', guard: 'middle' };
+    this.onStanceChange = null;
     this.animFrame = null;
     this.lastTime = 0;
     this._build();
@@ -21,11 +23,19 @@ export class BattingUI {
     this.el.id = 'batting-ui';
     this.el.className = 'batting-controller-large';
     this.el.innerHTML = `
-      <!-- Header Banner -->
+      <!-- Header Banner & Stance Selector -->
       <div class="bat-header-large">
         <div class="bat-aim-title">
           <span class="bat-icon">🏏</span>
           <span class="bat-main-text">BATSMAN CONTROL</span>
+        </div>
+        <div class="bat-stance-bar">
+          <button type="button" class="stance-badge-btn" id="btn-stance-hand" title="Toggle Right/Left Handed Batting [H]">
+            <span id="stance-hand-icon">🖐️</span> <strong id="stance-hand-label">RHB</strong> [H]
+          </button>
+          <button type="button" class="stance-badge-btn" id="btn-stance-depth" title="Toggle Crease Depth: Normal/Deep/Charge [G]">
+            <span>📍</span> <strong id="stance-depth-label">NORMAL</strong> [G]
+          </button>
         </div>
         <div class="bat-current-shot-badge" id="bat-current-shot-label">
           AIM: <strong>⬆ STRAIGHT DRIVE [W/↑]</strong>
@@ -144,12 +154,45 @@ export class BattingUI {
       });
     });
 
+    // Stance Buttons
+    const btnHand = this.el.querySelector('#btn-stance-hand');
+    if (btnHand) {
+      btnHand.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._toggleHand();
+      });
+    }
+
+    const btnDepth = this.el.querySelector('#btn-stance-depth');
+    if (btnDepth) {
+      btnDepth.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._toggleDepth();
+      });
+    }
+
     // Big Center Swing Button
     const swingBtn = this.el.querySelector('#btn-big-swing');
     swingBtn.addEventListener('click', (e) => { e.stopPropagation(); this._swing(); });
     swingBtn.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); this._swing(); });
 
     this.marker = this.el.querySelector('#batting-timing-marker');
+  }
+
+  _toggleHand() {
+    this.stance.hand = this.stance.hand === 'RHB' ? 'LHB' : 'RHB';
+    const label = this.el.querySelector('#stance-hand-label');
+    if (label) label.textContent = this.stance.hand;
+    if (this.onStanceChange) this.onStanceChange({ ...this.stance });
+  }
+
+  _toggleDepth() {
+    const order = ['normal', 'deep', 'forward'];
+    const curIdx = order.indexOf(this.stance.depth);
+    this.stance.depth = order[(curIdx + 1) % order.length];
+    const label = this.el.querySelector('#stance-depth-label');
+    if (label) label.textContent = this.stance.depth.toUpperCase();
+    if (this.onStanceChange) this.onStanceChange({ ...this.stance });
   }
 
   _bindKeyboard() {
@@ -160,6 +203,17 @@ export class BattingUI {
       if (k === ' ' || k === 'enter') {
         e.preventDefault();
         this._swing();
+        return;
+      }
+
+      if (k === 'h') {
+        e.preventDefault();
+        this._toggleHand();
+        return;
+      }
+      if (k === 'g') {
+        e.preventDefault();
+        this._toggleDepth();
         return;
       }
 

@@ -233,23 +233,41 @@ export class Ground {
   }
 
   _buildStumps(x, z) {
-    const stumpMat = new THREE.MeshStandardMaterial({ color: 0xF5F2DE, roughness: 0.4 });
-    const stumpGeo = new THREE.CylinderGeometry(0.032, 0.032, 0.75, 12);
-    const bailGeo = new THREE.CylinderGeometry(0.016, 0.016, 0.13, 8);
-    const bailMat = new THREE.MeshStandardMaterial({ color: 0xE5C058 });
-
-    const offsets = [-0.12, 0, 0.12];
-    offsets.forEach(dx => {
-      const stump = new THREE.Mesh(stumpGeo, stumpMat);
-      stump.position.set(x + dx, 0.38, z);
-      stump.castShadow = true;
-      this.scene.add(stump);
+    const stumpMat = new THREE.MeshStandardMaterial({
+      color: 0xF7E7B4,
+      roughness: 0.32,
+      metalness: 0.1
+    });
+    // Bigger, thicker cricket stumps
+    const stumpGeo = new THREE.CylinderGeometry(0.052, 0.048, 0.92, 16);
+    const bailGeo = new THREE.CylinderGeometry(0.024, 0.024, 0.20, 10);
+    const bailMat = new THREE.MeshStandardMaterial({
+      color: 0xFFD32A,
+      roughness: 0.25,
+      metalness: 0.2
     });
 
-    [-0.06, 0.06].forEach(dx => {
+    const offsets = [-0.18, 0, 0.18];
+    offsets.forEach(dx => {
+      const stump = new THREE.Mesh(stumpGeo, stumpMat);
+      stump.position.set(x + dx, 0.46, z);
+      stump.castShadow = true;
+      stump.receiveShadow = true;
+      this.scene.add(stump);
+
+      // Base peg ring
+      const baseGeo = new THREE.CylinderGeometry(0.062, 0.062, 0.05, 12);
+      const base = new THREE.Mesh(baseGeo, new THREE.MeshStandardMaterial({ color: 0x4A2F1B }));
+      base.position.set(x + dx, 0.03, z);
+      this.scene.add(base);
+    });
+
+    // Dual bails sitting atop the three stumps
+    [-0.09, 0.09].forEach(dx => {
       const bail = new THREE.Mesh(bailGeo, bailMat);
       bail.rotation.z = Math.PI / 2;
-      bail.position.set(x + dx, 0.77, z);
+      bail.position.set(x + dx, 0.93, z);
+      bail.castShadow = true;
       this.scene.add(bail);
     });
   }

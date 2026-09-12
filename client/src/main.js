@@ -31,6 +31,21 @@ class CricketGame {
     this.roomInfo = null;
     this.lastTime = performance.now();
 
+    // Dual-perspective camera positions
+    this.isUserBowling = false;
+    this.bowlerCamPos = new THREE.Vector3(0, 5.2, -11.5);
+    this.bowlerCamLookAt = new THREE.Vector3(0, 1.2, 3.5);
+    this.batsmanCamPos = new THREE.Vector3(0, 6.5, 11.5);
+    this.batsmanCamLookAt = new THREE.Vector3(0, 1.2, 0);
+
+    // Interactive Manual Running State
+    this.manualRunningActive = false;
+    this.manualRunsTaken = 0;
+    this.maxAvailableRuns = 0;
+    this.isRunningBetweenWickets = false;
+    this.runCancelled = false;
+    this.domRunningBar = null;
+
     this._setupDOM();
     this._initThree();
     this._initAudio();
@@ -154,6 +169,13 @@ class CricketGame {
         this.strikerAvatar.executeCommand(command);
       }
       this.network.bat(command);
+    };
+
+    // Batsman Stance Change Hook (RHB / LHB, Crease Depth)
+    this.battingUI.onStanceChange = (stance) => {
+      if (this.strikerAvatar) {
+        this.strikerAvatar.setStance(stance);
+      }
     };
 
     this.bowlingUI.onBowl = (data) => {
@@ -308,6 +330,14 @@ class CricketGame {
     document.getElementById('btn-play-again')?.addEventListener('click', () => {
       window.location.reload();
     });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'KeyR') {
+        this._handleUserPushRun();
+      } else if (e.code === 'KeyC') {
+        this._handleUserCancelRun();
+      }
+    });
   }
 
   _bindNetwork() {
@@ -377,9 +407,14 @@ class CricketGame {
       this.domHud.classList.remove('hidden');
       this._setupMatchCharacters(data.battingTeam, data.bowlingTeam);
       this._updateScorecardUI(data.scorecard);
+      this._updateCameraMode();
     });
 
     this.network.on('bowling_order_needed', (data) => {
+      this._showCaptainPickBowler(data.bowlers, data.over);
+    });
+
+    this.network.on('bowler_needed', (data) => {
       this._showCaptainPickBowler(data.bowlers, data.over);
     });
 
@@ -387,6 +422,7 @@ class CricketGame {
       this.domCaptainModal.classList.add('hidden');
       this.showNotice(`⚡ Over ${data.over} begins! ${data.bowler?.name} bowling to ${data.batsman?.name}.`);
       this._updateScorecardUI(data.scorecard);
+      this._updateCameraMode();
 
       // Rotate/update bowler avatar
       if (this.bowlerAvatar) {
@@ -394,32 +430,41 @@ class CricketGame {
       }
       const isSnail = data.bowler?.isBot || (data.scorecard?.bowlingTeam === 'b');
       this.bowlerAvatar = new CricketCharacter(this.scene, isSnail ? 'snail_bowler_01' : 'ant_fielder_right');
-      this.bowlerAvatar.setPosition(0, 0.35, -3.7);
+      this.bowlerAvatar.setPosition(0, 0.35, -11.0);
       this.bowlerAvatar.setRotation(0);
     });
 
     this.network.on('bowl_now', (data) => {
       this.showNotice(`⚾ Your turn to bowl ball ${data.ball} of over ${data.over}!`);
-      this.bowlingUI.show({ timeout: 6500 });
+      this._updateCameraMode();
+      this.bowlingUI.show({ timeout: 8500 });
     });
 
-    // Bowler Run-Up Event: bowler begins strides and batting meter appears immediately
+    // Bowler Run-Up Event: bowler begins full 2.0-second runup from back and batting meter appears immediately
     this.network.on('bowler_runup', (data) => {
-      this.domActionBanner.textContent = `⚡ ${data.bowler?.name} charging in (${data.deliveryType.toUpperCase()})...`;
+      const swingStr = data.swingDirection ? ` &bull; ${data.swingDirection.toUpperCase()}` : '';
+      this.domActionBanner.innerHTML = `⚡ ${data.bowler?.name} charging in (${data.deliveryType.toUpperCase()}${swingStr})...`;
 
-      // Animate bowler run-up stride towards the bowling crease over ~950ms
+      // Animate bowler run-up stride towards the bowling crease over 2000ms
       if (this.bowlerAvatar) {
-        this.bowlerAvatar.setPosition(0, 0.35, -7.2);
-        const startZ = -7.2;
+        this.bowlerAvatar.setPosition(0, 0.35, -11.0);
+        const startZ = -11.0;
         const targetZ = -3.7;
         const startTime = performance.now();
-        const duration = 920;
+        const duration = 2000;
         const runupStep = (now) => {
           const elapsed = now - startTime;
           const p = Math.min(1.0, elapsed / duration);
           if (this.bowlerAvatar) {
             this.bowlerAvatar.group.position.z = startZ + (targetZ - startZ) * p;
-            this.bowlerAvatar.group.position.y = 0.35 + Math.abs(Math.sin(p * Math.PI * 6)) * 0.08;
+            this.bowlerAvatar.group.position.y = 0.35 + Math.abs(Math.sin(p * Math.PI * 12)) * 0.12;
+            this.bowlerAvatar.group.position.x = Math.sin(p * Math.PI * 6) * 0.08;
+
+            // When user is bowling, dolly camera smoothly behind bowler running in
+            if (this.isUserBowling && !this.cameraTracking) {
+              this.defaultCamPos.set(0, 4.8, this.bowlerAvatar.group.position.z - 3.8);
+              this.defaultCamLookAt.set(0, 1.2, 3.8);
+            }
           }
           if (p < 1.0) {
             requestAnimationFrame(runupStep);
@@ -431,15 +476,17 @@ class CricketGame {
       }
 
       // Show prominent Batting UI & timing meter immediately during run-up!
-      const isStriker = (data.batsman?.id === this.myId) ||
-        (!data.batsman?.isBot && !this.roomInfo?.players?.teamA?.some(p => !p.isBot && p.id !== this.myId));
-      if (isStriker) {
-        this.battingUI.show({ timeout: 3500 });
+      const isBattingTeam = (this.currentScorecard?.battingTeam === this.myTeam) ||
+                            (data.batsman?.id === this.myId) ||
+                            (!this.roomInfo?.players?.teamA?.some(p => !p.isBot && p.id !== this.myId));
+      if (isBattingTeam) {
+        this.battingUI.show({ timeout: 4500 });
       }
     });
 
     this.network.on('delivery', (data) => {
-      this.domActionBanner.textContent = `⚾ ${data.bowler?.name} delivers a ${data.deliveryType.toUpperCase()}!`;
+      const paceStr = data.paceKmh ? ` [${data.paceKmh} km/h]` : '';
+      this.domActionBanner.textContent = `⚾ ${data.bowler?.name} delivers ${data.deliveryType.toUpperCase()}${paceStr}!`;
       if (this.bowlerAvatar) {
         this.bowlerAvatar.setPosition(0, 0.35, -3.7);
         this.bowlerAvatar.triggerBowlAction();
@@ -447,7 +494,6 @@ class CricketGame {
 
       // Authentic cricket ball delivery: release from bowler hand (y = 1.35m)
       const startPos = new THREE.Vector3(0, 1.35, -3.7);
-      // Pitch landing mapping: z=0 (Yorker at 3.0m), z=0.5 (Good Length at 1.4m), z=1.0 (Bouncer at -0.2m)
       const lzNormZ = typeof data.landingZone?.z === 'number' ? data.landingZone.z : 0.45;
       const lzZ = 3.0 - lzNormZ * 3.2;
       const lzX = (data.landingZone?.x || 0) * 0.65;
@@ -456,11 +502,15 @@ class CricketGame {
 
       this.ball.bowlDelivery(startPos, landingPos, targetPos, data.deliveryType);
 
-      // Ensure batting UI is displayed if user just arrived
-      const isStriker = (data.batsman?.id === this.myId) ||
-        (!data.batsman?.isBot && !this.roomInfo?.players?.teamA?.some(p => !p.isBot && p.id !== this.myId));
-      if (isStriker && !this.battingUI.active) {
-        this.battingUI.show({ timeout: 2600 });
+      // Re-center camera to appropriate end
+      this._updateCameraMode();
+
+      // Ensure batting UI is displayed if user's team is batting
+      const isBattingTeam = (this.currentScorecard?.battingTeam === this.myTeam) ||
+                            (data.batsman?.id === this.myId) ||
+                            (!this.roomInfo?.players?.teamA?.some(p => !p.isBot && p.id !== this.myId));
+      if (isBattingTeam && !this.battingUI.active) {
+        this.battingUI.show({ timeout: 3500 });
       }
     });
 
@@ -502,23 +552,22 @@ class CricketGame {
         if (this.umpireAvatar) this.umpireAvatar.signalFour();
         this.showBigEvent('FOUR! 🏏', 'Crisp drive racing across the turf!');
         this.ball.hitLaunch(new THREE.Vector3(0, 0.65, 3.8), dirInfo, data.timing || 0.76, data.shotType || 'drive', false, 4);
-        this._animateFielderIntercept(dirInfo);
+        this._animateFieldersPursuit(dirInfo, 4);
         setTimeout(() => { this.cameraTracking = false; }, 3200);
       } else if (data.runs > 0) {
         this.cameraTracking = true;
-        this.showNotice(`🏃 ${data.runs} Run${data.runs > 1 ? 's' : ''} scored!`);
+        this.showNotice(`🏏 Ball placed in the gap! Use RUN button to run!`);
         this.ball.hitLaunch(new THREE.Vector3(0, 0.65, 3.8), dirInfo, data.timing || 0.55, data.shotType || 'drive', false, data.runs);
-        this._animateFielderIntercept(dirInfo);
-        this._showRunBanner(data.runs);
-        this._animateBatsmenRunning(data.runs);
-        setTimeout(() => { this.cameraTracking = false; }, 3000);
+        this._animateFieldersPursuit(dirInfo, data.runs);
+        this._setupManualRunning(data.runs);
+        setTimeout(() => { this.cameraTracking = false; }, 3200);
       } else if (data.wide) {
         this.cameraTracking = false;
         if (this.umpireAvatar) this.umpireAvatar.signalWide();
         this.showNotice(`⚠️ WIDE BALL! 1 Extra run + re-bowl.`);
       } else if (data.noBall) {
         this.cameraTracking = false;
-        this.showNotice(`🚨 NO BALL! Extra run awarded.`);
+        this.showNotice(`🚨 NO BALL! Bowler overstepped crease line!`);
       } else {
         this.cameraTracking = false;
         this.showNotice(`• Dot ball! Tidy fielding.`);
@@ -568,9 +617,9 @@ class CricketGame {
     this.strikerAvatar = new CricketCharacter(this.scene, 'ant_batter_01');
     this.bowlerAvatar = new CricketCharacter(this.scene, 'snail_bowler_01');
 
-    // Umpire at bowler stumps (z = -5.6)
+    // Small Umpire placed slightly to side at bowler end (x = -1.3, z = -5.8) so it doesn't block pitch
     this.umpireAvatar = new CricketCharacter(this.scene, { species: 'umpire', role: 'umpire' });
-    this.umpireAvatar.setPosition(0, 0.22, -5.6);
+    this.umpireAvatar.setPosition(-1.3, 0.16, -5.8);
     this.umpireAvatar.setRotation(0);
 
     const snailLeft = new CricketCharacter(this.scene, 'snail_fielder_left');
@@ -590,6 +639,9 @@ class CricketGame {
     // Striker
     const batterPresetId = this.battingUI.characterId || 'ant_batter_01';
     this.strikerAvatar = new CricketCharacter(this.scene, batterPresetId);
+    if (this.strikerAvatar && this.battingUI) {
+      this.strikerAvatar.setStance(this.battingUI.stance);
+    }
 
     // Non-striker
     this.nonStrikerAvatar = new CricketCharacter(this.scene, 'ant_fielder_right');
@@ -598,18 +650,19 @@ class CricketGame {
 
     // Bowler
     this.bowlerAvatar = new CricketCharacter(this.scene, 'snail_bowler_01');
+    this.bowlerAvatar.setPosition(0, 0.35, -11.0);
 
     // Wicketkeeper
     this.keeperAvatar = new CricketCharacter(this.scene, 'snail_fielder_left');
     this.keeperAvatar.setPosition(0, 0.3, 5.4);
     this.keeperAvatar.setRotation(Math.PI);
 
-    // Umpire
+    // Small Umpire at bowler end, slightly offset to leg side
     this.umpireAvatar = new CricketCharacter(this.scene, { species: 'umpire', role: 'umpire' });
-    this.umpireAvatar.setPosition(0, 0.22, -5.6);
+    this.umpireAvatar.setPosition(-1.3, 0.16, -5.8);
     this.umpireAvatar.setRotation(0);
 
-    // Fielders in standard positions
+    // Fielders in strategic positions
     const f1 = new CricketCharacter(this.scene, 'snail_fielder_left');
     const f2 = new CricketCharacter(this.scene, 'ant_fielder_right');
 
@@ -631,10 +684,10 @@ class CricketGame {
     this.fielders.push(f1, f2);
   }
 
-  // Fielder Catch animation: nearest fielder runs to catch ball
+  // Enhanced Athletic Diving Catch Animation
   _animateFielderCatch(dirInfo) {
-    const targetX = dirInfo.x * 12;
-    const targetZ = 3.8 + dirInfo.z * 12;
+    const targetX = dirInfo.x * 13;
+    const targetZ = 3.8 + dirInfo.z * 13;
 
     let nearest = null;
     let minDist = Infinity;
@@ -650,49 +703,94 @@ class CricketGame {
       this.ball.hitLaunch(new THREE.Vector3(0, 0.65, 3.8), dirInfo, 0.6, 'loft', false);
       const startX = nearest.group.position.x;
       const startZ = nearest.group.position.z;
-      let t = 0;
-      const run = () => {
-        t += 0.05;
-        if (t <= 1) {
-          nearest.group.position.x = startX + (targetX - startX) * t;
-          nearest.group.position.z = startZ + (targetZ - startZ) * t;
+      const startTime = performance.now();
+      const duration = 1100;
+
+      const run = (now) => {
+        const p = Math.min(1.0, (now - startTime) / duration);
+        nearest.group.position.x = startX + (targetX - startX) * (p * 0.9);
+        nearest.group.position.z = startZ + (targetZ - startZ) * (p * 0.9);
+        nearest.group.rotation.y = Math.atan2(targetX - startX, targetZ - startZ);
+
+        if (p < 1.0) {
           requestAnimationFrame(run);
         } else {
+          // Athletic diving slide catch!
           nearest.triggerCatch();
         }
       };
-      run();
+      requestAnimationFrame(run);
     }
   }
 
-  // Fielder Intercept animation: fielder chases ground ball
-  _animateFielderIntercept(dirInfo) {
-    const targetX = dirInfo.x * 18;
-    const targetZ = 3.8 + dirInfo.z * 18;
+  // Dynamic Fielder Pursuit: 2 closest fielders sprint towards ball, gather and throw
+  _animateFieldersPursuit(dirInfo, runs = 1) {
+    const dist = Math.min(25, 12 + (runs || 1) * 3.5);
+    const targetX = dirInfo.x * dist;
+    const targetZ = 3.8 + dirInfo.z * dist;
 
-    let nearest = null;
-    let minDist = Infinity;
-    this.fielders.forEach(f => {
-      const d = Math.hypot(f.group.position.x - targetX, f.group.position.z - targetZ);
-      if (d < minDist) {
-        minDist = d;
-        nearest = f;
-      }
+    // Find closest 2 fielders to the ball's outfield trajectory
+    const sorted = [...this.fielders].sort((a, b) => {
+      const da = Math.hypot(a.group.position.x - targetX, a.group.position.z - targetZ);
+      const db = Math.hypot(b.group.position.x - targetX, b.group.position.z - targetZ);
+      return da - db;
     });
 
-    if (nearest) {
-      const startX = nearest.group.position.x;
-      const startZ = nearest.group.position.z;
-      let t = 0;
-      const run = () => {
-        t += 0.035;
-        if (t <= 0.8) {
-          nearest.group.position.x = startX + (targetX - startX) * t;
-          nearest.group.position.z = startZ + (targetZ - startZ) * t;
-          requestAnimationFrame(run);
+    const primary = sorted[0];
+    const backup = sorted[1];
+
+    if (primary) {
+      const startX = primary.group.position.x;
+      const startZ = primary.group.position.z;
+      const startTime = performance.now();
+      const duration = 1600;
+
+      const chaseStep = (now) => {
+        const p = Math.min(1.0, (now - startTime) / duration);
+        primary.group.position.x = startX + (targetX - startX) * (p * 0.85);
+        primary.group.position.z = startZ + (targetZ - startZ) * (p * 0.85);
+        primary.group.rotation.y = Math.atan2(targetX - startX, targetZ - startZ);
+        primary.group.position.y = 0.3 + Math.abs(Math.sin(p * Math.PI * 8)) * 0.08;
+
+        if (p < 1.0) {
+          requestAnimationFrame(chaseStep);
+        } else {
+          primary.triggerFieldGather();
         }
       };
-      run();
+      requestAnimationFrame(chaseStep);
+    }
+
+    if (backup) {
+      const bStartX = backup.group.position.x;
+      const bStartZ = backup.group.position.z;
+      const bTargetX = targetX * 0.75;
+      const bTargetZ = targetZ * 0.75;
+      const bStartTime = performance.now();
+      const bDuration = 1800;
+
+      const backupStep = (now) => {
+        const p = Math.min(1.0, (now - bStartTime) / bDuration);
+        backup.group.position.x = bStartX + (bTargetX - bStartX) * (p * 0.5);
+        backup.group.position.z = bStartZ + (bTargetZ - bStartZ) * (p * 0.5);
+        backup.group.rotation.y = Math.atan2(bTargetX - bStartX, bTargetZ - bStartZ);
+        if (p < 1.0) requestAnimationFrame(backupStep);
+      };
+      requestAnimationFrame(backupStep);
+    }
+  }
+
+  _updateCameraMode() {
+    const card = this.currentScorecard;
+    const isBowling = (card && card.bowlingTeam === this.myTeam) ||
+                      (card?.currentBowler?.id === this.myId);
+    this.isUserBowling = !!isBowling;
+    if (this.isUserBowling) {
+      this.defaultCamPos.copy(this.bowlerCamPos);
+      this.defaultCamLookAt.copy(this.bowlerCamLookAt);
+    } else {
+      this.defaultCamPos.copy(this.batsmanCamPos);
+      this.defaultCamLookAt.copy(this.batsmanCamLookAt);
     }
   }
 
@@ -802,13 +900,26 @@ class CricketGame {
     bowlers.forEach(b => {
       const btn = document.createElement('button');
       btn.className = 'roster-btn';
-      btn.innerHTML = `<span>🐌 ${b.name}</span><span>${b.isBot ? '(Bot)' : 'Human'}</span>`;
+      const isYou = (b.id === this.myId);
+      btn.innerHTML = `<span>🐌 ${b.name} ${isYou ? '⭐ YOU' : ''}</span><span>${b.isBot ? '(Bot)' : 'Human'}</span>`;
       btn.addEventListener('click', () => {
+        clearTimeout(this._captainPickTimer);
         this.domCaptainModal.classList.add('hidden');
         this.network.setBowler(b.id);
       });
       list.appendChild(btn);
     });
+
+    // Auto-select safety timeout (6 seconds) so match progresses smoothly
+    clearTimeout(this._captainPickTimer);
+    this._captainPickTimer = setTimeout(() => {
+      if (!this.domCaptainModal.classList.contains('hidden')) {
+        this.domCaptainModal.classList.add('hidden');
+        const myBowler = bowlers.find(b => b.id === this.myId);
+        const choice = myBowler ? myBowler.id : bowlers[0]?.id;
+        if (choice) this.network.setBowler(choice);
+      }
+    }, 6000);
   }
 
   _showCaptainPickBatsman(batsmen) {
@@ -857,75 +968,190 @@ class CricketGame {
     }, Math.max(2200, runs * 1100));
   }
 
-  // Batsmen physically running between wickets and rotating strike
-  _animateBatsmenRunning(runs) {
-    if (!this.strikerAvatar || !this.nonStrikerAvatar) return;
+  // Interactive Manual Running System (User chooses to Run [R] or Cancel [C])
+  _setupManualRunning(maxRuns) {
+    this.manualRunningActive = true;
+    this.manualRunsTaken = 0;
+    this.maxAvailableRuns = Math.max(1, maxRuns || 1);
+    this.isRunningBetweenWickets = false;
+    this.runCancelled = false;
 
-    const runDuration = 1050; // ms per run
-    let currentRun = 0;
+    if (!this.domRunningBar) {
+      this.domRunningBar = document.createElement('div');
+      this.domRunningBar.id = 'manual-running-bar';
+      this.domRunningBar.className = 'running-control-bar';
+      this.domRunningBar.innerHTML = `
+        <div class="run-score-tally">Runs: <strong id="manual-runs-count">0</strong> / <span id="manual-max-runs">${this.maxAvailableRuns}</span></div>
+        <button id="btn-manual-run" class="btn-run-action">🏃 RUN [R]</button>
+        <button id="btn-manual-cancel" class="btn-cancel-action">🛑 CANCEL RUN [C]</button>
+      `;
+      document.body.appendChild(this.domRunningBar);
 
-    const doSingleRun = (fromStrikerEnd) => {
-      currentRun++;
-      const startTime = performance.now();
-      const runZStartStriker = fromStrikerEnd ? 3.8 : -3.8;
-      const runZEndStriker = fromStrikerEnd ? -3.8 : 3.8;
-      const runZStartNonStriker = fromStrikerEnd ? -3.8 : 3.8;
-      const runZEndNonStriker = fromStrikerEnd ? 3.8 : -3.8;
+      this.domRunningBar.querySelector('#btn-manual-run').addEventListener('click', () => {
+        this._handleUserPushRun();
+      });
+      this.domRunningBar.querySelector('#btn-manual-cancel').addEventListener('click', () => {
+        this._handleUserCancelRun();
+      });
+    } else {
+      const countEl = document.getElementById('manual-runs-count');
+      const maxEl = document.getElementById('manual-max-runs');
+      if (countEl) countEl.textContent = '0';
+      if (maxEl) maxEl.textContent = String(this.maxAvailableRuns);
+      this.domRunningBar.classList.remove('hidden');
+    }
 
-      const runStep = (now) => {
-        const elapsed = now - startTime;
-        const p = Math.min(1.0, elapsed / runDuration);
+    const cancelBtn = this.domRunningBar.querySelector('#btn-manual-cancel');
+    if (cancelBtn) cancelBtn.classList.remove('disabled');
 
-        // Striker running down pitch lane
-        if (this.strikerAvatar) {
-          this.strikerAvatar.group.position.z = runZStartStriker + (runZEndStriker - runZStartStriker) * p;
-          this.strikerAvatar.group.position.x = 0.5 * Math.sin(p * Math.PI);
-          this.strikerAvatar.group.position.y = 0.65 + Math.abs(Math.sin(p * Math.PI * 6)) * 0.1;
+    // If human is not on the batting team (e.g. user is bowling), bots automatically take runs
+    const isBattingTeam = (this.currentScorecard?.battingTeam === this.myTeam) ||
+                          (!this.roomInfo?.players?.teamA?.some(p => !p.isBot && p.id !== this.myId));
+    if (!isBattingTeam) {
+      let r = 0;
+      const botRunInterval = setInterval(() => {
+        if (!this.manualRunningActive || r >= this.maxAvailableRuns) {
+          clearInterval(botRunInterval);
+          return;
         }
+        this._handleUserPushRun();
+        r++;
+      }, 1050);
+    }
 
-        // Non-striker running down pitch opposite lane
-        if (this.nonStrikerAvatar) {
-          this.nonStrikerAvatar.group.position.z = runZStartNonStriker + (runZEndNonStriker - runZStartNonStriker) * p;
-          this.nonStrikerAvatar.group.position.x = -1.0 - 0.4 * Math.sin(p * Math.PI);
-          this.nonStrikerAvatar.group.position.y = 0.55 + Math.abs(Math.sin(p * Math.PI * 6)) * 0.1;
+    // Auto-timeout when fielders gather and return ball to keeper
+    clearTimeout(this._manualRunningSafetyTimer);
+    this._manualRunningSafetyTimer = setTimeout(() => {
+      if (this.manualRunningActive && !this.isRunningBetweenWickets) {
+        this._finishManualRunning();
+      }
+    }, Math.max(4500, this.maxAvailableRuns * 1350 + 1200));
+  }
+
+  _handleUserPushRun() {
+    if (!this.manualRunningActive || this.isRunningBetweenWickets || this.runCancelled) return;
+    if (this.manualRunsTaken >= this.maxAvailableRuns) {
+      this.showNotice('⚠️ Fielder has gathered ball! Cannot risk another run.');
+      return;
+    }
+
+    this.isRunningBetweenWickets = true;
+    const runNum = this.manualRunsTaken + 1;
+    this.showNotice(`🏃 Taking run ${runNum}! Press [C] to Cancel & Dive.`);
+
+    const fromStrikerEnd = (this.manualRunsTaken % 2 === 0);
+    const runZStartStriker = fromStrikerEnd ? 3.8 : -3.8;
+    const runZEndStriker = fromStrikerEnd ? -3.8 : 3.8;
+    const runZStartNonStriker = fromStrikerEnd ? -3.8 : 3.8;
+    const runZEndNonStriker = fromStrikerEnd ? 3.8 : -3.8;
+
+    const startTime = performance.now();
+    const runDuration = 950;
+
+    const runStep = (now) => {
+      if (!this.manualRunningActive) return;
+
+      if (this.runCancelled) {
+        this._animateCancelDive(fromStrikerEnd);
+        return;
+      }
+
+      const elapsed = now - startTime;
+      const p = Math.min(1.0, elapsed / runDuration);
+
+      if (this.strikerAvatar) {
+        this.strikerAvatar.group.position.z = runZStartStriker + (runZEndStriker - runZStartStriker) * p;
+        this.strikerAvatar.group.position.x = 0.5 * Math.sin(p * Math.PI);
+        this.strikerAvatar.group.position.y = 0.65 + Math.abs(Math.sin(p * Math.PI * 6)) * 0.1;
+      }
+      if (this.nonStrikerAvatar) {
+        this.nonStrikerAvatar.group.position.z = runZStartNonStriker + (runZEndNonStriker - runZStartNonStriker) * p;
+        this.nonStrikerAvatar.group.position.x = -1.0 - 0.4 * Math.sin(p * Math.PI);
+        this.nonStrikerAvatar.group.position.y = 0.55 + Math.abs(Math.sin(p * Math.PI * 6)) * 0.1;
+      }
+
+      if (p < 1.0) {
+        requestAnimationFrame(runStep);
+      } else {
+        this.manualRunsTaken++;
+        this.isRunningBetweenWickets = false;
+        const countEl = document.getElementById('manual-runs-count');
+        if (countEl) countEl.textContent = String(this.manualRunsTaken);
+
+        this._showRunBanner(this.manualRunsTaken);
+
+        if (this.manualRunsTaken >= this.maxAvailableRuns) {
+          setTimeout(() => this._finishManualRunning(), 550);
         }
-
-        if (p < 1.0) {
-          requestAnimationFrame(runStep);
-        } else {
-          // Finished this single run
-          if (currentRun < runs) {
-            // Turn at crease and run back for next run
-            doSingleRun(!fromStrikerEnd);
-          } else {
-            // All runs completed!
-            if (runs % 2 === 1) {
-              // Odd runs: strike has rotated! Swap avatars
-              const prevStriker = this.strikerAvatar;
-              this.strikerAvatar = this.nonStrikerAvatar;
-              this.nonStrikerAvatar = prevStriker;
-
-              this.strikerAvatar.setPosition(0, 0.65, 3.8);
-              this.strikerAvatar.setRotation(Math.PI);
-
-              this.nonStrikerAvatar.setPosition(-1.3, 0.55, -3.8);
-              this.nonStrikerAvatar.setRotation(0);
-            } else {
-              // Even runs: batsmen returned to original ends
-              this.strikerAvatar.setPosition(0, 0.65, 3.8);
-              this.strikerAvatar.setRotation(Math.PI);
-
-              this.nonStrikerAvatar.setPosition(-1.3, 0.55, -3.8);
-              this.nonStrikerAvatar.setRotation(0);
-            }
-          }
-        }
-      };
-
-      requestAnimationFrame(runStep);
+      }
     };
+    requestAnimationFrame(runStep);
+  }
 
-    doSingleRun(true);
+  _animateCancelDive(fromStrikerEnd) {
+    this.isRunningBetweenWickets = false;
+    this.showNotice('🛑 RUN CANCELLED! Batsmen diving back into crease!');
+    const sZ = this.strikerAvatar ? this.strikerAvatar.group.position.z : 3.8;
+    const nsZ = this.nonStrikerAvatar ? this.nonStrikerAvatar.group.position.z : -3.8;
+
+    const targetSZ = fromStrikerEnd ? 3.8 : -3.8;
+    const targetNsZ = fromStrikerEnd ? -3.8 : 3.8;
+
+    const startTime = performance.now();
+    const duration = 380;
+
+    const diveStep = (now) => {
+      const p = Math.min(1.0, (now - startTime) / duration);
+      if (this.strikerAvatar) {
+        this.strikerAvatar.group.position.z = sZ + (targetSZ - sZ) * p;
+        this.strikerAvatar.group.position.y = 0.45 + (1 - p) * 0.2;
+      }
+      if (this.nonStrikerAvatar) {
+        this.nonStrikerAvatar.group.position.z = nsZ + (targetNsZ - nsZ) * p;
+        this.nonStrikerAvatar.group.position.y = 0.40 + (1 - p) * 0.2;
+      }
+      if (p < 1.0) {
+        requestAnimationFrame(diveStep);
+      } else {
+        this._finishManualRunning();
+      }
+    };
+    requestAnimationFrame(diveStep);
+  }
+
+  _handleUserCancelRun() {
+    if (!this.manualRunningActive) return;
+    if (this.isRunningBetweenWickets) {
+      this.runCancelled = true;
+      const cancelBtn = this.domRunningBar?.querySelector('#btn-manual-cancel');
+      if (cancelBtn) cancelBtn.classList.add('disabled');
+    } else {
+      this._finishManualRunning();
+    }
+  }
+
+  _finishManualRunning() {
+    this.manualRunningActive = false;
+    this.isRunningBetweenWickets = false;
+    if (this.domRunningBar) {
+      this.domRunningBar.classList.add('hidden');
+    }
+
+    // Set final positions and swap striker on odd runs
+    const odd = (this.manualRunsTaken % 2 === 1);
+    if (odd) {
+      const prevStriker = this.strikerAvatar;
+      this.strikerAvatar = this.nonStrikerAvatar;
+      this.nonStrikerAvatar = prevStriker;
+    }
+    if (this.strikerAvatar) {
+      this.strikerAvatar.setPosition(0, 0.65, 3.8);
+      this.strikerAvatar.setRotation(Math.PI);
+    }
+    if (this.nonStrikerAvatar) {
+      this.nonStrikerAvatar.setPosition(-1.3, 0.55, -3.8);
+      this.nonStrikerAvatar.setRotation(0);
+    }
   }
 
   _renderFullScorecard() {

@@ -345,15 +345,29 @@ class CricketRoom {
       scorecard: this._scorecardSnapshot()
     });
 
+    const humanBowlers = bowlingIds.filter(id => !this.players.get(id)?.isBot);
     const bowlingCaptainPlayer = this.players.get(bowlingCaptain);
-    if (bowlingCaptainPlayer && bowlingCaptainPlayer.isBot) {
-      setTimeout(() => this._autoPickBowler(), 1200);
-    } else {
+
+    if (bowlingCaptainPlayer && !bowlingCaptainPlayer.isBot) {
       io.to(bowlingCaptain).emit('bowling_order_needed', {
         over: 1,
         bowlingTeam: this.bowlingTeam,
         bowlers: bowlingIds.map(id => this._playerInfo(id))
       });
+    } else if (humanBowlers.length > 0) {
+      // Prioritize human player to bowl Over 1 of innings!
+      io.to(humanBowlers[0]).emit('bowling_order_needed', {
+        over: 1,
+        bowlingTeam: this.bowlingTeam,
+        bowlers: bowlingIds.map(id => this._playerInfo(id))
+      });
+      setTimeout(() => {
+        if (this.state === 'CAPTAIN_SETUP' && !this.currentBowler) {
+          this.startOver(null, humanBowlers[0]);
+        }
+      }, 5000);
+    } else {
+      setTimeout(() => this._autoPickBowler(), 1200);
     }
   }
 
@@ -364,12 +378,17 @@ class CricketRoom {
 
     // Eligible bowlers who are not the current bowler and haven't reached max overs
     const eligible = bowlingIds.filter(id => id !== this.currentBowler && (card.bowlers[id]?.overs || 0) < maxOvers);
+    const humanEligible = eligible.filter(id => !this.players.get(id)?.isBot);
+
     let bowlerId;
-    if (eligible.length > 0) {
-      // Rotate through squad bowlers
+    if (humanEligible.length > 0) {
+      // Always give human player on the bowling team their overs!
+      bowlerId = humanEligible[0];
+    } else if (eligible.length > 0) {
       bowlerId = eligible[this.currentOver % eligible.length];
     } else {
-      bowlerId = bowlingIds.find(id => id !== this.currentBowler) || bowlingIds[0];
+      const anyHuman = bowlingIds.filter(id => !this.players.get(id)?.isBot);
+      bowlerId = anyHuman[0] || bowlingIds.find(id => id !== this.currentBowler) || bowlingIds[0];
     }
 
     this.startOver(null, bowlerId);
@@ -427,16 +446,20 @@ class CricketRoom {
       ? this.sbQueue[this.sbCurrentBatsmanIdx]
       : this.battingOrder[this.currentBatsmanIdx];
 
-    // 1. Emit bowler_runup immediately so bowler starts running in and batting meter appears
+    // 1. Emit bowler_runup immediately so bowler starts running in from back over 2.0 seconds
     io.to(this.code).emit('bowler_runup', {
       bowler: this._playerInfo(socketId),
       batsman: this._playerInfo(batsmanId),
       deliveryType: data.deliveryType,
+      swingDirection: data.swingDirection || 'straight',
+      power: data.power,
+      isNoBall: data.isNoBall || false,
+      runupDuration: 2000,
       over: this.currentOver + 1,
       ball: this.currentBall + 1
     });
 
-    // 2. Deliver the ball after bowler run-up stride (1000ms)
+    // 2. Deliver the ball after bowler complete 2.0-second run-up stride
     setTimeout(() => {
       if (!this.ballInFlight) return;
 
@@ -445,22 +468,29 @@ class CricketRoom {
         batsman: this._playerInfo(batsmanId),
         landingZone: data.landingZone,
         deliveryType: data.deliveryType,
+        swingDirection: data.swingDirection || 'straight',
+        power: data.power,
+        isNoBall: data.isNoBall || false,
+        paceKmh: data.paceKmh,
         over: this.currentOver + 1,
         ball: this.currentBall + 1
       });
 
+      const battingIds = this.battingTeam === 'a' ? this.teamA : this.teamB;
+      const humanOnBattingTeam = battingIds.some(id => !this.players.get(id)?.isBot);
       const batsmanPlayer = this.players.get(batsmanId);
-      if (batsmanPlayer && batsmanPlayer.isBot) {
-        setTimeout(() => this._botBat(batsmanId, data), 650 + Math.random() * 500);
+
+      if (batsmanPlayer && batsmanPlayer.isBot && !humanOnBattingTeam) {
+        setTimeout(() => this._botBat(batsmanId, data), 700 + Math.random() * 500);
       } else {
         clearTimeout(this._batTimeout);
         this._batTimeout = setTimeout(() => {
           if (this.ballInFlight) {
             this._botBat(batsmanId, data);
           }
-        }, 3600);
+        }, 4000);
       }
-    }, 1000);
+    }, 2000);
   }
 
   handleBat(socketId, data) {
@@ -468,7 +498,11 @@ class CricketRoom {
       ? this.sbQueue[this.sbCurrentBatsmanIdx]
       : this.battingOrder[this.currentBatsmanIdx];
 
-    if (!this.ballInFlight || socketId !== batsmanId) return;
+    const battingIds = this.battingTeam === 'a' ? this.teamA : this.teamB;
+    const isBatsman = (socketId === batsmanId);
+    const isHumanOnBattingTeam = battingIds.includes(socketId) && !this.players.get(socketId)?.isBot;
+
+    if (!this.ballInFlight || (!isBatsman && !isHumanOnBattingTeam)) return;
     clearTimeout(this._batTimeout);
     this._resolveBall(data, this.pendingBall);
   }
@@ -717,6 +751,11 @@ class CricketRoom {
     const impactMult = isBeetle ? 1.4 : isGrasshopper ? 1.05 : 1.0;
     const stability = isBeetle ? 0.98 : isGrasshopper ? 0.38 : 0.62;
 
+    // Overstepping Crease Line NO-BALL
+    if (bowl.isNoBall || (typeof bowl.power === 'number' && bowl.power >= 0.88)) {
+      return { type: 'noball', noBall: true, runs: 1, ballPath: 'crease_noball' };
+    }
+
     // Wide check: bowler missed landing zone by a lot
     if (accuracy < 0.22 && Math.abs(bowl.landingZone?.x || 0) > 0.85) {
       return { type: 'wide', wide: true, runs: 0, ballPath: 'wide' };
@@ -962,16 +1001,28 @@ class CricketRoom {
 
     const bowlingCaptain = this.bowlingTeam === 'a' ? this.captainA : this.captainB;
     const bowlingCaptainPlayer = this.players.get(bowlingCaptain);
+    const bowlingIds = this.bowlingTeam === 'a' ? this.teamA : this.teamB;
+    const humanBowlers = bowlingIds.filter(id => !this.players.get(id)?.isBot);
 
-    if (bowlingCaptainPlayer && bowlingCaptainPlayer.isBot) {
-      setTimeout(() => this._autoPickBowler(), 1200);
-    } else {
-      const bowlingIds = this.bowlingTeam === 'a' ? this.teamA : this.teamB;
+    if (bowlingCaptainPlayer && !bowlingCaptainPlayer.isBot) {
       io.to(bowlingCaptain).emit('bowler_needed', {
         over: this.currentOver + 1,
         bowlers: bowlingIds.map(id => this._playerInfo(id)),
         scorecard: snap
       });
+    } else if (humanBowlers.length > 0) {
+      io.to(humanBowlers[0]).emit('bowler_needed', {
+        over: this.currentOver + 1,
+        bowlers: bowlingIds.map(id => this._playerInfo(id)),
+        scorecard: snap
+      });
+      setTimeout(() => {
+        if (this.state === 'CAPTAIN_SETUP' && this.pendingBowlerRequest) {
+          this._autoPickBowler();
+        }
+      }, 6000);
+    } else {
+      setTimeout(() => this._autoPickBowler(), 1200);
     }
   }
 

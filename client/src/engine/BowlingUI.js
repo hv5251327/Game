@@ -1,9 +1,10 @@
-// BowlingUI: Advanced Cricket Bowling Controller with 8 Delivery Options, Release Speed Meter & Pitch Targeting
+// BowlingUI: Advanced Cricket Bowling Controller with 8 Delivery Options, Swing Direction, No-Ball Crease Line & Pitch Targeting
 export class BowlingUI {
   constructor(container) {
     this.container = container;
     this.landingZone = { x: -0.2, z: 0.45 }; // default top of off-stump good length
     this.deliveryType = 'pace';
+    this.swingDirection = 'straight'; // 'outswing' | 'straight' | 'inswing' | 'reverse'
     this.power = 0.5;
     this.barDirection = 1;
     this.barSpeed = 2.4;
@@ -42,6 +43,15 @@ export class BowlingUI {
         <button type="button" class="deliv-opt-btn" data-type="slower" title="Deceptive Knuckle Slower Ball [8]">🐢 Slower [8]</button>
       </div>
 
+      <!-- Dedicated Swing Direction Selector Bar -->
+      <div class="swing-direction-bar">
+        <span class="swing-bar-label">SWING BIAS:</span>
+        <button type="button" class="swing-dir-btn" data-swing="outswing" title="Outswing Away from Batsman">↩ Outswing</button>
+        <button type="button" class="swing-dir-btn active" data-swing="straight" title="Straight Seam Delivery">⬆ Straight</button>
+        <button type="button" class="swing-dir-btn" data-swing="inswing" title="Inswing into Batter Pads">↪ Inswing</button>
+        <button type="button" class="swing-dir-btn" data-swing="reverse" title="Tail-in Reverse Swing">🔄 Reverse</button>
+      </div>
+
       <!-- Interactive 2D Pitch View with Color-Coded Length Zones -->
       <div class="pitch-picker-container">
         <div class="pitch-picker-label">🎯 Click on pitch or use Arrow Keys to set landing target:</div>
@@ -71,15 +81,19 @@ export class BowlingUI {
         <span id="bowl-line-label">Line: <strong>Outside Off</strong></span>
       </div>
 
-      <!-- Bowling Release Speed & Accuracy Meter -->
+      <!-- Bowling Release Speed & Accuracy Meter with NO-BALL Line -->
       <div class="bowling-meter-wrap">
         <div class="bowl-meter-labels">
-          <span>MIN SPEED</span>
-          <span class="meter-label-sweet">⚡ PEAK SPEED & ACCURACY ⚡</span>
-          <span>OVERSTEP</span>
+          <span>MIN PACE</span>
+          <span class="meter-label-sweet">⚡ OPTIMAL SWEET SPOT ⚡</span>
+          <span class="meter-label-noball">🚨 NO-BALL LINE</span>
         </div>
         <div class="bowl-meter-track">
           <div class="bowl-meter-sweet-zone"></div>
+          <div class="bowl-meter-noball-zone" title="Overstep Crease = NO-BALL"></div>
+          <div class="bowl-meter-noball-crease-line" title="Crease Line">
+            <span class="crease-line-text">CREASE</span>
+          </div>
           <div id="bowling-speed-marker" class="bowl-meter-marker"></div>
         </div>
       </div>
@@ -98,6 +112,14 @@ export class BowlingUI {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         this._setDeliveryType(btn.dataset.type);
+      });
+    });
+
+    // Swing direction pills
+    this.el.querySelectorAll('.swing-dir-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._setSwingDirection(btn.dataset.swing);
       });
     });
 
@@ -184,15 +206,26 @@ export class BowlingUI {
     // Preset ideal length for the chosen delivery
     if (type === 'yorker') this.landingZone.z = 0.10;
     else if (type === 'bouncer') this.landingZone.z = 0.85;
-    else if (type === 'outswing') { this.landingZone.z = 0.44; this.landingZone.x = -0.35; }
-    else if (type === 'inswing') { this.landingZone.z = 0.40; this.landingZone.x = -0.15; }
+    else if (type === 'outswing') { this.landingZone.z = 0.44; this.landingZone.x = -0.35; this.swingDirection = 'outswing'; }
+    else if (type === 'inswing') { this.landingZone.z = 0.40; this.landingZone.x = -0.15; this.swingDirection = 'inswing'; }
     else if (type === 'spin') { this.landingZone.z = 0.48; this.landingZone.x = 0.35; }
     else if (type === 'leg_spin') { this.landingZone.z = 0.48; this.landingZone.x = -0.35; }
     else if (type === 'slower') { this.landingZone.z = 0.35; }
     else { this.landingZone.z = 0.45; this.landingZone.x = -0.20; }
 
+    this._updateSwingButtons();
     this._updateMarkerVisual();
     this._updateLabels();
+  }
+
+  _setSwingDirection(swing) {
+    this.swingDirection = swing;
+    this._updateSwingButtons();
+    this._updateLabels();
+  }
+
+  _updateSwingButtons() {
+    this.el.querySelectorAll('.swing-dir-btn').forEach(b => b.classList.toggle('active', b.dataset.swing === this.swingDirection));
   }
 
   _updateMarkerVisual() {
@@ -208,7 +241,6 @@ export class BowlingUI {
     const lengthLabel = this.el.querySelector('#bowl-length-label');
     const lineLabel = this.el.querySelector('#bowl-line-label');
     const statusBanner = this.el.querySelector('#bowl-status-banner');
-    const speedDisplay = this.el.querySelector('#bowl-speed-display');
 
     const z = this.landingZone.z;
     let lenStr = 'Good Length';
@@ -226,17 +258,16 @@ export class BowlingUI {
     else if (x > 0.2) lineStr = 'On the Pads (Leg Stump)';
     else lineStr = 'Middle & Off Channel';
 
-    if (lengthLabel) lengthLabel.innerHTML = `Length: <strong>${lenStr}</strong>`;
+    if (lengthLabel) lengthLabel.innerHTML = `Length: <strong>${lenStr}</strong> &bull; Swing: <strong style="color:#7bed9f;">${this.swingDirection.toUpperCase()}</strong>`;
     if (lineLabel) lineLabel.innerHTML = `Line: <strong>${lineStr}</strong>`;
 
-    // Projected speed estimate
     const isSpin = this.deliveryType.includes('spin');
     const isSlower = this.deliveryType === 'slower';
-    const isPace = !isSpin && !isSlower;
-    const speedKmh = isSpin ? 88 : isSlower ? 112 : 142;
+    const baseKmh = isSpin ? 84 : isSlower ? 106 : 138;
+    const speedEst = Math.round(baseKmh + this.power * 16);
 
     if (statusBanner) {
-      statusBanner.innerHTML = `TARGET: <strong>${lenStr}</strong> &bull; <span style="color:#ffd32a;">${this.deliveryType.toUpperCase()} (~${speedKmh} km/h)</span>`;
+      statusBanner.innerHTML = `TARGET: <strong>${lenStr}</strong> &bull; <span style="color:#ffd32a;">${this.deliveryType.toUpperCase()} (~${speedEst} km/h)</span>`;
     }
   }
 
@@ -275,6 +306,23 @@ export class BowlingUI {
     if (this.marker) {
       this.marker.style.left = `${this.power * 100}%`;
     }
+
+    // Dynamic banner text for No-Ball Crease Warning
+    const statusBanner = this.el.querySelector('#bowl-status-banner');
+    if (statusBanner) {
+      const isSpin = this.deliveryType.includes('spin');
+      const isSlower = this.deliveryType === 'slower';
+      const baseKmh = isSpin ? 84 : isSlower ? 106 : 138;
+      const curSpeed = Math.round(baseKmh + this.power * (isSpin ? 14 : 20));
+
+      if (this.power >= 0.88) {
+        statusBanner.innerHTML = `🚨 <strong style="color:#ff4757;">OVERSTEPPED CREASE! NO-BALL RISK!</strong> &bull; <span style="color:#ff6b81;">${curSpeed} km/h</span>`;
+      } else {
+        const isSweet = this.power >= 0.52 && this.power <= 0.82;
+        statusBanner.innerHTML = `${isSweet ? '⚡ SWEET SPOT!' : 'TARGET'} &bull; <span style="color:#ffd32a;">${this.deliveryType.toUpperCase()} (${curSpeed} km/h)</span> &bull; <span>${this.swingDirection.toUpperCase()}</span>`;
+      }
+    }
+
     this.animFrame = requestAnimationFrame((t) => this._animate(t));
   }
 
@@ -282,10 +330,16 @@ export class BowlingUI {
     if (!this.active) return;
     this.hide();
 
-    // Timing score: sweet spot between 0.50 and 0.75
-    const sweetCenter = 0.62;
+    // No ball check if power exceeds 0.88 (crease overstep line)
+    const isNoBall = this.power >= 0.88;
+    const sweetCenter = 0.68;
     const timingDiff = Math.abs(this.power - sweetCenter);
-    const accuracy = Math.max(0.5, 1.0 - timingDiff * 1.5);
+    const accuracy = isNoBall ? 0.2 : Math.max(0.45, 1.0 - timingDiff * 1.5);
+
+    const isSpin = this.deliveryType.includes('spin');
+    const isSlower = this.deliveryType === 'slower';
+    const baseKmh = isSpin ? 84 : isSlower ? 106 : 138;
+    const paceKmh = Math.round(baseKmh + this.power * (isSpin ? 14 : 20));
 
     if (this.onBowl) {
       this.onBowl({
@@ -294,8 +348,11 @@ export class BowlingUI {
           z: parseFloat(this.landingZone.z.toFixed(2))
         },
         deliveryType: this.deliveryType,
+        swingDirection: this.swingDirection,
+        power: parseFloat(this.power.toFixed(2)),
         accuracy: parseFloat(accuracy.toFixed(2)),
-        power: parseFloat(this.power.toFixed(2))
+        isNoBall,
+        paceKmh
       });
     }
   }

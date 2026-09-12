@@ -181,15 +181,19 @@ export class CricketCharacter {
 
     this.build();
 
+    this.stance = { hand: 'RHB', depth: 'normal', guard: 'middle' };
+
     // Set initial transform
+    const isUmpire = this.species === 'umpire' || this.role === 'umpire';
     if (this.config.starting_transform) {
       const st = this.config.starting_transform;
       this.setPosition(st.position.x, st.position.y, st.position.z);
       this.setRotation((st.rotation_y_degrees || 0) * Math.PI / 180);
-      const sc = (st.scale || 1.0) * (this.config.scale || 1.0);
+      const sc = isUmpire ? 0.58 : ((st.scale || 1.0) * (this.config.scale || 1.0));
       this.group.scale.setScalar(sc);
     } else {
-      this.group.scale.setScalar(this.config.scale || 1.0);
+      const sc = isUmpire ? 0.58 : (this.config.scale || 1.0);
+      this.group.scale.setScalar(sc);
     }
 
     this.scene.add(this.group);
@@ -768,14 +772,81 @@ export class CricketCharacter {
     anim();
   }
 
+  setStance(stance = {}) {
+    this.stance = { ...this.stance, ...stance };
+
+    // Handedness: RHB vs LHB
+    const baseScale = (this.config.starting_transform?.scale || 1.0) * (this.config.scale || 1.0);
+    if (this.stance.hand === 'LHB') {
+      this.group.scale.x = -Math.abs(baseScale);
+    } else {
+      this.group.scale.x = Math.abs(baseScale);
+    }
+
+    // Crease Depth
+    let zPos = 3.8;
+    if (this.stance.depth === 'deep') zPos = 4.15;
+    else if (this.stance.depth === 'forward') zPos = 3.42;
+
+    // Guard Position across stumps
+    let xPos = 0;
+    if (this.stance.guard === 'leg') xPos = this.stance.hand === 'LHB' ? 0.28 : -0.28;
+    else if (this.stance.guard === 'off') xPos = this.stance.hand === 'LHB' ? -0.28 : 0.28;
+
+    this.group.position.x = xPos;
+    this.group.position.z = zPos;
+  }
+
+  // Enhanced Diving Cricket Catch
   triggerCatch() {
     let t = 0;
     const origY = this.group.position.y;
+    const origRotX = this.bodyPivot.rotation.x;
+    const origRotZ = this.bodyPivot.rotation.z;
+
     const anim = () => {
-      t += 0.14;
+      t += 0.08;
       if (t < Math.PI) {
-        this.group.position.y = origY + Math.sin(t) * 0.5;
-        this.bodyPivot.rotation.x = -Math.sin(t) * 0.4;
+        // Phase 1: Airborne athletic dive towards ball
+        this.group.position.y = origY + Math.sin(t) * 0.45;
+        this.bodyPivot.rotation.x = -Math.sin(t) * 0.75;
+        this.bodyPivot.rotation.z = Math.sin(t * 2) * 0.2;
+        requestAnimationFrame(anim);
+      } else if (t < Math.PI * 2.2) {
+        // Phase 2: Slide on grass with ball safely tucked
+        this.group.position.y = origY * 0.4;
+        this.bodyPivot.rotation.x = -0.3;
+        requestAnimationFrame(anim);
+      } else if (t < Math.PI * 3.5) {
+        // Phase 3: Pop back up and celebrate catch
+        this.group.position.y = origY + Math.abs(Math.sin(t * 2)) * 0.3;
+        this.bodyPivot.rotation.x = 0;
+        this.bodyPivot.rotation.z = 0;
+        requestAnimationFrame(anim);
+      } else {
+        this.group.position.y = origY;
+        this.bodyPivot.rotation.x = origRotX;
+        this.bodyPivot.rotation.z = origRotZ;
+      }
+    };
+    anim();
+  }
+
+  // Ground Fielding & Gather Motion
+  triggerFieldGather() {
+    let t = 0;
+    const origY = this.group.position.y;
+    const anim = () => {
+      t += 0.12;
+      if (t < Math.PI) {
+        // Crouch & gather ball off grass
+        this.group.position.y = origY * 0.5;
+        this.bodyPivot.rotation.x = 0.55;
+        requestAnimationFrame(anim);
+      } else if (t < Math.PI * 2) {
+        // Stand and throw motion
+        this.group.position.y = origY;
+        this.bodyPivot.rotation.x = -0.3;
         requestAnimationFrame(anim);
       } else {
         this.group.position.y = origY;

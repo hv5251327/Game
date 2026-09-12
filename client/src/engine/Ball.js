@@ -204,11 +204,12 @@ export class Ball {
       }
     }
 
-    // --- 2. REGULAR TURF BOUNCE (For Batted Hits or Ground Rolls) ---
+    // --- 2. REALISTIC CRICKET TURF GROUND PHYSICS (Batted Shots & Rolls) ---
     if (this.pos.y <= this.radius) {
       this.pos.y = this.radius;
 
-      if (Math.abs(this.vel.y) > 1.2) {
+      if (Math.abs(this.vel.y) > 0.8) {
+        // Crisp turf bounce with damping
         this.vel.y = -this.vel.y * this.restitution;
         this.vel.x *= this.groundFriction;
         this.vel.z *= this.groundFriction;
@@ -217,25 +218,31 @@ export class Ball {
 
         if (this.onBounce) this.onBounce(this.pos);
       } else {
-        // Rolling on ground with rolling friction
+        // Continuous realistic rolling on turf (physical rolling resistance ~1.85 m/s^2)
         this.vel.y = 0;
-        this.vel.x *= 0.91;
-        this.vel.z *= 0.91;
-
-        if (this.vel.lengthSq() < 0.2) {
+        const currentSpeed = Math.hypot(this.vel.x, this.vel.z);
+        if (currentSpeed > 0.05) {
+          const newSpeed = Math.max(0, currentSpeed - 2.2 * delta);
+          const ratio = newSpeed / currentSpeed;
+          this.vel.x *= ratio;
+          this.vel.z *= ratio;
+        } else {
+          this.vel.set(0, 0, 0);
           this.active = false;
           if (this.onComplete) this.onComplete();
         }
       }
     }
 
-    // Boundary check (radius 26m)
+    // Boundary rope collision & cushion physics (boundary radius = 27.5m)
     const distFromCenter = Math.hypot(this.pos.x, this.pos.z);
-    if (distFromCenter > 32) {
-      // Ball cleared or reached outer stadium
-      this.vel.multiplyScalar(0.9);
-      if (this.flightTime > 4.5) {
+    if (distFromCenter >= 27.5) {
+      // Ball meets boundary rope / barrier
+      this.vel.x *= Math.max(0, 1 - 5.0 * delta);
+      this.vel.z *= Math.max(0, 1 - 5.0 * delta);
+      if (this.flightTime > 3.8 || Math.hypot(this.vel.x, this.vel.z) < 0.3) {
         this.active = false;
+        if (this.onComplete) this.onComplete();
       }
     }
 
