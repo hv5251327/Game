@@ -566,10 +566,52 @@ body, html {
   to { opacity: 1.0; }
 }
 
-.btn-hud-scorecard {
+.hud-top-right-actions {
   position: absolute;
   top: 14px;
   right: 14px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  pointer-events: auto;
+  z-index: 60;
+}
+
+.btn-hud-vr {
+  background: rgba(10, 32, 28, 0.92);
+  border: 1.5px solid #00d2d3;
+  color: #00d2d3;
+  border-radius: 10px;
+  padding: 6px 12px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+}
+
+.btn-hud-vr:hover {
+  background: #00d2d3;
+  color: #111;
+  box-shadow: 0 0 14px rgba(0, 210, 211, 0.7);
+}
+
+.btn-hud-vr.active {
+  background: linear-gradient(135deg, #00d2d3, #54a0ff);
+  border-color: #ffd32a;
+  color: #111;
+  font-weight: 900;
+  box-shadow: 0 0 18px rgba(0, 210, 211, 0.8), 0 0 8px #ffd32a;
+  animation: vrPulse 1.5s infinite alternate;
+}
+
+@keyframes vrPulse {
+  from { transform: scale(1); box-shadow: 0 0 12px rgba(0, 210, 211, 0.6); }
+  to { transform: scale(1.05); box-shadow: 0 0 22px rgba(0, 210, 211, 1.0); }
+}
+
+.btn-hud-scorecard {
   background: rgba(14, 38, 16, 0.9);
   border: 1px solid #ffd32a;
   color: #ffd32a;
@@ -578,13 +620,59 @@ body, html {
   font-size: 0.78rem;
   font-weight: bold;
   cursor: pointer;
-  pointer-events: auto;
   transition: all 0.2s;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
 }
 
 .btn-hud-scorecard:hover {
   background: #ffd32a;
   color: #111;
+}
+
+/* VR Helmet Visor Overlay */
+.vr-helmet-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 15;
+  box-shadow: inset 0 0 90px rgba(0, 0, 0, 0.65), inset 0 0 200px rgba(0, 25, 20, 0.45);
+}
+
+.vr-badge {
+  position: absolute;
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.75);
+  border: 1.5px solid #00d2d3;
+  color: #00d2d3;
+  padding: 4px 14px;
+  border-radius: 20px;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 1px;
+  box-shadow: 0 0 12px rgba(0, 210, 211, 0.6);
+  animation: vrBadgeGlow 2s infinite alternate;
+}
+
+@keyframes vrBadgeGlow {
+  from { opacity: 0.85; }
+  to { opacity: 1.0; }
+}
+
+.vr-crosshair {
+  position: absolute;
+  top: 52%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 26px;
+  height: 26px;
+  border: 1.5px dashed rgba(255, 211, 42, 0.5);
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(255, 211, 42, 0.3);
 }
 
 /* Batting UI - Compact Top-Left Meter */
@@ -1835,12 +1923,16 @@ body, html {
     font-size: 0.65rem;
   }
 
-  .btn-hud-scorecard {
-    top: 6px;
-    right: 6px;
-    padding: 4px 8px;
-    font-size: 0.7rem;
-    border-radius: 8px;
+  .hud-top-right-actions {
+    top: 6px !important;
+    right: 6px !important;
+    gap: 4px !important;
+  }
+
+  .btn-hud-vr, .btn-hud-scorecard {
+    padding: 4px 8px !important;
+    font-size: 0.68rem !important;
+    border-radius: 8px !important;
   }
 
   /* Centered Batting Controller for Mobile */

@@ -7,7 +7,7 @@ export class BowlingUI {
     this.swingDirection = 'left'; // 'left' | 'right'
     this.power = 0.5;
     this.barDirection = 1;
-    this.barSpeed = 2.4;
+    this.barSpeed = 1.3;
     this.active = false;
     this.onBowl = null;
     this.animFrame = null;

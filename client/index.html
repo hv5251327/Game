@@ -206,8 +206,17 @@
       <div id="action-banner" class="action-banner">⚡ Welcome to Cricket Doodle! Match starting...</div>
     </div>
 
-    <!-- Quick Scorecard Button -->
-    <button id="btn-toggle-scorecard" class="btn-hud-scorecard">📊 SCORECARD</button>
+    <!-- Quick Actions: VR Batsman View & Scorecard -->
+    <div class="hud-top-right-actions">
+      <button id="btn-toggle-vr" class="btn-hud-vr" title="Toggle Batsman VR / Helmet View [V]">🥽 VR VIEW</button>
+      <button id="btn-toggle-scorecard" class="btn-hud-scorecard" title="View Full Match Scorecard">📊 SCORECARD</button>
+    </div>
+
+    <!-- VR Helmet Overlay (Active in VR Mode) -->
+    <div id="vr-helmet-overlay" class="vr-helmet-overlay hidden">
+      <div class="vr-badge">🥽 BATSMAN VR POV [V]</div>
+      <div class="vr-crosshair"></div>
+    </div>
 
     <!-- UI Mounts for Batting & Bowling Controls -->
     <div id="game-controls-container"></div>

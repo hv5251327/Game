@@ -46,6 +46,11 @@ class CricketGame {
     this.runCancelled = false;
     this.domRunningBar = null;
 
+    // VR Batsman POV Mode
+    this.isVRMode = false;
+    this.vrMouseOffsetX = 0;
+    this.vrMouseOffsetY = 0;
+
     this._setupDOM();
     this._initThree();
     this._initAudio();
@@ -103,6 +108,8 @@ class CricketGame {
 
     this.domControlsContainer = document.getElementById('game-controls-container');
     this.domRunBanner = null;
+    this.domBtnVR = document.getElementById('btn-toggle-vr');
+    this.domVRHelmetOverlay = document.getElementById('vr-helmet-overlay');
   }
 
   _initThree() {
@@ -348,13 +355,36 @@ class CricketGame {
       window.location.reload();
     });
 
+    this.domBtnVR?.addEventListener('click', () => this._toggleVRMode());
+
+    window.addEventListener('mousemove', (e) => {
+      if (this.isVRMode) {
+        this.vrMouseOffsetX = (e.clientX / window.innerWidth - 0.5) * 1.6;
+        this.vrMouseOffsetY = (e.clientY / window.innerHeight - 0.5) * 0.9;
+      }
+    });
+
     window.addEventListener('keydown', (e) => {
-      if (e.code === 'KeyR') {
+      if (e.code === 'KeyV' && !e.target.matches('input, select')) {
+        this._toggleVRMode();
+      } else if (e.code === 'KeyR') {
         this._handleUserPushRun();
       } else if (e.code === 'KeyC') {
         this._handleUserCancelRun();
       }
     });
+  }
+
+  _toggleVRMode() {
+    this.isVRMode = !this.isVRMode;
+    if (this.domBtnVR) {
+      this.domBtnVR.classList.toggle('active', this.isVRMode);
+      this.domBtnVR.innerHTML = this.isVRMode ? '🥽 VR VIEW: ON' : '🥽 VR VIEW';
+    }
+    if (this.domVRHelmetOverlay) {
+      this.domVRHelmetOverlay.classList.toggle('hidden', !this.isVRMode);
+    }
+    this.showNotice(this.isVRMode ? '🥽 Batsman VR View Active [V] — Facing the bowler!' : '📺 Broadcast Camera Restored.');
   }
 
   _bindNetwork() {
@@ -447,7 +477,7 @@ class CricketGame {
       }
       const isSnail = data.bowler?.isBot || (data.scorecard?.bowlingTeam === 'b');
       this.bowlerAvatar = new CricketCharacter(this.scene, isSnail ? 'snail_bowler_01' : 'ant_fielder_right');
-      this.bowlerAvatar.setPosition(0, 0.35, -11.0);
+      this.bowlerAvatar.setPosition(0, 0.0, -11.0);
       this.bowlerAvatar.setRotation(0);
     });
 
@@ -464,7 +494,7 @@ class CricketGame {
 
       // Animate bowler run-up stride towards the bowling crease over 2500ms
       if (this.bowlerAvatar) {
-        this.bowlerAvatar.setPosition(0, 0.35, -11.0);
+        this.bowlerAvatar.setPosition(0, 0.0, -11.0);
         const startZ = -11.0;
         const targetZ = -3.7;
         const startTime = performance.now();
@@ -474,7 +504,7 @@ class CricketGame {
           const p = Math.min(1.0, elapsed / duration);
           if (this.bowlerAvatar) {
             this.bowlerAvatar.group.position.z = startZ + (targetZ - startZ) * p;
-            this.bowlerAvatar.group.position.y = 0.35 + Math.abs(Math.sin(p * Math.PI * 12)) * 0.12;
+            this.bowlerAvatar.group.position.y = Math.abs(Math.sin(p * Math.PI * 12)) * 0.12;
             this.bowlerAvatar.group.position.x = Math.sin(p * Math.PI * 6) * 0.08;
 
             // When user is bowling, dolly camera smoothly towards the bowling wickets
@@ -487,7 +517,7 @@ class CricketGame {
           if (p < 1.0) {
             requestAnimationFrame(runupStep);
           } else if (this.bowlerAvatar) {
-            this.bowlerAvatar.setPosition(0, 0.35, targetZ);
+            this.bowlerAvatar.setPosition(0, 0.0, targetZ);
             if (this.isUserBowling && !this.cameraTracking) {
               this.defaultCamPos.copy(this.bowlerCamPos);
               this.defaultCamLookAt.copy(this.bowlerCamLookAt);
@@ -511,7 +541,7 @@ class CricketGame {
       const swingStr = data.swingDirection ? ` &bull; ${data.swingDirection.toUpperCase()}` : '';
       this.domActionBanner.textContent = `⚾ ${data.bowler?.name} delivers ${data.deliveryType.toUpperCase()}${swingStr}${paceStr}!`;
       if (this.bowlerAvatar) {
-        this.bowlerAvatar.setPosition(0, 0.35, -3.7);
+        this.bowlerAvatar.setPosition(0, 0.0, -3.7);
         this.bowlerAvatar.triggerBowlAction();
       }
 
@@ -560,12 +590,27 @@ class CricketGame {
       }
 
       if (data.wicket) {
-        this.cameraTracking = false;
         this._playOutSound();
         if (this.umpireAvatar) this.umpireAvatar.signalOut();
-        this.showBigEvent('OUT! WICKET!', `${data.dismissal || 'Caught'} - Umpire finger raised!`);
         if (this.bowlerAvatar) this.bowlerAvatar.triggerCelebrate();
-        this._animateFielderCatch(dirInfo);
+
+        const dismissal = data.dismissal || 'Caught';
+
+        if (dismissal === 'Caught') {
+          // For caught dismissals: launch ball into the air toward fielder region, then dive-catch
+          const catchDist = 10 + Math.random() * 6;
+          this.cameraTracking = true;
+          this.ball.hitLaunch(new THREE.Vector3(0, 0.7, 3.8), dirInfo, data.timing || 0.55, 'loft', false, 0);
+          setTimeout(() => {
+            this.cameraTracking = false;
+            this._animateFielderCatch(dirInfo, catchDist);
+            this.showBigEvent('OUT! CAUGHT!', `${data.dismissal || 'Caught'} — Brilliant take!`);
+          }, 800);
+        } else {
+          // Bowled / LBW / Stumped
+          this.cameraTracking = false;
+          this.showBigEvent('OUT! WICKET!', `${dismissal} — Umpire finger raised!`);
+        }
       } else if (data.runs === 6) {
         this.cameraTracking = true;
         this._playCheerSound();
@@ -673,21 +718,21 @@ class CricketGame {
 
     // Non-striker
     this.nonStrikerAvatar = new CricketCharacter(this.scene, 'ant_fielder_right');
-    this.nonStrikerAvatar.setPosition(-1.3, 0.55, -3.8);
+    this.nonStrikerAvatar.setPosition(-1.3, 0.0, -3.8);
     this.nonStrikerAvatar.setRotation(0);
 
     // Bowler
     this.bowlerAvatar = new CricketCharacter(this.scene, 'snail_bowler_01');
-    this.bowlerAvatar.setPosition(0, 0.35, -11.0);
+    this.bowlerAvatar.setPosition(0, 0.0, -11.0);
 
     // Wicketkeeper
     this.keeperAvatar = new CricketCharacter(this.scene, 'snail_fielder_left');
-    this.keeperAvatar.setPosition(0, 0.3, 5.4);
+    this.keeperAvatar.setPosition(0, 0.0, 5.4);
     this.keeperAvatar.setRotation(Math.PI);
 
     // Small Umpire at bowler end, slightly offset to leg side
     this.umpireAvatar = new CricketCharacter(this.scene, { species: 'umpire', role: 'umpire' });
-    this.umpireAvatar.setPosition(-1.3, 0.16, -5.8);
+    this.umpireAvatar.setPosition(-1.3, 0.0, -5.8);
     this.umpireAvatar.setRotation(0);
 
     // Fielders in strategic positions
@@ -695,11 +740,11 @@ class CricketGame {
     const f2 = new CricketCharacter(this.scene, 'ant_fielder_right');
 
     const extraPositions = [
-      { id: 'snail_fielder_left', x: -8, y: 0.3, z: 2 },
-      { id: 'ant_fielder_right', x: 9, y: 0.55, z: 4 },
-      { id: 'snail_fielder_left', x: 0, y: 0.3, z: -10 },
-      { id: 'ant_fielder_right', x: -10, y: 0.55, z: -6 },
-      { id: 'snail_fielder_left', x: 7, y: 0.3, z: -8 }
+      { id: 'snail_fielder_left', x: -8, y: 0.0, z: 2 },
+      { id: 'ant_fielder_right', x: 9, y: 0.0, z: 4 },
+      { id: 'snail_fielder_left', x: 0, y: 0.0, z: -10 },
+      { id: 'ant_fielder_right', x: -10, y: 0.0, z: -6 },
+      { id: 'snail_fielder_left', x: 7, y: 0.0, z: -8 }
     ];
 
     extraPositions.forEach(ep => {
@@ -712,14 +757,20 @@ class CricketGame {
     this.fielders.push(f1, f2);
   }
 
-  // Enhanced Athletic Diving Catch Animation
-  _animateFielderCatch(dirInfo) {
-    const targetX = dirInfo.x * 13;
-    const targetZ = 3.8 + dirInfo.z * 13;
+  // Athletic Diving Catch Animation — moves the NEAREST fielder to the ball's trajectory
+  // Ball physics is already handled by the caller (ball_result handler); we only move the fielder here.
+  _animateFielderCatch(dirInfo, catchDist = 13) {
+    const targetX = dirInfo.x * catchDist;
+    const targetZ = 3.8 + dirInfo.z * catchDist;
 
     let nearest = null;
     let minDist = Infinity;
-    this.fielders.forEach(f => {
+
+    // Also check keeper for catches behind wicket
+    const allFielders = [...this.fielders];
+    if (this.keeperAvatar) allFielders.push(this.keeperAvatar);
+
+    allFielders.forEach(f => {
       const d = Math.hypot(f.group.position.x - targetX, f.group.position.z - targetZ);
       if (d < minDist) {
         minDist = d;
@@ -728,21 +779,26 @@ class CricketGame {
     });
 
     if (nearest) {
-      this.ball.hitLaunch(new THREE.Vector3(0, 0.65, 3.8), dirInfo, 0.6, 'loft', false);
       const startX = nearest.group.position.x;
       const startZ = nearest.group.position.z;
       const startTime = performance.now();
-      const duration = 1100;
+      // Sprint speed: 1.2s to cover at most ~18m — realistic fielder dash
+      const dist = Math.hypot(targetX - startX, targetZ - startZ);
+      const duration = Math.min(1800, Math.max(600, dist * 80));
 
       const run = (now) => {
         const p = Math.min(1.0, (now - startTime) / duration);
-        nearest.group.position.x = startX + (targetX - startX) * (p * 0.9);
-        nearest.group.position.z = startZ + (targetZ - startZ) * (p * 0.9);
+        const ease = p < 0.5 ? 2 * p * p : -1 + (4 - 2 * p) * p; // ease-in-out
+        nearest.group.position.x = startX + (targetX - startX) * ease;
+        nearest.group.position.z = startZ + (targetZ - startZ) * ease;
         nearest.group.rotation.y = Math.atan2(targetX - startX, targetZ - startZ);
+        // Running bounce
+        nearest.group.position.y = Math.abs(Math.sin(p * Math.PI * 6)) * 0.08;
 
         if (p < 1.0) {
           requestAnimationFrame(run);
         } else {
+          nearest.group.position.y = 0;
           // Athletic diving slide catch!
           nearest.triggerCatch();
         }
@@ -1090,12 +1146,12 @@ class CricketGame {
       if (this.strikerAvatar) {
         this.strikerAvatar.group.position.z = runZStartStriker + (runZEndStriker - runZStartStriker) * p;
         this.strikerAvatar.group.position.x = 0.5 * Math.sin(p * Math.PI);
-        this.strikerAvatar.group.position.y = 0.65 + Math.abs(Math.sin(p * Math.PI * 6)) * 0.1;
+        this.strikerAvatar.group.position.y = Math.abs(Math.sin(p * Math.PI * 6)) * 0.1;
       }
       if (this.nonStrikerAvatar) {
         this.nonStrikerAvatar.group.position.z = runZStartNonStriker + (runZEndNonStriker - runZStartNonStriker) * p;
         this.nonStrikerAvatar.group.position.x = -1.0 - 0.4 * Math.sin(p * Math.PI);
-        this.nonStrikerAvatar.group.position.y = 0.55 + Math.abs(Math.sin(p * Math.PI * 6)) * 0.1;
+        this.nonStrikerAvatar.group.position.y = Math.abs(Math.sin(p * Math.PI * 6)) * 0.1;
       }
 
       if (p < 1.0) {
@@ -1132,11 +1188,11 @@ class CricketGame {
       const p = Math.min(1.0, (now - startTime) / duration);
       if (this.strikerAvatar) {
         this.strikerAvatar.group.position.z = sZ + (targetSZ - sZ) * p;
-        this.strikerAvatar.group.position.y = 0.45 + (1 - p) * 0.2;
+        this.strikerAvatar.group.position.y = (1 - p) * 0.15;
       }
       if (this.nonStrikerAvatar) {
         this.nonStrikerAvatar.group.position.z = nsZ + (targetNsZ - nsZ) * p;
-        this.nonStrikerAvatar.group.position.y = 0.40 + (1 - p) * 0.2;
+        this.nonStrikerAvatar.group.position.y = (1 - p) * 0.15;
       }
       if (p < 1.0) {
         requestAnimationFrame(diveStep);
@@ -1173,11 +1229,11 @@ class CricketGame {
       this.nonStrikerAvatar = prevStriker;
     }
     if (this.strikerAvatar) {
-      this.strikerAvatar.setPosition(0, 0.65, 3.8);
+      this.strikerAvatar.setPosition(0, 0.0, 3.8);
       this.strikerAvatar.setRotation(Math.PI);
     }
     if (this.nonStrikerAvatar) {
-      this.nonStrikerAvatar.setPosition(-1.3, 0.55, -3.8);
+      this.nonStrikerAvatar.setPosition(-1.3, 0.0, -3.8);
       this.nonStrikerAvatar.setRotation(0);
     }
   }
@@ -1247,8 +1303,43 @@ class CricketGame {
     const delta = Math.min((now - this.lastTime) / 1000, 0.1);
     this.lastTime = now;
 
-    // Dynamic Broadcast Camera Tracking (follows ball in flight, including backside shots)
-    if (this.cameraTracking && this.ball && this.ball.active) {
+    // Camera Logic: VR Batsman POV vs Broadcast Camera Tracking
+    if (this.isVRMode) {
+      // 1. FIRST-PERSON BATSMAN VR VIEW
+      // Camera placed right at the batsman's head / helmet looking down the pitch towards the bowler
+      const sPos = this.strikerAvatar ? this.strikerAvatar.group.position : new THREE.Vector3(0, 0.0, 3.8);
+      this.targetCamPos.set(sPos.x, 0.62, sPos.z - 0.22);
+
+      if (this.ball && this.ball.active) {
+        const bPos = this.ball.pos;
+        if (!this.ball.isHitShot) {
+          // Ball arriving towards batsman: batsman eyes track incoming delivery and pitch bounce!
+          this.targetCamLookAt.set(
+            bPos.x * 0.7 + this.vrMouseOffsetX,
+            Math.max(0.18, bPos.y) - this.vrMouseOffsetY,
+            bPos.z
+          );
+        } else {
+          // Ball hit: batsman turns and tracks the ball soaring into the outfield!
+          this.targetCamLookAt.set(
+            bPos.x + this.vrMouseOffsetX,
+            Math.max(0.4, bPos.y) - this.vrMouseOffsetY,
+            bPos.z
+          );
+        }
+      } else {
+        // Focused down the pitch towards the bowler
+        const bwlPos = this.bowlerAvatar ? this.bowlerAvatar.group.position : new THREE.Vector3(0, 0.0, -3.7);
+        this.targetCamLookAt.set(
+          bwlPos.x * 0.5 + this.vrMouseOffsetX,
+          0.75 - this.vrMouseOffsetY,
+          bwlPos.z
+        );
+      }
+      this.camera.position.lerp(this.targetCamPos, 7.5 * delta);
+      this.currentCamLookAt.lerp(this.targetCamLookAt, 8.5 * delta);
+      this.camera.lookAt(this.currentCamLookAt);
+    } else if (this.cameraTracking && this.ball && this.ball.active) {
       const bPos = this.ball.pos;
       if (this.isUserBowling) {
         // Bowling wickets perspective: elevated tracking following the ball into the outfield

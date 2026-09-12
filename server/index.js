@@ -53,6 +53,9 @@ class CricketRoom {
     this.currentOver = 0;
     this.currentBall = 0;
     this.ballInFlight = false;
+    this.runupInProgress = false;
+    this.pendingEarlyBat = null;
+    this._runupTimeout = null;
     this.pendingBall = null;
     this.target = null;
     this.pendingBowlerRequest = false;
@@ -437,8 +440,13 @@ class CricketRoom {
   }
 
   handleBowl(socketId, data) {
+    // Critical guard: reject stale or duplicate bowl events
+    if (this.state !== 'PLAYING' || this.ballInFlight || this.runupInProgress || socketId !== this.currentBowler) return;
+
     clearTimeout(this._bowlerTimeout);
-    this.ballInFlight = true;
+    this.runupInProgress = true;
+    this.ballInFlight = false;
+    this.pendingEarlyBat = null;
     this.pendingBall = { ...data, bowlerId: socketId };
 
     const batsmanId = this.mode === 'single_batting'
@@ -459,8 +467,9 @@ class CricketRoom {
     });
 
     // 2. Deliver the ball after bowler completes 2.5-second run-up stride
-    setTimeout(() => {
-      if (!this.ballInFlight) return;
+    this._runupTimeout = setTimeout(() => {
+      this.runupInProgress = false;
+      this.ballInFlight = true;
 
       io.to(this.code).emit('delivery', {
         bowler: this._playerInfo(socketId),
@@ -474,6 +483,16 @@ class CricketRoom {
         over: this.currentOver + 1,
         ball: this.currentBall + 1
       });
+
+      // If batsman queued a swing during run-up, resolve immediately
+      if (this.pendingEarlyBat) {
+        const earlyBat = this.pendingEarlyBat;
+        this.pendingEarlyBat = null;
+        this.ballInFlight = false;
+        clearTimeout(this._batTimeout);
+        this._resolveBall(earlyBat, this.pendingBall);
+        return;
+      }
 
       const battingIds = this.battingTeam === 'a' ? this.teamA : this.teamB;
       const humanOnBattingTeam = battingIds.some(id => !this.players.get(id)?.isBot);
@@ -502,13 +521,22 @@ class CricketRoom {
     const isBatsman = (socketId === batsmanId);
     const isHumanOnBattingTeam = battingIds.includes(socketId) && !this.players.get(socketId)?.isBot;
 
-    if (!this.ballInFlight || (!isBatsman && !isHumanOnBattingTeam)) return;
+    if (!isBatsman && !isHumanOnBattingTeam) return;
+
+    if (this.runupInProgress) {
+      // Batsman swung during bowler runup - queue early swing
+      this.pendingEarlyBat = { ...data, timing: Math.min(data.timing || 0.3, 0.25) };
+      return;
+    }
+
+    if (!this.ballInFlight) return;
+    this.ballInFlight = false;
     clearTimeout(this._batTimeout);
     this._resolveBall(data, this.pendingBall);
   }
 
   _botBowl(bowlerId) {
-    if (this.ballInFlight || this.state !== 'PLAYING' || this.currentBowler !== bowlerId) return;
+    if (this.ballInFlight || this.runupInProgress || this.state !== 'PLAYING' || this.currentBowler !== bowlerId) return;
 
     // Realistic delivery repertoire:
     const deliveryOptions = [
@@ -584,6 +612,10 @@ class CricketRoom {
 
   _resolveBall(batData, bowlData) {
     this.ballInFlight = false;
+    this.runupInProgress = false;
+    this.pendingEarlyBat = null;
+    clearTimeout(this._runupTimeout);
+    clearTimeout(this._batTimeout);
     const card = this._currentCard();
 
     const batsmanId = this.mode === 'single_batting'
@@ -733,7 +765,7 @@ class CricketRoom {
       return;
     }
 
-    setTimeout(() => this._requestNextBall(), 1500);
+    setTimeout(() => this._requestNextBall(), 3000);
   }
 
   _computeOutcome(bat, bowl) {

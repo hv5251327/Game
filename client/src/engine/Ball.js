@@ -117,14 +117,19 @@ export class Ball {
 
     if (isSix || runs === 6) {
       // High soaring maximum: clears the 27.5m boundary rope with rainbow parabola
-      const baseSpeed = 29;
+      const baseSpeed = 28;
       speedXZ = baseSpeed * (0.85 + power * 0.35);
-      initialVy = 16.0 * (0.85 + power * 0.3);
+      initialVy = 15.5 * (0.85 + power * 0.3);
     } else if (runs === 4) {
       // Crisp boundary four: travels with good pace to touch/cross the rope
-      const baseSpeed = 25;
+      const baseSpeed = 23;
       speedXZ = baseSpeed * (0.8 + power * 0.4);
-      initialVy = shotType === 'loft' ? 9.5 : 3.8;
+      // Straight drive (forward) needs higher arc to clear mid-on/off region
+      if (dirVector.z < -0.5) {
+        initialVy = shotType === 'loft' ? 10.0 : 5.5; // Forward: higher arc over pitch
+      } else {
+        initialVy = shotType === 'loft' ? 9.5 : 3.8;
+      }
     } else if (shotType === 'sweep') {
       speedXZ = 18 * (0.75 + power * 0.4);
       initialVy = 3.2;
@@ -134,12 +139,13 @@ export class Ball {
     } else if (shotType === 'defend' || runs === 0) {
       // Defensive block or dot: dead drop onto pitch
       speedXZ = 3.2;
-      initialVy = 1.0;
+      initialVy = 1.2;
     } else {
       // 1, 2, or 3 runs: calibrated to gap in the outfield
       const mult = runs === 3 ? 1.35 : runs === 2 ? 1.15 : 0.95;
       speedXZ = 14.5 * mult * (0.8 + power * 0.35);
-      initialVy = 3.0;
+      // Straight shots need a bit more vertical to clear pitch stumps realistically
+      initialVy = dirVector.z < -0.5 ? 4.5 : 3.0;
     }
 
     this.vel.set(dir.x * speedXZ, initialVy, dir.y * speedXZ);
