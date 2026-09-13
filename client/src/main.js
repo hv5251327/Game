@@ -33,10 +33,12 @@ class CricketGame {
 
     // Dual-perspective camera positions
     this.isUserBowling = false;
-    this.bowlerCamPos = new THREE.Vector3(0, 2.9, -6.6);
-    this.bowlerCamLookAt = new THREE.Vector3(0, 1.0, 3.8);
-    this.batsmanCamPos = new THREE.Vector3(0, 6.5, 11.5);
-    this.batsmanCamLookAt = new THREE.Vector3(0, 1.2, 0);
+    // Bowler view: behind bowler running up along positive Z towards pitch
+    this.bowlerCamPos = new THREE.Vector3(0, 6.5, 29.5);
+    this.bowlerCamLookAt = new THREE.Vector3(0, 2.0, -9.5);
+    // Batsman view: behind batsman at z = -9.5 looking toward bowler at +Z
+    this.batsmanCamPos = new THREE.Vector3(0, 5.5, -17.5);
+    this.batsmanCamLookAt = new THREE.Vector3(0, 2.0, 10.5);
 
     // Interactive Manual Running State
     this.manualRunningActive = false;
@@ -170,8 +172,6 @@ class CricketGame {
       const height = window.innerHeight;
       const aspect = width / height;
       this.camera.aspect = aspect;
-      // Responsive Mobile FOV scaling:
-      // In portrait mode (aspect < 1.0), widen the vertical FOV so the pitch, wickets, and characters fit nicely
       if (aspect < 1.0) {
         this.camera.fov = Math.min(68, Math.max(48, (48 / aspect) * 0.78));
       } else {
@@ -204,13 +204,17 @@ class CricketGame {
     this._initPitchTargetMarker();
     this._setupPitchScreenPicker();
 
-    // Bat Controller Swing Hook: batsman can ONLY hit when ball is actively incoming in front of crease
+    // Bat Controller Swing Hook: batsman hits ball when ball is actively incoming
     this.battingUI.onSwing = (command) => {
-      if (!this.ballIncoming || !this.ball || !this.ball.active || this.ball.isHitShot) return;
-      if (this.ball.pos && this.ball.pos.z < -11.2) return;
-      this.ballIncoming = false;
+      if (!this.ball || !this.ball.active || this.ball.isHitShot) return;
 
+      // Bat connection check: ball is approaching striker crease around z = -6.0 to -11.5
+      const ballZ = this.ball.pos ? this.ball.pos.z : -9.5;
+      if (ballZ < -11.5 || ballZ > -3.0) return;
+
+      this.ballIncoming = false;
       this._playBatSound();
+
       if (this.strikerAvatar) {
         this.strikerAvatar.executeCommand(command);
       }
@@ -597,8 +601,8 @@ class CricketGame {
       }
       const isSnail = data.bowler?.isBot || (data.scorecard?.bowlingTeam === 'b');
       this.bowlerAvatar = new CricketCharacter(this.scene, isSnail ? 'snail_bowler_01' : 'ant_fielder_right');
-      this.bowlerAvatar.setPosition(0, 0.0, -11.0);
-      this.bowlerAvatar.setRotation(0);
+      this.bowlerAvatar.setPosition(0, 0.0, 27.0);
+      this.bowlerAvatar.setRotation(Math.PI);
     });
 
     this.network.on('bowl_now', (data) => {
@@ -614,7 +618,7 @@ class CricketGame {
       this.bowlingUI.show({ timeout: 20000 });
     });
 
-    // Bowler Run-Up Event: bowler begins full 2.5-second runup from back
+    // Bowler Run-Up Event: bowler begins full 2.5-second runup from back (z = 27.0 -> z = 10.5)
     this.network.on('bowler_runup', (data) => {
       const swingStr = data.swingDirection ? ` &bull; ${data.swingDirection.toUpperCase()}` : '';
       this.domActionBanner.innerHTML = `⚡ ${data.bowler?.name} charging in (${data.deliveryType.toUpperCase()}${swingStr})... Get ready!`;
@@ -626,9 +630,10 @@ class CricketGame {
 
       // Animate bowler run-up stride towards the bowling crease over 2500ms
       if (this.bowlerAvatar) {
-        this.bowlerAvatar.setPosition(0, 0.0, -11.0);
-        const startZ = -11.0;
-        const targetZ = -3.7;
+        this.bowlerAvatar.setPosition(0, 0.0, 27.0);
+        this.bowlerAvatar.setRotation(Math.PI);
+        const startZ = 27.0;
+        const targetZ = 10.5;
         const startTime = performance.now();
         const duration = 2500;
         const runupStep = (now) => {
@@ -636,14 +641,13 @@ class CricketGame {
           const p = Math.min(1.0, elapsed / duration);
           if (this.bowlerAvatar) {
             this.bowlerAvatar.group.position.z = startZ + (targetZ - startZ) * p;
-            this.bowlerAvatar.group.position.y = Math.abs(Math.sin(p * Math.PI * 12)) * 0.12;
+            this.bowlerAvatar.group.position.y = Math.abs(Math.sin(p * Math.PI * 12)) * 0.15;
             this.bowlerAvatar.group.position.x = Math.sin(p * Math.PI * 6) * 0.08;
 
-            // When user is bowling, dolly camera smoothly towards the bowling wickets
+            // When user is bowling, dynamic back view camera follows behind the bowler gliding forward!
             if (this.isUserBowling && !this.cameraTracking) {
-              const camZ = -6.6 + (1 - p) * -3.0;
-              this.defaultCamPos.set(0, 2.9 + (1 - p) * 0.8, camZ);
-              this.defaultCamLookAt.set(0, 1.0, 3.8);
+              this.defaultCamPos.set(0, 6.5, this.bowlerAvatar.group.position.z + 6.5);
+              this.defaultCamLookAt.set(0, 2.0, -9.5);
             }
           }
           if (p < 1.0) {
@@ -651,8 +655,8 @@ class CricketGame {
           } else if (this.bowlerAvatar) {
             this.bowlerAvatar.setPosition(0, 0.0, targetZ);
             if (this.isUserBowling && !this.cameraTracking) {
-              this.defaultCamPos.copy(this.bowlerCamPos);
-              this.defaultCamLookAt.copy(this.bowlerCamLookAt);
+              this.defaultCamPos.set(0, 6.5, 17.0);
+              this.defaultCamLookAt.set(0, 2.0, -9.5);
             }
           }
         };
@@ -666,36 +670,36 @@ class CricketGame {
       const swingStr = data.swingDirection ? ` &bull; ${data.swingDirection.toUpperCase()}` : '';
       this.domActionBanner.textContent = `⚾ ${data.bowler?.name} delivers ${data.deliveryType.toUpperCase()}${swingStr}${paceStr}!`;
       if (this.bowlerAvatar) {
-        this.bowlerAvatar.setPosition(0, 0.0, 9.5);
+        this.bowlerAvatar.setPosition(0, 0.0, 10.5);
         this.bowlerAvatar.triggerBowlAction();
       }
 
       // Lock batsmen firmly to crease for delivery arrival
       this._resetBatsmenToCrease();
 
-      // Authentic cricket ball delivery: release from bowler hand (y = 3.2m for 4m player) to pitch landing spot
-      const startPos = new THREE.Vector3(0, 3.2, 9.5);
+      // Authentic cricket ball delivery: release from bowler hand (z = 10.5, y = 3.2m) to pitch landing spot
+      const startPos = new THREE.Vector3(0, 3.2, 10.5);
       const lzX = typeof data.landingZone?.x === 'number' ? data.landingZone.x : 0;
-      const lzZ = typeof data.landingZone?.z === 'number' ? data.landingZone.z : 1.2;
-      const landingPos = new THREE.Vector3(lzX * 2.0, 0.24, -Math.abs(lzZ) * 2.5);
+      const lzZ = typeof data.landingZone?.z === 'number' ? data.landingZone.z : 0.45;
+      // Map landing zone to pitch coordinates: pitch center z=0, spans z=-13 to +13
+      // Good length is around z = -2.0 to -5.0
+      const landingPos = new THREE.Vector3(lzX * 1.8, 0.24, -2.0 - lzZ * 5.0);
       const targetPos = new THREE.Vector3(lzX, 1.8, -9.5);
 
       this.ball.bowlDelivery(startPos, landingPos, targetPos, data.deliveryType, data.swingDirection);
 
-      // Camera after bowl: firmly positioned behind the bowling wickets!
+      // Camera after bowl: positioned behind the bowler stumps
       this._updateCameraMode();
       if (this.isUserBowling) {
         this.cameraTracking = false;
-        this.defaultCamPos.copy(this.bowlerCamPos);
-        this.defaultCamLookAt.copy(this.bowlerCamLookAt);
+        this.defaultCamPos.set(0, 6.5, 17.0);
+        this.defaultCamLookAt.set(0, 2.0, -9.5);
       }
 
       // Ball is now actively incoming — show Batting UI with 1.4s arrival window matching ball flight
       this.ballIncoming = true;
-      const isBattingTeam = (this.currentScorecard?.battingTeam === this.myTeam) ||
-                            (data.batsman?.id === this.myId) ||
-                            (!this.roomInfo?.players?.teamA?.some(p => !p.isBot && p.id !== this.myId));
-      if (isBattingTeam) {
+      const isBattingUser = !this.isUserBowling;
+      if (isBattingUser) {
         this.battingUI.show({ timeout: 1400 });
       }
     });
@@ -726,6 +730,9 @@ class CricketGame {
         (!this.roomInfo?.players?.teamA?.some(p => !p.isBot && p.id !== this.myId) && this.currentScorecard?.battingTeam === 'a')
       );
 
+      // Striker bat contact position at batsman crease
+      const contactPos = new THREE.Vector3(0, 1.8, -9.2);
+
       if (data.wicket) {
         this._resetBatsmenToCrease();
         this._playOutSound();
@@ -736,9 +743,9 @@ class CricketGame {
 
         if (dismissal === 'Caught') {
           // For caught dismissals: launch ball into the air toward fielder region, then dive-catch
-          const catchDist = 10 + Math.random() * 6;
+          const catchDist = 18 + Math.random() * 8;
           this.cameraTracking = true;
-          this.ball.hitLaunch(new THREE.Vector3(0, 0.7, 3.8), dirInfo, data.timing || 0.55, 'loft', false, 0);
+          this.ball.hitLaunch(contactPos, dirInfo, data.timing || 0.55, 'loft', false, 0);
           setTimeout(() => {
             this.cameraTracking = false;
             this._animateFielderCatch(dirInfo, catchDist);
@@ -755,7 +762,7 @@ class CricketGame {
         this._playCheerSound();
         if (this.umpireAvatar) this.umpireAvatar.signalSix();
         this.showBigEvent('SIXER! 🚀', 'Soaring over the stadium grandstands!');
-        this.ball.hitLaunch(new THREE.Vector3(0, 0.65, 3.8), dirInfo, data.timing || 0.88, data.shotType || 'loft', true, 6);
+        this.ball.hitLaunch(contactPos, dirInfo, data.timing || 0.88, data.shotType || 'loft', true, 6);
         if (this.strikerAvatar) this.strikerAvatar.triggerCelebrate();
         setTimeout(() => { this.cameraTracking = false; }, 3600);
       } else if (data.runs === 4) {
@@ -764,7 +771,7 @@ class CricketGame {
         this._playCheerSound();
         if (this.umpireAvatar) this.umpireAvatar.signalFour();
         this.showBigEvent('FOUR! 🏏', 'Crisp drive racing across the turf!');
-        this.ball.hitLaunch(new THREE.Vector3(0, 0.65, 3.8), dirInfo, data.timing || 0.76, data.shotType || 'drive', false, 4);
+        this.ball.hitLaunch(contactPos, dirInfo, data.timing || 0.76, data.shotType || 'drive', false, 4);
         this._animateFieldersPursuit(dirInfo, 4);
         setTimeout(() => { this.cameraTracking = false; }, 3200);
       } else if (data.runs > 0) {
@@ -774,7 +781,7 @@ class CricketGame {
         } else {
           this.showNotice(`🏏 Ball hit into the gap! Fielders sprinting to collect and throw!`);
         }
-        this.ball.hitLaunch(new THREE.Vector3(0, 0.65, 3.8), dirInfo, data.timing || 0.55, data.shotType || 'drive', false, data.runs);
+        this.ball.hitLaunch(contactPos, dirInfo, data.timing || 0.55, data.shotType || 'drive', false, data.runs);
         this._animateFieldersPursuit(dirInfo, data.runs);
         this._setupManualRunning(data.runs, isBattingUser);
         setTimeout(() => { this.cameraTracking = false; }, 3200);
@@ -856,10 +863,10 @@ class CricketGame {
     this.bowlerAvatar = new CricketCharacter(this.scene, 'snail_bowler_01');
     this.bowlerAvatar.setPosition(0, 0.0, 27.0);
 
-    // Umpire at square-leg position (Babylon.js ref: [5.2, 0, -2])
+    // Authentic Umpire: Bowler's end umpire behind non-striker wickets watching delivery
     this.umpireAvatar = new CricketCharacter(this.scene, { species: 'umpire', role: 'umpire' });
-    this.umpireAvatar.setPosition(5.2, 0, -2.0);
-    this.umpireAvatar.setRotation(Math.PI / 2);
+    this.umpireAvatar.setPosition(0, 0.0, 14.5);
+    this.umpireAvatar.setRotation(Math.PI);
 
     const fCover = new CricketCharacter(this.scene, 'snail_fielder_left');
     fCover.setPosition(-24, 0, 22);
@@ -899,10 +906,10 @@ class CricketGame {
     this.keeperAvatar.setPosition(0, 0.0, -17.0);
     this.keeperAvatar.setRotation(0);
 
-    // Umpire (Babylon.js JSON: [5.2, 0, -2])
+    // Authentic Umpire: Bowler's end umpire behind non-striker wickets watching delivery
     this.umpireAvatar = new CricketCharacter(this.scene, { species: 'umpire', role: 'umpire' });
-    this.umpireAvatar.setPosition(5.2, 0, -2.0);
-    this.umpireAvatar.setRotation(Math.PI / 2);
+    this.umpireAvatar.setPosition(0, 0.0, 14.5);
+    this.umpireAvatar.setRotation(Math.PI);
 
     // Exact strategic fielders matching Babylon.js sceneConfig JSON
     const fieldersConfig = [
@@ -925,10 +932,9 @@ class CricketGame {
   }
 
   // Athletic Diving Catch Animation — moves the NEAREST fielder to the ball's trajectory
-  // Ball physics is already handled by the caller (ball_result handler); we only move the fielder here.
-  _animateFielderCatch(dirInfo, catchDist = 13) {
+  _animateFielderCatch(dirInfo, catchDist = 18) {
     const targetX = dirInfo.x * catchDist;
-    const targetZ = 3.8 + dirInfo.z * catchDist;
+    const targetZ = -9.5 + dirInfo.z * catchDist;
 
     let nearest = null;
     let minDist = Infinity;
@@ -949,7 +955,6 @@ class CricketGame {
       const startX = nearest.group.position.x;
       const startZ = nearest.group.position.z;
       const startTime = performance.now();
-      // Sprint speed: 1.2s to cover at most ~18m — realistic fielder dash
       const dist = Math.hypot(targetX - startX, targetZ - startZ);
       const duration = Math.min(1800, Math.max(600, dist * 80));
 
@@ -966,7 +971,6 @@ class CricketGame {
           requestAnimationFrame(run);
         } else {
           nearest.group.position.y = 0;
-          // Athletic diving slide catch!
           nearest.triggerCatch();
         }
       };
@@ -976,9 +980,9 @@ class CricketGame {
 
   // Dynamic Fielder Pursuit: closest fielders sprint towards ball, gather, and throw
   _animateFieldersPursuit(dirInfo, runs = 1) {
-    const dist = Math.min(25, 12 + (runs || 1) * 3.5);
+    const dist = Math.min(65, 18 + (runs || 1) * 8.5);
     const targetX = dirInfo.x * dist;
-    const targetZ = 3.8 + dirInfo.z * dist;
+    const targetZ = -9.5 + dirInfo.z * dist;
 
     // Find closest 2 fielders to the ball's outfield trajectory
     const sorted = [...this.fielders].sort((a, b) => {
@@ -1001,14 +1005,14 @@ class CricketGame {
         primary.group.position.x = startX + (targetX - startX) * (p * 0.9);
         primary.group.position.z = startZ + (targetZ - startZ) * (p * 0.9);
         primary.group.rotation.y = Math.atan2(targetX - startX, targetZ - startZ);
-        primary.group.position.y = 0.3 + Math.abs(Math.sin(p * Math.PI * 8)) * 0.08;
+        primary.group.position.y = 0.0 + Math.abs(Math.sin(p * Math.PI * 8)) * 0.08;
 
         if (p < 1.0) {
           requestAnimationFrame(chaseStep);
         } else {
           // Fielder reaches the ball, gathers it, and then THROWS it back towards the stumps!
           primary.triggerFieldGather();
-          this.ball.pos.set(primary.group.position.x, 0.35, primary.group.position.z);
+          this.ball.pos.set(primary.group.position.x, 0.45, primary.group.position.z);
           this.ball.vel.set(0, 0, 0);
           this.ball.group.position.copy(this.ball.pos);
 
@@ -1043,26 +1047,26 @@ class CricketGame {
   _animateFielderThrow(fielder, runs) {
     if (!fielder || !this.ball) return;
 
-    // Determine target stumps: throw towards the closest stumps or where batsman is running to
+    // Determine target stumps: throw towards the closest stumps (striker end z = -12.6, bowler end z = 12.6)
     const fielderZ = fielder.group.position.z;
-    const targetEndZ = Math.abs(fielderZ - 4.5) < Math.abs(fielderZ + 4.5) ? 4.5 : -4.5;
-    const targetCreaseZ = targetEndZ > 0 ? 3.8 : -3.8;
-    const stumpTarget = new THREE.Vector3(0, 0.42, targetEndZ);
+    const targetEndZ = Math.abs(fielderZ - (-12.6)) < Math.abs(fielderZ - 12.6) ? -12.6 : 12.6;
+    const targetCreaseZ = targetEndZ < 0 ? -9.5 : 9.5;
+    const stumpTarget = new THREE.Vector3(0, 0.85, targetEndZ);
 
     const fPos = fielder.group.position.clone();
-    this.showNotice(`🎯 Fielder gathers and fires throw toward the ${targetEndZ > 0 ? 'striker' : 'bowler'} stumps!`);
+    this.showNotice(`🎯 Fielder gathers and fires throw toward the ${targetEndZ < 0 ? 'striker' : 'bowler'} stumps!`);
 
     const startTime = performance.now();
-    const throwDuration = 620;
+    const throwDuration = 700;
 
     const throwStep = (now) => {
       const elapsed = now - startTime;
       const p = Math.min(1.0, elapsed / throwDuration);
 
-      // Arc throw through the air
+      // Arc throw through the air towards stumps
       this.ball.pos.x = fPos.x + (stumpTarget.x - fPos.x) * p;
       this.ball.pos.z = fPos.z + (stumpTarget.z - fPos.z) * p;
-      this.ball.pos.y = fPos.y + 0.35 + (stumpTarget.y - (fPos.y + 0.35)) * p + Math.sin(p * Math.PI) * 0.85;
+      this.ball.pos.y = fPos.y + 1.2 + (stumpTarget.y - (fPos.y + 1.2)) * p + Math.sin(p * Math.PI) * 2.2;
       this.ball.group.position.copy(this.ball.pos);
 
       if (p < 1.0) {
@@ -1074,21 +1078,20 @@ class CricketGame {
 
         // Check whether batsmen are running between wickets!
         const isCurrentlyRunning = this.manualRunningActive && this.isRunningBetweenWickets;
-        const strikerZ = this.strikerAvatar ? this.strikerAvatar.group.position.z : 3.8;
-        const nonStrikerZ = this.nonStrikerAvatar ? this.nonStrikerAvatar.group.position.z : -3.8;
+        const strikerZ = this.strikerAvatar ? this.strikerAvatar.group.position.z : -9.5;
+        const nonStrikerZ = this.nonStrikerAvatar ? this.nonStrikerAvatar.group.position.z : 9.5;
 
-        const strikerShortOfCrease = Math.abs(strikerZ - targetCreaseZ) > 0.45 && Math.abs(strikerZ) < 3.6;
-        const nonStrikerShortOfCrease = Math.abs(nonStrikerZ - targetCreaseZ) > 0.45 && Math.abs(nonStrikerZ) < 3.6;
+        const strikerShortOfCrease = Math.abs(strikerZ - targetCreaseZ) > 1.2 && Math.abs(strikerZ) < 8.5;
+        const nonStrikerShortOfCrease = Math.abs(nonStrikerZ - targetCreaseZ) > 1.2 && Math.abs(nonStrikerZ) < 8.5;
 
         if (isCurrentlyRunning || (this.manualRunningActive && (strikerShortOfCrease || nonStrikerShortOfCrease))) {
           // Trigger RUN OUT!
-          this._triggerRunOut(targetEndZ < 0);
+          this._triggerRunOut(targetEndZ > 0);
         } else {
           this.showNotice('🧤 Clean collection at the stumps by the keeper/bowler.');
         }
       }
     };
-    requestAnimationFrame(throwStep);
   }
 
   // Trigger Run Out Sequence
@@ -1391,10 +1394,10 @@ class CricketGame {
     }
 
     const fromStrikerEnd = (this.manualRunsTaken % 2 === 0);
-    const runZStartStriker = fromStrikerEnd ? 3.8 : -3.8;
-    const runZEndStriker = fromStrikerEnd ? -3.8 : 3.8;
-    const runZStartNonStriker = fromStrikerEnd ? -3.8 : 3.8;
-    const runZEndNonStriker = fromStrikerEnd ? 3.8 : -3.8;
+    const runZStartStriker = fromStrikerEnd ? -9.5 : 9.5;
+    const runZEndStriker = fromStrikerEnd ? 9.5 : -9.5;
+    const runZStartNonStriker = fromStrikerEnd ? 9.5 : -9.5;
+    const runZEndNonStriker = fromStrikerEnd ? -9.5 : 9.5;
 
     const startTime = performance.now();
     const runDuration = 950;
@@ -1420,7 +1423,7 @@ class CricketGame {
       }
       if (this.nonStrikerAvatar) {
         this.nonStrikerAvatar.group.position.z = runZStartNonStriker + (runZEndNonStriker - runZStartNonStriker) * p;
-        this.nonStrikerAvatar.group.position.x = -1.0 - 0.4 * Math.sin(p * Math.PI);
+        this.nonStrikerAvatar.group.position.x = -1.2 - 0.4 * Math.sin(p * Math.PI);
         this.nonStrikerAvatar.group.position.y = Math.abs(Math.sin(p * Math.PI * 6)) * 0.1;
       }
 
@@ -1446,11 +1449,11 @@ class CricketGame {
   _animateCancelDive(fromStrikerEnd) {
     this.isRunningBetweenWickets = false;
     this.showNotice('🛑 RUN CANCELLED! Batsmen diving back into crease!');
-    const sZ = this.strikerAvatar ? this.strikerAvatar.group.position.z : 3.8;
-    const nsZ = this.nonStrikerAvatar ? this.nonStrikerAvatar.group.position.z : -3.8;
+    const sZ = this.strikerAvatar ? this.strikerAvatar.group.position.z : -9.5;
+    const nsZ = this.nonStrikerAvatar ? this.nonStrikerAvatar.group.position.z : 9.5;
 
-    const targetSZ = fromStrikerEnd ? 3.8 : -3.8;
-    const targetNsZ = fromStrikerEnd ? -3.8 : 3.8;
+    const targetSZ = fromStrikerEnd ? -9.5 : 9.5;
+    const targetNsZ = fromStrikerEnd ? 9.5 : -9.5;
 
     const startTime = performance.now();
     const duration = 380;
@@ -1520,17 +1523,17 @@ class CricketGame {
       if (this.battingUI && this.battingUI.stance) {
         this.strikerAvatar.setStance(this.battingUI.stance);
       } else {
-        this.strikerAvatar.setPosition(0, 0.0, 3.8);
+        this.strikerAvatar.setPosition(0, 0.0, -9.5);
       }
-      this.strikerAvatar.setRotation(Math.PI);
+      this.strikerAvatar.setRotation(0);
       if (this.strikerAvatar.bodyPivot) {
         this.strikerAvatar.bodyPivot.rotation.set(0, 0, 0);
       }
     }
 
     if (this.nonStrikerAvatar) {
-      this.nonStrikerAvatar.setPosition(-1.3, 0.0, -3.8);
-      this.nonStrikerAvatar.setRotation(0);
+      this.nonStrikerAvatar.setPosition(-1.2, 0.0, 9.5);
+      this.nonStrikerAvatar.setRotation(Math.PI);
       if (this.nonStrikerAvatar.bodyPivot) {
         this.nonStrikerAvatar.bodyPivot.rotation.set(0, 0, 0);
       }
@@ -1641,30 +1644,29 @@ class CricketGame {
     } else if (this.cameraTracking && this.ball && this.ball.active) {
       const bPos = this.ball.pos;
       if (this.isUserBowling) {
-        // Bowling wickets perspective: elevated tracking following the ball into the outfield
+        // Elevated behind-bowler tracking following the ball towards the outfield
         this.targetCamPos.set(
           bPos.x * 0.4,
-          3.8 + Math.max(0, bPos.y * 0.35),
-          Math.min(bPos.z - 4.5, -6.6)
+          6.5 + Math.max(0, bPos.y * 0.35),
+          Math.max(bPos.z + 12.0, 16.0)
         );
-        this.targetCamLookAt.set(bPos.x, Math.max(0.5, bPos.y), bPos.z);
-      } else if (bPos.z > 3.0) {
-        // Backside shot (Third Man, Fine Leg, behind wicketkeeper)
-        // Camera moves higher and looks backward tracking the ball
+        this.targetCamLookAt.set(bPos.x, Math.max(1.0, bPos.y), bPos.z);
+      } else if (bPos.z < -10.0) {
+        // Behind wicketkeeper shot (Third Man, Fine Leg, Slips)
         this.targetCamPos.set(
           bPos.x * 0.35,
-          7.2 + Math.max(0, bPos.y * 0.35),
-          Math.min(18.5, 11.5 + (bPos.z - 3.0) * 0.65)
+          6.5 + Math.max(0, bPos.y * 0.35),
+          Math.max(-28.0, bPos.z - 8.0)
         );
-        this.targetCamLookAt.set(bPos.x, Math.max(0.5, bPos.y), bPos.z);
+        this.targetCamLookAt.set(bPos.x, Math.max(1.0, bPos.y), bPos.z);
       } else {
-        // Forward outfield shot (Covers, Mid-Wicket, Straight, Point)
+        // Forward outfield shot (Straight, Covers, Mid-Wicket, Point)
         this.targetCamPos.set(
           bPos.x * 0.45,
-          6.5 + Math.max(0, bPos.y * 0.25),
-          11.5 + bPos.z * 0.25
+          6.0 + Math.max(0, bPos.y * 0.25),
+          Math.min(22.0, -17.5 + bPos.z * 0.25)
         );
-        this.targetCamLookAt.set(bPos.x, Math.max(0.6, bPos.y), bPos.z);
+        this.targetCamLookAt.set(bPos.x, Math.max(1.0, bPos.y), bPos.z);
       }
       this.camera.position.lerp(this.targetCamPos, 3.8 * delta);
       this.currentCamLookAt.lerp(this.targetCamLookAt, 4.5 * delta);

@@ -349,18 +349,21 @@ export class CricketCharacter {
       this.bodyPivot.rotation.x = 0.15;
     }
 
-    // 6. Batsman Bat: blade (0.22 x 1.85 x 0.24) + handle (diameter 0.11, height 0.62)
+    // 6. Batsman Bat: blade (0.28 x 1.85 x 0.28) + handle (diameter 0.12, height 0.65)
     if (isBatsman) {
-      const bladeGeo = new THREE.BoxGeometry(0.22, 1.85, 0.24);
+      // Batsman bat positioned naturally in hands in front of body
+      this.batPivot.position.set(0.2, 0.4, 0.35);
+
+      const bladeGeo = new THREE.BoxGeometry(0.28, 1.85, 0.28);
       const blade = new THREE.Mesh(bladeGeo, batMat);
-      blade.position.set(0.85, 1.6, 0);
-      blade.rotation.z = -0.18;
+      blade.position.set(0.4, 1.4, 0.1);
+      blade.rotation.z = -0.15;
       blade.castShadow = true;
 
-      const handleGeo = new THREE.CylinderGeometry(0.055, 0.055, 0.62, 8);
+      const handleGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.65, 8);
       const handle = new THREE.Mesh(handleGeo, new THREE.MeshStandardMaterial({ color: 0x1f1f1f, roughness: 0.7 }));
-      handle.position.set(0.85, 2.8, 0);
-      handle.rotation.z = -0.18;
+      handle.position.set(0.4, 2.6, 0.1);
+      handle.rotation.z = -0.15;
 
       this.batPivot.add(blade);
       this.batPivot.add(handle);
@@ -430,6 +433,7 @@ export class CricketCharacter {
 
         const dirInfo = DIRECTION_VECTORS[this.currentDirection] || DIRECTION_VECTORS.forward;
         this.batPivot.rotation.z = (batAngleDeg * Math.PI / 180) * (0.8 + this.currentPower * 0.4);
+        this.batPivot.rotation.x = Math.sin(t * Math.PI) * 0.25;
         this.bodyPivot.rotation.y = (bodyTwistDeg * Math.PI / 180) + dirInfo.angle * 0.5;
         break;
       }

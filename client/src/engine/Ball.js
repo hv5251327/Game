@@ -83,8 +83,9 @@ export class Ball {
     this.swingDirection = swingDirection || 'left';
     this.batsmanTarget = targetPos ? targetPos.clone() : new THREE.Vector3(0, 1.8, 9.5);
 
-    // Phase 1: From bowler release hand to exact pitch landing spot
-    const totalDz = Math.max(1.5, this.landingSpot.z - this.startSpot.z);
+    // Phase 1: From bowler release hand (z ~ 10.5) to pitch landing spot (z ~ 2.0 to -6.0)
+    // In our coordinate system, ball travels from positive Z to negative Z (towards batsman at -9.5)
+    const totalDz = this.landingSpot.z - this.startSpot.z; // negative value
     const isSpin = this.deliveryType.includes('spin');
     const isYorker = this.deliveryType === 'yorker';
     const isBouncer = this.deliveryType === 'bouncer';
@@ -93,7 +94,7 @@ export class Ball {
 
     // Exact analytical velocity to hit landingSpot precisely at t = duration1 under gravity
     const vx = (this.landingSpot.x - this.startSpot.x) / this.duration1;
-    const vz = totalDz / this.duration1;
+    const vz = totalDz / this.duration1; // negative velocity along Z
     const vy = (this.landingSpot.y - this.startSpot.y - 0.5 * this.gravity * this.duration1 * this.duration1) / this.duration1;
 
     this.vel.set(vx, vy, vz);
@@ -168,8 +169,8 @@ export class Ball {
       // Exact parabolic arc under gravity
       this.pos.y = this.startSpot.y + this.vel.y * this.flightTime + 0.5 * this.gravity * this.flightTime * this.flightTime;
 
-      // Check for pitch impact
-      if (progress >= 1.0 || (this.pos.z >= this.landingSpot.z && this.pos.y <= this.radius + 0.05)) {
+      // Check for pitch impact: since ball travels from +Z to -Z, we check pos.z <= landingSpot.z
+      if (progress >= 1.0 || (this.pos.z <= this.landingSpot.z && this.pos.y <= this.radius + 0.08)) {
         this.pos.x = this.landingSpot.x;
         this.pos.y = this.radius;
         this.pos.z = this.landingSpot.z;
@@ -180,33 +181,33 @@ export class Ball {
 
         if (this.onBounce) this.onBounce(this.pos);
 
-        // Phase 2: Compute realistic cricket bounce trajectory to batsman crease (z = 3.8)
-        const targetZ = 3.8;
-        const distRemaining = Math.max(0.6, targetZ - this.pos.z);
+        // Phase 2: Compute realistic cricket bounce trajectory to batsman crease (z = -9.5)
+        const targetZ = -9.5;
+        const distRemaining = targetZ - this.pos.z; // negative distance to batsman
         const isSpin = this.deliveryType.includes('spin');
         const isBouncer = this.deliveryType === 'bouncer';
         const isYorker = this.deliveryType === 'yorker';
         const isOutswing = this.deliveryType === 'outswing' || this.swingDirection === 'right';
         const isInswing = this.deliveryType === 'inswing' || this.swingDirection === 'left';
 
-        let duration2 = isSpin ? 0.28 : isYorker ? 0.12 : isBouncer ? 0.24 : 0.20;
+        let duration2 = isSpin ? 0.32 : isYorker ? 0.16 : isBouncer ? 0.28 : 0.24;
 
-        // Target height at batsman
-        let targetY = 0.68; // default waist / bat sweet spot
-        if (isYorker) targetY = 0.22; // low dipping blockhole
-        else if (isBouncer) targetY = 1.28; // high steep rising delivery at chest/helmet!
-        else if (isSpin) targetY = 0.72;
+        // Target height at batsman (scaled for 4m player model: waist / bat sweet spot is ~1.8m)
+        let targetY = 1.8; // default waist / bat sweet spot
+        if (isYorker) targetY = 0.4; // low dipping blockhole
+        else if (isBouncer) targetY = 3.2; // steep rising delivery at chest/helmet
+        else if (isSpin) targetY = 1.6;
 
         // Lateral deviation / spin turn / swing after pitch
         let targetX = this.landingSpot.x;
         if (isOutswing || this.deliveryType === 'leg_spin') {
-          targetX = this.landingSpot.x + 0.32; // breaks away / swings right
+          targetX = this.landingSpot.x + 0.45; // breaks away / swings right
         } else if (isInswing || this.deliveryType === 'spin') {
-          targetX = this.landingSpot.x - 0.32; // jags in / swings left
+          targetX = this.landingSpot.x - 0.45; // jags in / swings left
         }
 
         const vx2 = (targetX - this.pos.x) / duration2;
-        const vz2 = distRemaining / duration2;
+        const vz2 = distRemaining / duration2; // negative velocity toward z = -9.5
         const vy2 = (targetY - this.radius - 0.5 * this.gravity * duration2 * duration2) / duration2;
 
         this.vel.set(vx2, vy2, vz2);
@@ -256,9 +257,9 @@ export class Ball {
       }
     }
 
-    // Boundary rope collision & cushion physics (boundary radius = 27.5m)
+    // Boundary rope collision & cushion physics (boundary radius = 96m matching stadium rope)
     const distFromCenter = Math.hypot(this.pos.x, this.pos.z);
-    if (distFromCenter >= 27.5) {
+    if (distFromCenter >= 96.0) {
       // Ball meets boundary rope / barrier
       this.vel.x *= Math.max(0, 1 - 5.0 * delta);
       this.vel.z *= Math.max(0, 1 - 5.0 * delta);
