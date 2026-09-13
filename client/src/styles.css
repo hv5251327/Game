@@ -577,6 +577,39 @@ body, html {
   align-items: center;
   pointer-events: auto;
   z-index: 60;
+.camera-preset-bar {
+  display: flex;
+  gap: 5px;
+  background: rgba(7, 18, 20, 0.85);
+  padding: 3px 5px;
+  border-radius: 9px;
+  border: 1px solid rgba(244, 239, 227, 0.2);
+  backdrop-filter: blur(8px);
+}
+
+.btn-cam-preset {
+  background: transparent;
+  border: 1px solid transparent;
+  color: rgba(244, 239, 227, 0.65);
+  border-radius: 6px;
+  padding: 5px 9px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.3px;
+  transition: all 0.2s ease;
+}
+
+.btn-cam-preset:hover {
+  color: #f4efe3;
+  border-color: rgba(234, 195, 103, 0.5);
+}
+
+.btn-cam-preset.active {
+  color: #071214;
+  background: #eac367;
+  border-color: #eac367;
+  font-weight: 800;
 }
 
 .btn-hud-vr {

@@ -20,7 +20,7 @@ export const CHARACTER_PRESETS = {
     },
     scale: 1.0,
     bat: { color: 0xc79140, grip_color: 0x222222 },
-    starting_transform: { position: { x: 0, y: 0.0, z: 9.5 }, rotation_y_degrees: 180, scale: 1.0 },
+    starting_transform: { position: { x: 0, y: 0.0, z: -9.5 }, rotation_y_degrees: 0, scale: 1.0 },
     swing_phases: [
       { name: 'wind_up', time: 0.0, bat_angle: -55, body_twist: -18 },
       { name: 'accelerate', time: 0.22, bat_angle: 15, body_twist: 12 },
@@ -45,7 +45,7 @@ export const CHARACTER_PRESETS = {
       grounded_stability: 0.95
     },
     scale: 1.0,
-    starting_transform: { position: { x: 0, y: 0.0, z: -27.0 }, rotation_y_degrees: 0, scale: 1.0 }
+    starting_transform: { position: { x: 0, y: 0.0, z: 27.0 }, rotation_y_degrees: 180, scale: 1.0 }
   },
   snail_fielder_left: {
     id: 'snail_fielder_left',
@@ -64,7 +64,7 @@ export const CHARACTER_PRESETS = {
       grounded_stability: 0.95
     },
     scale: 1.0,
-    starting_transform: { position: { x: -24.0, y: 0.0, z: -22.0 }, rotation_y_degrees: 90, scale: 1.0 }
+    starting_transform: { position: { x: -24.0, y: 0.0, z: 22.0 }, rotation_y_degrees: 90, scale: 1.0 }
   },
   ant_fielder_right: {
     id: 'ant_fielder_right',
@@ -83,7 +83,7 @@ export const CHARACTER_PRESETS = {
       grounded_stability: 0.85
     },
     scale: 1.0,
-    starting_transform: { position: { x: 29.0, y: 0.0, z: 19.0 }, rotation_y_degrees: -90, scale: 1.0 }
+    starting_transform: { position: { x: 29.0, y: 0.0, z: -19.0 }, rotation_y_degrees: -90, scale: 1.0 }
   },
   beetle_power_batter_01: {
     id: 'beetle_power_batter_01',
@@ -103,7 +103,7 @@ export const CHARACTER_PRESETS = {
     },
     scale: 1.0,
     bat: { color: 0xb57c32, grip_color: 0x111111 },
-    starting_transform: { position: { x: 0, y: 0.0, z: 9.5 }, rotation_y_degrees: 180, scale: 1.0 },
+    starting_transform: { position: { x: 0, y: 0.0, z: -9.5 }, rotation_y_degrees: 0, scale: 1.0 },
     swing_phases: [
       { name: 'deep_wind_up', time: 0.0, bat_angle: -78, body_twist: -28 },
       { name: 'power_drive', time: 0.34, bat_angle: 5, body_twist: 8 },
@@ -129,7 +129,7 @@ export const CHARACTER_PRESETS = {
     },
     scale: 1.0,
     bat: { color: 0xdbad65, grip_color: 0x333333 },
-    starting_transform: { position: { x: 0, y: 0.0, z: 9.5 }, rotation_y_degrees: 180, scale: 1.0 },
+    starting_transform: { position: { x: 0, y: 0.0, z: -9.5 }, rotation_y_degrees: 0, scale: 1.0 },
     swing_phases: [
       { name: 'coil', time: 0.0, bat_angle: -35, body_twist: -12 },
       { name: 'hop_and_accelerate', time: 0.14, bat_angle: 20, body_twist: 14 },
@@ -557,9 +557,9 @@ export class CricketCharacter {
       this.group.scale.x = Math.abs(baseScale);
     }
 
-    let zPos = 9.5;
-    if (this.stance.depth === 'deep') zPos = 10.4;
-    else if (this.stance.depth === 'forward') zPos = 8.6;
+    let zPos = -9.5;
+    if (this.stance.depth === 'deep') zPos = -10.4;
+    else if (this.stance.depth === 'forward') zPos = -8.6;
 
     let xPos = 0;
     if (this.stance.guard === 'leg') xPos = this.stance.hand === 'LHB' ? 0.6 : -0.6;
