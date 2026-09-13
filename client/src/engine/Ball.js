@@ -6,8 +6,8 @@ export class Ball {
     this.scene = scene;
     this.group = new THREE.Group();
 
-    // Ball mesh: color #D9362B, radius 0.16
-    this.radius = 0.16;
+    // Ball mesh: color #D9362B, radius 0.22 (scaled for 4m player models)
+    this.radius = 0.22;
     const geo = new THREE.SphereGeometry(this.radius, 18, 18);
     const mat = new THREE.MeshStandardMaterial({
       color: 0xD9362B,
@@ -19,21 +19,21 @@ export class Ball {
     this.group.add(this.mesh);
 
     // Seam
-    const seamGeo = new THREE.TorusGeometry(this.radius, 0.012, 8, 36);
+    const seamGeo = new THREE.TorusGeometry(this.radius, 0.015, 8, 36);
     const seamMat = new THREE.MeshStandardMaterial({ color: 0xFFF2D0, roughness: 0.5 });
     const seam = new THREE.Mesh(seamGeo, seamMat);
     this.group.add(seam);
 
-    // Initial position: { x: 0, y: 0.35, z: -2.8 }
-    this.group.position.set(0, 0.35, -2.8);
+    // Initial position
+    this.group.position.set(0, 0.5, -9.5);
     this.scene.add(this.group);
     this.group.visible = false;
 
     // Physics State
-    this.pos = new THREE.Vector3(0, 0.35, -2.8);
+    this.pos = new THREE.Vector3(0, 0.5, -9.5);
     this.vel = new THREE.Vector3(0, 0, 0);
-    this.gravity = -21.0; // Realistic snappy cricket gravity
-    this.restitution = 0.62; // Pitch bounce coefficient
+    this.gravity = -21.0;
+    this.restitution = 0.62;
     this.groundFriction = 0.88;
     this.airDrag = 0.992;
     this.active = false;
@@ -52,7 +52,7 @@ export class Ball {
 
   _buildTrail() {
     for (let i = 0; i < 16; i++) {
-      const tGeo = new THREE.SphereGeometry(0.065 - i * 0.0035, 6, 6);
+      const tGeo = new THREE.SphereGeometry(0.09 - i * 0.005, 6, 6);
       const tMat = new THREE.MeshStandardMaterial({
         color: 0xFF6B4A,
         transparent: true,
@@ -81,10 +81,10 @@ export class Ball {
     this.flightTime = 0;
     this.deliveryType = deliveryType || 'pace';
     this.swingDirection = swingDirection || 'left';
-    this.batsmanTarget = targetPos ? targetPos.clone() : new THREE.Vector3(0, 0.68, 3.8);
+    this.batsmanTarget = targetPos ? targetPos.clone() : new THREE.Vector3(0, 1.8, 9.5);
 
     // Phase 1: From bowler release hand to exact pitch landing spot
-    const totalDz = Math.max(0.8, this.landingSpot.z - this.startSpot.z);
+    const totalDz = Math.max(1.5, this.landingSpot.z - this.startSpot.z);
     const isSpin = this.deliveryType.includes('spin');
     const isYorker = this.deliveryType === 'yorker';
     const isBouncer = this.deliveryType === 'bouncer';
@@ -100,7 +100,7 @@ export class Ball {
     this.trailPoints = [];
   }
 
-  // Realistic Bat Hit Physics Launch with calibrated power, arcs, and backside trajectory
+  // Realistic Bat Hit Physics Launch calibrated for 96m boundary
   hitLaunch(startPos, dirVector, power = 0.8, shotType = 'drive', isSix = false, runs = 0) {
     this.pos.copy(startPos);
     this.group.position.copy(this.pos);
@@ -117,36 +117,32 @@ export class Ball {
     let speedXZ, initialVy;
 
     if (isSix || runs === 6) {
-      // High soaring maximum: clears the 27.5m boundary rope with rainbow parabola
-      const baseSpeed = 28;
+      // High soaring maximum: clears the 96m boundary rope with majestic parabola
+      const baseSpeed = 66;
       speedXZ = baseSpeed * (0.85 + power * 0.35);
-      initialVy = 15.5 * (0.85 + power * 0.3);
+      initialVy = 32.0 * (0.85 + power * 0.3);
     } else if (runs === 4) {
-      // Crisp boundary four: travels with good pace to touch/cross the rope
-      const baseSpeed = 23;
+      // Crisp boundary four: travels with good pace to touch/cross the 96m rope
+      const baseSpeed = 54;
       speedXZ = baseSpeed * (0.8 + power * 0.4);
-      // Straight drive (forward) needs higher arc to clear mid-on/off region
       if (dirVector.z < -0.5) {
-        initialVy = shotType === 'loft' ? 10.0 : 5.5; // Forward: higher arc over pitch
+        initialVy = shotType === 'loft' ? 22.0 : 12.5;
       } else {
-        initialVy = shotType === 'loft' ? 9.5 : 3.8;
+        initialVy = shotType === 'loft' ? 20.0 : 8.5;
       }
     } else if (shotType === 'sweep') {
-      speedXZ = 18 * (0.75 + power * 0.4);
-      initialVy = 3.2;
+      speedXZ = 40 * (0.75 + power * 0.4);
+      initialVy = 7.0;
     } else if (shotType === 'cut') {
-      speedXZ = 19 * (0.75 + power * 0.4);
-      initialVy = 3.5;
+      speedXZ = 42 * (0.75 + power * 0.4);
+      initialVy = 7.5;
     } else if (shotType === 'defend' || runs === 0) {
-      // Defensive block or dot: dead drop onto pitch
-      speedXZ = 3.2;
-      initialVy = 1.2;
+      speedXZ = 6.5;
+      initialVy = 2.4;
     } else {
-      // 1, 2, or 3 runs: calibrated to gap in the outfield
       const mult = runs === 3 ? 1.35 : runs === 2 ? 1.15 : 0.95;
-      speedXZ = 14.5 * mult * (0.8 + power * 0.35);
-      // Straight shots need a bit more vertical to clear pitch stumps realistically
-      initialVy = dirVector.z < -0.5 ? 4.5 : 3.0;
+      speedXZ = 32.0 * mult * (0.8 + power * 0.35);
+      initialVy = dirVector.z < -0.5 ? 9.5 : 6.0;
     }
 
     this.vel.set(dir.x * speedXZ, initialVy, dir.y * speedXZ);

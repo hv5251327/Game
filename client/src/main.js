@@ -119,11 +119,11 @@ class CricketGame {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x82C7FE);
 
-    // Exact Broadcast Camera
-    this.camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.1, 160);
-    this.defaultCamPos = new THREE.Vector3(0, 6.5, 11.5);
-    this.defaultCamLookAt = new THREE.Vector3(0, 1.2, 0);
-    this.currentCamLookAt = new THREE.Vector3(0, 1.2, 0);
+    // Exact Broadcast Camera scaled for Summit Park 280m Stadium
+    this.camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.1, 800);
+    this.defaultCamPos = new THREE.Vector3(0, 20, 48);
+    this.defaultCamLookAt = new THREE.Vector3(0, 4.0, 0);
+    this.currentCamLookAt = new THREE.Vector3(0, 4.0, 0);
     this.targetCamPos = this.defaultCamPos.clone();
     this.targetCamLookAt = this.defaultCamLookAt.clone();
     this.cameraTracking = false;
@@ -139,18 +139,18 @@ class CricketGame {
 
     document.getElementById('canvas-container').appendChild(this.renderer.domElement);
 
-    // Exact Lighting:
-    const keyLight = new THREE.DirectionalLight(0xFFF4C2, 1.2);
-    keyLight.position.set(-4, 8, 5);
+    // Exact Lighting matching Babylon scene sunset keylight:
+    const keyLight = new THREE.DirectionalLight(0xFFF4C2, 1.3);
+    keyLight.position.set(-60, 90, -70);
     keyLight.castShadow = true;
-    keyLight.shadow.mapSize.width = 1024;
-    keyLight.shadow.mapSize.height = 1024;
-    keyLight.shadow.camera.near = 0.5;
-    keyLight.shadow.camera.far = 40;
-    keyLight.shadow.camera.left = -16;
-    keyLight.shadow.camera.right = 16;
-    keyLight.shadow.camera.top = 16;
-    keyLight.shadow.camera.bottom = -16;
+    keyLight.shadow.mapSize.width = 2048;
+    keyLight.shadow.mapSize.height = 2048;
+    keyLight.shadow.camera.near = 1.0;
+    keyLight.shadow.camera.far = 400;
+    keyLight.shadow.camera.left = -140;
+    keyLight.shadow.camera.right = 140;
+    keyLight.shadow.camera.top = 140;
+    keyLight.shadow.camera.bottom = -140;
     keyLight.shadow.bias = -0.0005;
     this.scene.add(keyLight);
 
@@ -199,7 +199,7 @@ class CricketGame {
     // Bat Controller Swing Hook: batsman can ONLY hit when ball is actively incoming in front of crease
     this.battingUI.onSwing = (command) => {
       if (!this.ballIncoming || !this.ball || !this.ball.active || this.ball.isHitShot) return;
-      if (this.ball.pos && this.ball.pos.z > 4.2) return;
+      if (this.ball.pos && this.ball.pos.z > 11.2) return;
       this.ballIncoming = false;
 
       this._playBatSound();
@@ -652,19 +652,19 @@ class CricketGame {
       const swingStr = data.swingDirection ? ` &bull; ${data.swingDirection.toUpperCase()}` : '';
       this.domActionBanner.textContent = `⚾ ${data.bowler?.name} delivers ${data.deliveryType.toUpperCase()}${swingStr}${paceStr}!`;
       if (this.bowlerAvatar) {
-        this.bowlerAvatar.setPosition(0, 0.0, -3.7);
+        this.bowlerAvatar.setPosition(0, 0.0, -9.5);
         this.bowlerAvatar.triggerBowlAction();
       }
 
       // Lock batsmen firmly to crease for delivery arrival
       this._resetBatsmenToCrease();
 
-      // Authentic cricket ball delivery: release from bowler hand (y = 1.35m) to EXACT pitch spot
-      const startPos = new THREE.Vector3(0, 1.35, -3.7);
+      // Authentic cricket ball delivery: release from bowler hand (y = 3.2m for 4m player) to pitch landing spot
+      const startPos = new THREE.Vector3(0, 3.2, -9.5);
       const lzX = typeof data.landingZone?.x === 'number' ? data.landingZone.x : 0;
       const lzZ = typeof data.landingZone?.z === 'number' ? data.landingZone.z : 1.2;
-      const landingPos = new THREE.Vector3(lzX, 0.16, lzZ);
-      const targetPos = new THREE.Vector3(lzX, 0.68, 3.8);
+      const landingPos = new THREE.Vector3(lzX * 2.0, 0.24, lzZ * 2.5);
+      const targetPos = new THREE.Vector3(lzX, 1.8, 9.5);
 
       this.ball.bowlDelivery(startPos, landingPos, targetPos, data.deliveryType, data.swingDirection);
 
@@ -837,16 +837,21 @@ class CricketGame {
 
   _setupDefaultCharacters() {
     this.strikerAvatar = new CricketCharacter(this.scene, 'ant_batter_01');
-    this.bowlerAvatar = new CricketCharacter(this.scene, 'snail_bowler_01');
+    this.strikerAvatar.setPosition(0, 0.0, 9.5);
 
-    // Umpire at square-leg position near batting crease (Babylon.js ref: [5.2, 0, -2] → Three.js [5.2, 0, 1.5])
+    this.bowlerAvatar = new CricketCharacter(this.scene, 'snail_bowler_01');
+    this.bowlerAvatar.setPosition(0, 0.0, -27.0);
+
+    // Umpire at square-leg position near batting crease (Babylon.js ref: [5.2, 0, -2] -> Three.js [5.2, 0, 9.5])
     this.umpireAvatar = new CricketCharacter(this.scene, { species: 'umpire', role: 'umpire' });
-    this.umpireAvatar.setPosition(5.2, 0, 1.5);
+    this.umpireAvatar.setPosition(5.2, 0, 9.5);
     this.umpireAvatar.setRotation(Math.PI);
 
-    const snailLeft = new CricketCharacter(this.scene, 'snail_fielder_left');
-    const antRight = new CricketCharacter(this.scene, 'ant_fielder_right');
-    this.fielders.push(snailLeft, antRight);
+    const fCover = new CricketCharacter(this.scene, 'snail_fielder_left');
+    fCover.setPosition(-24, 0, -22);
+    const fMidwicket = new CricketCharacter(this.scene, 'ant_fielder_right');
+    fMidwicket.setPosition(29, 0, 19);
+    this.fielders.push(fCover, fMidwicket);
   }
 
   _setupMatchCharacters(battingTeam, bowlingTeam) {
@@ -858,52 +863,51 @@ class CricketGame {
     this.fielders.forEach(f => f.destroy());
     this.fielders = [];
 
-    // Striker
+    // Striker (Babylon.js ref: [0, 0, 9.5])
     const batterPresetId = this.battingUI.characterId || 'ant_batter_01';
     this.strikerAvatar = new CricketCharacter(this.scene, batterPresetId);
+    this.strikerAvatar.setPosition(0, 0.0, 9.5);
     if (this.strikerAvatar && this.battingUI) {
       this.strikerAvatar.setStance(this.battingUI.stance);
     }
 
-    // Non-striker
+    // Non-striker (Babylon.js ref: [0, 0, -9.5])
     this.nonStrikerAvatar = new CricketCharacter(this.scene, 'ant_fielder_right');
-    this.nonStrikerAvatar.setPosition(-1.3, 0.0, -3.8);
+    this.nonStrikerAvatar.setPosition(-2.5, 0.0, -9.5);
     this.nonStrikerAvatar.setRotation(0);
 
-    // Bowler
+    // Bowler (Babylon.js ref: [0, 0, -27])
     this.bowlerAvatar = new CricketCharacter(this.scene, 'snail_bowler_01');
-    this.bowlerAvatar.setPosition(0, 0.0, -11.0);
+    this.bowlerAvatar.setPosition(0, 0.0, -27.0);
 
-    // Wicketkeeper
+    // Wicketkeeper (Babylon.js ref: [0, 0, 17] behind striker stumps)
     this.keeperAvatar = new CricketCharacter(this.scene, 'snail_fielder_left');
-    this.keeperAvatar.setPosition(0, 0.0, 5.4);
+    this.keeperAvatar.setPosition(0, 0.0, 17.0);
     this.keeperAvatar.setRotation(Math.PI);
 
-    // Umpire at square-leg position near batting crease (Babylon.js ref: [5.2, 0, -2] → Three.js [5.2, 0, 1.5])
+    // Umpire at square-leg position near batting crease (Babylon.js ref: [5.2, 0, -2] -> Three.js [5.2, 0, 9.5])
     this.umpireAvatar = new CricketCharacter(this.scene, { species: 'umpire', role: 'umpire' });
-    this.umpireAvatar.setPosition(5.2, 0, 1.5);
+    this.umpireAvatar.setPosition(5.2, 0, 9.5);
     this.umpireAvatar.setRotation(Math.PI);
 
-    // Fielders in strategic positions
-    const f1 = new CricketCharacter(this.scene, 'snail_fielder_left');
-    const f2 = new CricketCharacter(this.scene, 'ant_fielder_right');
-
-    const extraPositions = [
-      { id: 'snail_fielder_left', x: -8, y: 0.0, z: 2 },
-      { id: 'ant_fielder_right', x: 9, y: 0.0, z: 4 },
-      { id: 'snail_fielder_left', x: 0, y: 0.0, z: -10 },
-      { id: 'ant_fielder_right', x: -10, y: 0.0, z: -6 },
-      { id: 'snail_fielder_left', x: 7, y: 0.0, z: -8 }
+    // Exact 8 strategic fielders matching Babylon.js sceneConfig
+    const fieldersConfig = [
+      { id: 'snail_fielder_left',  x: -24, z: -22 }, // cover
+      { id: 'ant_fielder_right',   x:  29, z:  19 }, // midwicket
+      { id: 'snail_fielder_left',  x:  18, z: -53 }, // longon
+      { id: 'ant_fielder_right',   x: -34, z:   5 }, // point
+      { id: 'snail_fielder_left',  x:  -8, z:  18 }, // slip
+      { id: 'ant_fielder_right',   x: -42, z: -48 }, // third man
+      { id: 'snail_fielder_left',  x:  30, z:  -7 }, // square leg
+      { id: 'ant_fielder_right',   x:  38, z:  42 }  // fine leg
     ];
 
-    extraPositions.forEach(ep => {
-      const f = new CricketCharacter(this.scene, ep.id);
-      f.setPosition(ep.x, ep.y, ep.z);
-      f.setRotation(Math.atan2(-ep.x, 3.8 - ep.z));
+    fieldersConfig.forEach(fc => {
+      const f = new CricketCharacter(this.scene, fc.id);
+      f.setPosition(fc.x, 0, fc.z);
+      f.setRotation(Math.atan2(-fc.x, 9.5 - fc.z));
       this.fielders.push(f);
     });
-
-    this.fielders.push(f1, f2);
   }
 
   // Athletic Diving Catch Animation — moves the NEAREST fielder to the ball's trajectory

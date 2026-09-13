@@ -1,26 +1,26 @@
 import * as THREE from 'three';
 
-// Babylon.js Summit Park Style Human Cricket Player Presets
+// Babylon.js Summit Park Style Human Cricket Player Specifications
 export const CHARACTER_PRESETS = {
   ant_batter_01: {
     id: 'ant_batter_01',
     species: 'human',
     role: 'batter',
     team: 'emerald',
-    team_color: '#0d472a',    // Emerald XI deep green
-    accent_color: '#80b82e',  // Lime accent trim
+    team_color: '#0d472a',    // Emerald XI deep green Color3(0.05, 0.28, 0.16)
+    accent_color: '#80b82e',  // Lime accent Color3(0.5, 0.72, 0.18)
     physics: {
-      mass_kg: 75.0,
+      mass_kg: 80.0,
       swing_speed_degrees_per_second: 540,
-      impact_force_newtons: 28,
-      restitution: 0.62,
+      impact_force_newtons: 35,
+      restitution: 0.65,
       friction: 0.70,
       air_drag: 0.15,
-      grounded_stability: 0.85
+      grounded_stability: 0.90
     },
     scale: 1.0,
     bat: { color: 0xc79140, grip_color: 0x222222 },
-    starting_transform: { position: { x: 0, y: 0.0, z: 3.8 }, rotation_y_degrees: 180, scale: 1.0 },
+    starting_transform: { position: { x: 0, y: 0.0, z: 9.5 }, rotation_y_degrees: 180, scale: 1.0 },
     swing_phases: [
       { name: 'wind_up', time: 0.0, bat_angle: -55, body_twist: -18 },
       { name: 'accelerate', time: 0.22, bat_angle: 15, body_twist: 12 },
@@ -33,19 +33,19 @@ export const CHARACTER_PRESETS = {
     species: 'human',
     role: 'bowler',
     team: 'sapphire',
-    team_color: '#0d3799',    // Sapphire XI royal blue
-    accent_color: '#73c2f2',  // Ice blue accent
+    team_color: '#0d3799',    // Sapphire XI royal blue Color3(0.05, 0.22, 0.62)
+    accent_color: '#73c2f2',  // Ice accent Color3(0.45, 0.76, 0.95)
     physics: {
-      mass_kg: 78.0,
-      swing_speed_degrees_per_second: 180,
-      impact_force_newtons: 10,
+      mass_kg: 82.0,
+      swing_speed_degrees_per_second: 200,
+      impact_force_newtons: 12,
       restitution: 0.25,
       friction: 0.90,
       air_drag: 0.30,
       grounded_stability: 0.95
     },
     scale: 1.0,
-    starting_transform: { position: { x: 0, y: 0.0, z: -11.0 }, rotation_y_degrees: 0, scale: 1.0 }
+    starting_transform: { position: { x: 0, y: 0.0, z: -27.0 }, rotation_y_degrees: 0, scale: 1.0 }
   },
   snail_fielder_left: {
     id: 'snail_fielder_left',
@@ -55,7 +55,7 @@ export const CHARACTER_PRESETS = {
     team_color: '#0d3799',
     accent_color: '#73c2f2',
     physics: {
-      mass_kg: 72.0,
+      mass_kg: 78.0,
       swing_speed_degrees_per_second: 150,
       impact_force_newtons: 8,
       restitution: 0.2,
@@ -64,7 +64,7 @@ export const CHARACTER_PRESETS = {
       grounded_stability: 0.95
     },
     scale: 1.0,
-    starting_transform: { position: { x: -5.0, y: 0.0, z: -1.2 }, rotation_y_degrees: 90, scale: 1.0 }
+    starting_transform: { position: { x: -24.0, y: 0.0, z: -22.0 }, rotation_y_degrees: 90, scale: 1.0 }
   },
   ant_fielder_right: {
     id: 'ant_fielder_right',
@@ -74,7 +74,7 @@ export const CHARACTER_PRESETS = {
     team_color: '#0d3799',
     accent_color: '#73c2f2',
     physics: {
-      mass_kg: 74.0,
+      mass_kg: 76.0,
       swing_speed_degrees_per_second: 460,
       impact_force_newtons: 14,
       restitution: 0.5,
@@ -83,7 +83,7 @@ export const CHARACTER_PRESETS = {
       grounded_stability: 0.85
     },
     scale: 1.0,
-    starting_transform: { position: { x: 4.6, y: 0.0, z: -1.8 }, rotation_y_degrees: -90, scale: 1.0 }
+    starting_transform: { position: { x: 29.0, y: 0.0, z: 19.0 }, rotation_y_degrees: -90, scale: 1.0 }
   },
   beetle_power_batter_01: {
     id: 'beetle_power_batter_01',
@@ -93,17 +93,17 @@ export const CHARACTER_PRESETS = {
     team_color: '#0d472a',
     accent_color: '#80b82e',
     physics: {
-      mass_kg: 84.0,
-      swing_speed_degrees_per_second: 480,
-      impact_force_newtons: 36,
-      restitution: 0.64,
+      mass_kg: 90.0,
+      swing_speed_degrees_per_second: 500,
+      impact_force_newtons: 45,
+      restitution: 0.68,
       friction: 0.80,
       air_drag: 0.12,
-      grounded_stability: 0.95
+      grounded_stability: 0.98
     },
-    scale: 1.05,
+    scale: 1.0,
     bat: { color: 0xb57c32, grip_color: 0x111111 },
-    starting_transform: { position: { x: 0, y: 0.0, z: 3.8 }, rotation_y_degrees: 180, scale: 1.0 },
+    starting_transform: { position: { x: 0, y: 0.0, z: 9.5 }, rotation_y_degrees: 180, scale: 1.0 },
     swing_phases: [
       { name: 'deep_wind_up', time: 0.0, bat_angle: -78, body_twist: -28 },
       { name: 'power_drive', time: 0.34, bat_angle: 5, body_twist: 8 },
@@ -119,17 +119,17 @@ export const CHARACTER_PRESETS = {
     team_color: '#0d472a',
     accent_color: '#80b82e',
     physics: {
-      mass_kg: 68.0,
-      swing_speed_degrees_per_second: 620,
-      impact_force_newtons: 22,
-      restitution: 0.7,
+      mass_kg: 74.0,
+      swing_speed_degrees_per_second: 680,
+      impact_force_newtons: 26,
+      restitution: 0.72,
       friction: 0.55,
       air_drag: 0.1,
-      grounded_stability: 0.80
+      grounded_stability: 0.85
     },
-    scale: 0.98,
+    scale: 1.0,
     bat: { color: 0xdbad65, grip_color: 0x333333 },
-    starting_transform: { position: { x: 0, y: 0.0, z: 3.8 }, rotation_y_degrees: 180, scale: 1.0 },
+    starting_transform: { position: { x: 0, y: 0.0, z: 9.5 }, rotation_y_degrees: 180, scale: 1.0 },
     swing_phases: [
       { name: 'coil', time: 0.0, bat_angle: -35, body_twist: -12 },
       { name: 'hop_and_accelerate', time: 0.14, bat_angle: 20, body_twist: 14 },
@@ -185,8 +185,7 @@ export class CricketCharacter {
 
     this.stance = { hand: 'RHB', depth: 'normal', guard: 'middle' };
 
-    // Initial transform
-    const isUmpire = this.species === 'umpire' || this.role === 'umpire';
+    // Initial transform matching Babylon.js specs
     if (this.config.starting_transform) {
       const st = this.config.starting_transform;
       this.setPosition(st.position.x, st.position.y, st.position.z);
@@ -205,168 +204,167 @@ export class CricketCharacter {
     while (this.bodyPivot.children.length > 0) this.bodyPivot.remove(this.bodyPivot.children[0]);
     while (this.batPivot.children.length > 0) this.batPivot.remove(this.batPivot.children[0]);
 
-    this._buildHumanPlayer();
+    this._buildExactBabylonPlayer();
   }
 
-  // --- BABYLON.JS SUMMIT PARK HUMAN CRICKET PLAYER ---
-  _buildHumanPlayer() {
+  // --- EXACT BABYLON.JS PLAYER MODEL IN THREE.JS ---
+  // Dimensions taken directly from Babylon.js createPlayer() function
+  _buildExactBabylonPlayer() {
     const isUmpire = this.species === 'umpire' || this.role === 'umpire';
     const isBatsman = this.role.includes('batter') || this.role.includes('batsman');
     const isKeeper = this.role === 'wicketkeeper';
 
-    // Kit colors based on team / role
-    let kitHex = 0x0d472a;    // Emerald XI deep green
-    let accentHex = 0x80b82e; // Lime accent
-    let trouserHex = kitHex;
-    const skinHex = 0x855024; // Tan skin tone (Babylon: 0.52, 0.28, 0.16)
-    const woodHex = 0xc79140; // Wood bat
+    // Materials
+    let kitHex = 0x0d472a;    // Emerald XI deep green Color3(0.05, 0.28, 0.16)
+    let accentHex = 0x80b82e; // Lime accent Color3(0.5, 0.72, 0.18)
+    const skinHex = 0x855024; // Color3(0.52, 0.28, 0.16)
+    const batWoodHex = 0xc79140; // Color3(0.78, 0.57, 0.25)
+    let shoeHex = 0x141a1c;
 
     if (isUmpire) {
-      kitHex = 0xd9d4c2;     // Cream shirt
-      trouserHex = 0x1e272e; // Dark trousers
-      accentHex = 0x1e272e;  // Dark cap
+      kitHex = 0xd9d4c2;     // Umpire kit Color3(0.85, 0.83, 0.76)
+      accentHex = 0x101416;  // Dark metal
     } else if (this.role === 'bowler' || this.role === 'fielder' || isKeeper) {
-      kitHex = 0x0d3799;     // Sapphire XI royal blue
-      accentHex = 0x73c2f2;  // Ice blue accent
-      trouserHex = kitHex;
+      kitHex = 0x0d3799;     // Sapphire XI royal blue Color3(0.05, 0.22, 0.62)
+      accentHex = 0x73c2f2;  // Ice accent Color3(0.45, 0.76, 0.95)
     }
 
     const kitMat = new THREE.MeshStandardMaterial({ color: kitHex, roughness: 0.65 });
-    const trouserMat = new THREE.MeshStandardMaterial({ color: trouserHex, roughness: 0.70 });
     const accentMat = new THREE.MeshStandardMaterial({ color: accentHex, roughness: 0.50 });
     const skinMat = new THREE.MeshStandardMaterial({ color: skinHex, roughness: 0.60 });
-    const shoeMat = new THREE.MeshStandardMaterial({ color: 0x181e24, roughness: 0.80 });
+    const shoeMat = new THREE.MeshStandardMaterial({ color: shoeHex, roughness: 0.80 });
+    const batMat = new THREE.MeshStandardMaterial({ color: batWoodHex, roughness: 0.55 });
 
-    // 1. Torso: Box (width 0.42, height 0.68, depth 0.24, center y = 1.02)
-    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.68, 0.24), kitMat);
-    torso.position.set(0, 1.02, 0);
+    // 1. Torso: Box (width: 1.0, height: 1.75, depth: 0.6) at (0, 2.15, 0)
+    const torsoGeo = new THREE.BoxGeometry(1.0, 1.75, 0.6);
+    const torso = new THREE.Mesh(torsoGeo, kitMat);
+    torso.position.set(0, 2.15, 0);
+    torso.rotation.z = isUmpire ? 0 : 0.02;
     torso.castShadow = true;
     this.bodyPivot.add(torso);
 
-    // 2. Head: Sphere (diameter 0.28, center y = 1.50)
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.14, 16, 16), skinMat);
-    head.position.set(0, 1.50, 0);
+    // 2. Head: Sphere (diameter: 0.68 -> radius: 0.34) at (0, 3.65, 0)
+    const headGeo = new THREE.SphereGeometry(0.34, 16, 16);
+    const head = new THREE.Mesh(headGeo, skinMat);
+    head.position.set(0, 3.65, 0);
     head.castShadow = true;
     this.bodyPivot.add(head);
 
-    // 3. Helmet & Visor (Players) OR Umpire Cap & Clipboard
+    // 3. Helmet & Visor (players) OR Umpire Cap & Clipboard
     if (!isUmpire) {
-      const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.16, 16, 16), accentMat);
-      helmet.position.set(0, 1.56, 0);
+      // Helmet: Sphere (diameter: 0.76 -> radius: 0.38) at (0, 3.87, 0)
+      const helmetGeo = new THREE.SphereGeometry(0.38, 16, 16);
+      const helmet = new THREE.Mesh(helmetGeo, accentMat);
+      helmet.position.set(0, 3.87, 0);
       this.bodyPivot.add(helmet);
 
-      const visor = new THREE.Mesh(
-        new THREE.BoxGeometry(0.20, 0.035, 0.08),
-        new THREE.MeshStandardMaterial({ color: 0x1a252f, roughness: 0.3 })
-      );
-      visor.position.set(0, 1.52, 0.12);
+      // Visor: Box (width: 0.48, height: 0.08, depth: 0.16) at (0, 3.74, 0.3)
+      const visorGeo = new THREE.BoxGeometry(0.48, 0.08, 0.16);
+      const visor = new THREE.Mesh(visorGeo, new THREE.MeshStandardMaterial({ color: 0x1a2124, roughness: 0.3 }));
+      visor.position.set(0, 3.74, 0.3);
       this.bodyPivot.add(visor);
     } else {
-      // Umpire Cap: wide flat box
-      const cap = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.05, 0.28), accentMat);
-      cap.position.set(0, 1.63, 0);
+      // Cap: Box (width: 0.74, height: 0.16, depth: 0.74) at (0, 4.08, 0)
+      const capGeo = new THREE.BoxGeometry(0.74, 0.16, 0.74);
+      const cap = new THREE.Mesh(capGeo, accentMat);
+      cap.position.set(0, 4.08, 0);
       this.bodyPivot.add(cap);
 
-      // Clipboard in left hand
-      const clipboard = new THREE.Mesh(
-        new THREE.BoxGeometry(0.14, 0.18, 0.02),
-        new THREE.MeshStandardMaterial({ color: 0xf5f5dc })
-      );
-      clipboard.position.set(-0.28, 0.95, 0.08);
-      clipboard.rotation.x = 0.3;
-      this.bodyPivot.add(clipboard);
+      // Clipboard: Box (width: 0.38, height: 0.5, depth: 0.05) at (-0.65, 2.5, 0)
+      const cbGeo = new THREE.BoxGeometry(0.38, 0.5, 0.05);
+      const cb = new THREE.Mesh(cbGeo, batMat);
+      cb.position.set(-0.65, 2.5, 0);
+      this.bodyPivot.add(cb);
     }
 
-    // 4. Legs (2) & Shoes (2) - bottoms contact ground at y = 0
-    [-0.11, 0.11].forEach(x => {
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.58, 0.16), trouserMat);
-      leg.position.set(x, 0.38, 0);
+    // 4. Legs & Shoes at x = -0.27, 0.27
+    // Leg: Box (width: 0.31, height: 1.38, depth: 0.38) at (x, 0.83, 0)
+    // Shoe: Box (width: 0.42, height: 0.18, depth: 0.7) at (x, 0.05, 0.08) - bottom contacts turf at y = 0
+    const legGeo = new THREE.BoxGeometry(0.31, 1.38, 0.38);
+    const shoeGeo = new THREE.BoxGeometry(0.42, 0.18, 0.7);
+    const padGeo = new THREE.BoxGeometry(0.38, 0.88, 0.18);
+    const keeperPadGeo = new THREE.BoxGeometry(0.38, 0.9, 0.22);
+
+    [-0.27, 0.27].forEach(x => {
+      const leg = new THREE.Mesh(legGeo, kitMat);
+      leg.position.set(x, 0.83, 0);
       leg.castShadow = true;
       this.bodyPivot.add(leg);
 
-      const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.09, 0.26), shoeMat);
-      shoe.position.set(x, 0.045, 0.03);
+      const shoe = new THREE.Mesh(shoeGeo, shoeMat);
+      shoe.position.set(x, 0.09, 0.08);
       shoe.castShadow = true;
       this.bodyPivot.add(shoe);
 
-      // Batting Pads for batsmen
+      // Batsman Pads: Box (width: 0.38, height: 0.88, depth: 0.18) at (x, 0.7, 0.2)
       if (isBatsman) {
-        const pad = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.42, 0.08), accentMat);
-        pad.position.set(x, 0.38, 0.09);
+        const pad = new THREE.Mesh(padGeo, accentMat);
+        pad.position.set(x, 0.7, 0.2);
+        pad.castShadow = true;
         this.bodyPivot.add(pad);
       }
 
-      // Keeper Pads for wicketkeeper
+      // Keeper Pads: Box (width: 0.38, height: 0.9, depth: 0.22) at (x, 0.7, 0.15)
       if (isKeeper) {
-        const kPad = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.40, 0.09), kitMat);
-        kPad.position.set(x, 0.36, 0.08);
+        const kPad = new THREE.Mesh(keeperPadGeo, kitMat);
+        kPad.position.set(x, 0.7, 0.15);
         this.bodyPivot.add(kPad);
       }
     });
 
-    // 5. Arms & Arm Pivots
-    // Right Arm Pivot (for swings, bowling action, umpire signals)
+    // 5. Arms at x = -0.67 and 0.67
+    // Arm: Box (width: 0.24, height: 1.15, depth: 0.26) at (x, 2.4, 0)
+    const armGeo = new THREE.BoxGeometry(0.24, 1.15, 0.26);
+
     this.rightArmPivot = new THREE.Group();
-    this.rightArmPivot.position.set(0.26, 1.30, 0);
-    const rArm = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.48, 0.10), kitMat);
-    rArm.position.set(0, -0.20, 0);
+    this.rightArmPivot.position.set(0.67, 2.8, 0);
+    const rArm = new THREE.Mesh(armGeo, kitMat);
+    rArm.position.set(0, -0.4, 0);
     rArm.castShadow = true;
     this.rightArmPivot.add(rArm);
     this.bodyPivot.add(this.rightArmPivot);
 
-    // Left Arm Pivot
     this.leftArmPivot = new THREE.Group();
-    this.leftArmPivot.position.set(-0.26, 1.30, 0);
-    const lArm = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.48, 0.10), kitMat);
-    lArm.position.set(0, -0.20, 0);
+    this.leftArmPivot.position.set(-0.67, 2.8, 0);
+    const lArm = new THREE.Mesh(armGeo, kitMat);
+    lArm.position.set(0, -0.4, 0);
     lArm.castShadow = true;
     this.leftArmPivot.add(lArm);
     this.bodyPivot.add(this.leftArmPivot);
 
-    // Wicketkeeper gloves
+    // Wicketkeeper gloves: Sphere (diameter: 0.6 -> radius: 0.3) at (±0.78, 2.3, -0.5)
     if (isKeeper) {
-      const gloveGeo = new THREE.SphereGeometry(0.09, 12, 12);
-      const gloveMat = new THREE.MeshStandardMaterial({ color: 0xdfab34, roughness: 0.5 });
-      const rGlove = new THREE.Mesh(gloveGeo, gloveMat);
-      rGlove.position.set(0, -0.42, 0.05);
-      this.rightArmPivot.add(rGlove);
+      const gloveGeo = new THREE.SphereGeometry(0.3, 12, 12);
+      const gloveMat = new THREE.MeshStandardMaterial({ color: 0xdeaa32, roughness: 0.45 });
+      const g1 = new THREE.Mesh(gloveGeo, gloveMat);
+      g1.position.set(-0.78, 2.3, -0.5);
+      this.bodyPivot.add(g1);
 
-      const lGlove = new THREE.Mesh(gloveGeo, gloveMat);
-      lGlove.position.set(0, -0.42, 0.05);
-      this.leftArmPivot.add(lGlove);
+      const g2 = new THREE.Mesh(gloveGeo, gloveMat);
+      g2.position.set(0.78, 2.3, -0.5);
+      this.bodyPivot.add(g2);
 
-      // Crouching posture for keeper
-      this.bodyPivot.position.y = -0.12;
-      this.bodyPivot.rotation.x = 0.16;
+      // Keeper crouching posture
+      this.bodyPivot.position.y = -0.3;
+      this.bodyPivot.rotation.x = 0.15;
     }
 
-    // 6. Cricket Bat (attached to batPivot for batsmen)
+    // 6. Batsman Bat: blade (0.22 x 1.85 x 0.24) + handle (diameter 0.11, height 0.62)
     if (isBatsman) {
-      this._buildBat();
+      const bladeGeo = new THREE.BoxGeometry(0.22, 1.85, 0.24);
+      const blade = new THREE.Mesh(bladeGeo, batMat);
+      blade.position.set(0.85, 1.6, 0);
+      blade.rotation.z = -0.18;
+      blade.castShadow = true;
+
+      const handleGeo = new THREE.CylinderGeometry(0.055, 0.055, 0.62, 8);
+      const handle = new THREE.Mesh(handleGeo, new THREE.MeshStandardMaterial({ color: 0x1f1f1f, roughness: 0.7 }));
+      handle.position.set(0.85, 2.8, 0);
+      handle.rotation.z = -0.18;
+
+      this.batPivot.add(blade);
+      this.batPivot.add(handle);
     }
-  }
-
-  _buildBat() {
-    const batConf = this.config.bat || { color: 0xc79140, grip_color: 0x222222 };
-    const batMat = new THREE.MeshStandardMaterial({ color: batConf.color, roughness: 0.55 });
-    const gripMat = new THREE.MeshStandardMaterial({ color: batConf.grip_color, roughness: 0.70 });
-
-    // Handle
-    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.28, 8), gripMat);
-    handle.position.y = 0.55;
-
-    // Blade
-    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.68, 0.06), batMat);
-    blade.position.y = 0.18;
-    blade.castShadow = true;
-
-    this.batPivot.add(handle);
-    this.batPivot.add(blade);
-
-    // Initial stance posture: bat ready beside back hip
-    this.batPivot.position.set(0.24, 0.70, 0.08);
-    this.batPivot.rotation.z = -0.35;
-    this.batPivot.rotation.x = -0.25;
   }
 
   executeCommand(command) {
@@ -402,16 +400,15 @@ export class CricketCharacter {
       if (this.swingProgress >= 1.0) {
         this.swingProgress = 1.0;
         this.isSwinging = false;
-        this.batPivot.rotation.set(-0.25, 0, -0.35);
+        this.batPivot.rotation.set(0, 0, 0);
         this.bodyPivot.rotation.y = 0;
       } else {
         this._updateSwingPhases(this.swingProgress);
       }
     } else {
-      // Idle batsman tap
       const isBatsman = this.role.includes('batter') || this.role.includes('batsman');
       if (isBatsman && this.batPivot) {
-        this.batPivot.rotation.x = -0.25 + Math.sin(this.animTime * 3.5) * 0.05;
+        this.batPivot.rotation.x = Math.sin(this.animTime * 3.0) * 0.05;
       }
     }
   }
@@ -444,8 +441,8 @@ export class CricketCharacter {
     const bowl = () => {
       t += 0.08;
       if (t < Math.PI) {
-        this.bodyPivot.position.z = Math.sin(t) * 0.35;
-        this.bodyPivot.position.y = Math.sin(t) * 0.15;
+        this.bodyPivot.position.z = Math.sin(t) * 0.8;
+        this.bodyPivot.position.y = Math.sin(t) * 0.4;
         if (this.rightArmPivot) {
           this.rightArmPivot.rotation.x = -Math.sin(t) * Math.PI * 2;
         }
@@ -466,9 +463,9 @@ export class CricketCharacter {
     const cel = () => {
       t += 0.09;
       if (t < Math.PI * 4) {
-        this.group.position.y = Math.abs(Math.sin(t)) * 0.4;
-        if (this.rightArmPivot) this.rightArmPivot.rotation.z = Math.sin(t * 2) * 1.2;
-        if (this.leftArmPivot) this.leftArmPivot.rotation.z = -Math.sin(t * 2) * 1.2;
+        this.group.position.y = Math.abs(Math.sin(t)) * 0.8;
+        if (this.rightArmPivot) this.rightArmPivot.rotation.z = Math.sin(t * 2) * 1.5;
+        if (this.leftArmPivot) this.leftArmPivot.rotation.z = -Math.sin(t * 2) * 1.5;
         requestAnimationFrame(cel);
       } else {
         this.group.position.y = 0;
@@ -560,13 +557,13 @@ export class CricketCharacter {
       this.group.scale.x = Math.abs(baseScale);
     }
 
-    let zPos = 3.8;
-    if (this.stance.depth === 'deep') zPos = 4.15;
-    else if (this.stance.depth === 'forward') zPos = 3.42;
+    let zPos = 9.5;
+    if (this.stance.depth === 'deep') zPos = 10.4;
+    else if (this.stance.depth === 'forward') zPos = 8.6;
 
     let xPos = 0;
-    if (this.stance.guard === 'leg') xPos = this.stance.hand === 'LHB' ? 0.28 : -0.28;
-    else if (this.stance.guard === 'off') xPos = this.stance.hand === 'LHB' ? -0.28 : 0.28;
+    if (this.stance.guard === 'leg') xPos = this.stance.hand === 'LHB' ? 0.6 : -0.6;
+    else if (this.stance.guard === 'off') xPos = this.stance.hand === 'LHB' ? -0.6 : 0.6;
 
     this.group.position.x = xPos;
     this.group.position.y = 0.0;
@@ -576,29 +573,23 @@ export class CricketCharacter {
   triggerCatch() {
     let t = 0;
     const origY = this.group.position.y;
-    const origRotX = this.bodyPivot.rotation.x;
-    const origRotZ = this.bodyPivot.rotation.z;
-
     const anim = () => {
       t += 0.08;
       if (t < Math.PI) {
-        this.group.position.y = origY + Math.sin(t) * 0.45;
+        this.group.position.y = origY + Math.sin(t) * 1.0;
         this.bodyPivot.rotation.x = -Math.sin(t) * 0.75;
-        this.bodyPivot.rotation.z = Math.sin(t * 2) * 0.2;
         requestAnimationFrame(anim);
       } else if (t < Math.PI * 2.2) {
         this.group.position.y = 0;
         this.bodyPivot.rotation.x = -0.3;
         requestAnimationFrame(anim);
       } else if (t < Math.PI * 3.5) {
-        this.group.position.y = origY + Math.abs(Math.sin(t * 2)) * 0.3;
+        this.group.position.y = origY + Math.abs(Math.sin(t * 2)) * 0.6;
         this.bodyPivot.rotation.x = 0;
-        this.bodyPivot.rotation.z = 0;
         requestAnimationFrame(anim);
       } else {
         this.group.position.y = origY;
-        this.bodyPivot.rotation.x = origRotX;
-        this.bodyPivot.rotation.z = origRotZ;
+        this.bodyPivot.rotation.x = 0;
       }
     };
     anim();
