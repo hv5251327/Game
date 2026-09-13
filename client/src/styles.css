@@ -400,10 +400,11 @@ body, html {
 .hud-top-bar {
   position: absolute;
   top: 14px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 95%;
-  max-width: 820px;
+  right: 14px;
+  left: auto;
+  transform: none;
+  width: 48%;
+  max-width: 480px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -569,7 +570,8 @@ body, html {
 .hud-top-right-actions {
   position: absolute;
   top: 14px;
-  right: 14px;
+  left: 14px;
+  right: auto;
   display: flex;
   gap: 8px;
   align-items: center;
@@ -675,11 +677,12 @@ body, html {
   box-shadow: 0 0 8px rgba(255, 211, 42, 0.3);
 }
 
-/* Batting UI - Compact Top-Left Meter */
+/* Batting UI - Compact Bottom-Left Meter (Babylon.js ref: controls at bottom corner) */
 #batting-ui.top-left-batting-ui {
   position: fixed;
-  top: 75px;
+  bottom: 22px;
   left: 18px;
+  top: auto;
   background: rgba(14, 38, 16, 0.94);
   border: 2px solid #ffd32a;
   border-radius: 16px;
@@ -824,12 +827,12 @@ body, html {
   border-color: #ffd32a;
 }
 
-/* Bowling UI - Docked neatly to the side so pitch screen is fully open */
+/* Bowling UI - Docked to bottom-right (Babylon.js ref: bowler controls opposite side to batting) */
 #bowling-ui,
 .bowling-controller-side-panel {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
+  bottom: 22px;
+  right: 22px;
   left: auto;
   transform: none;
   background: rgba(14, 38, 16, 0.95);

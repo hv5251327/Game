@@ -839,10 +839,10 @@ class CricketGame {
     this.strikerAvatar = new CricketCharacter(this.scene, 'ant_batter_01');
     this.bowlerAvatar = new CricketCharacter(this.scene, 'snail_bowler_01');
 
-    // Small Umpire placed slightly to side at bowler end (x = -1.3, z = -5.8) so it doesn't block pitch
+    // Umpire at square-leg position near batting crease (Babylon.js ref: [5.2, 0, -2] → Three.js [5.2, 0, 1.5])
     this.umpireAvatar = new CricketCharacter(this.scene, { species: 'umpire', role: 'umpire' });
-    this.umpireAvatar.setPosition(-1.3, 0.16, -5.8);
-    this.umpireAvatar.setRotation(0);
+    this.umpireAvatar.setPosition(5.2, 0, 1.5);
+    this.umpireAvatar.setRotation(Math.PI);
 
     const snailLeft = new CricketCharacter(this.scene, 'snail_fielder_left');
     const antRight = new CricketCharacter(this.scene, 'ant_fielder_right');
@@ -879,10 +879,10 @@ class CricketGame {
     this.keeperAvatar.setPosition(0, 0.0, 5.4);
     this.keeperAvatar.setRotation(Math.PI);
 
-    // Small Umpire at bowler end, slightly offset to leg side
+    // Umpire at square-leg position near batting crease (Babylon.js ref: [5.2, 0, -2] → Three.js [5.2, 0, 1.5])
     this.umpireAvatar = new CricketCharacter(this.scene, { species: 'umpire', role: 'umpire' });
-    this.umpireAvatar.setPosition(-1.3, 0.0, -5.8);
-    this.umpireAvatar.setRotation(0);
+    this.umpireAvatar.setPosition(5.2, 0, 1.5);
+    this.umpireAvatar.setRotation(Math.PI);
 
     // Fielders in strategic positions
     const f1 = new CricketCharacter(this.scene, 'snail_fielder_left');
