@@ -474,6 +474,7 @@ class CricketRoom {
     io.to(this.code).emit('bowler_runup', {
       bowler: this._playerInfo(socketId),
       batsman: this._playerInfo(batsmanId),
+      landingZone: data.landingZone,
       deliveryType: data.deliveryType,
       swingDirection: data.swingDirection || 'left',
       power: data.power,
@@ -780,7 +781,7 @@ class CricketRoom {
   }
 
   _computeOutcome(bat, bowl) {
-    const timing = clamp(bat.timing || 0.5, 0, 1);
+    const timing = clamp(typeof bat.timing === 'number' ? bat.timing : (typeof bat.power === 'number' ? bat.power : 0.5), 0, 1);
     const power = clamp(bat.power || 0.75, 0, 1);
     const direction = typeof bat.direction === 'string' ? bat.direction : 'forward';
     const shotType = bat.shotType || 'drive';

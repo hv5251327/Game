@@ -329,6 +329,7 @@ export class BattingUI {
       action: 'swing_bat',
       direction: this.direction,
       power: parseFloat(this.power.toFixed(3)),
+      timing: parseFloat(this.power.toFixed(3)),
       shotType: this.shotType
     };
 

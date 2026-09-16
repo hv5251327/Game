@@ -33,10 +33,10 @@ class CricketGame {
 
     // Dual-perspective camera positions
     this.isUserBowling = false;
-    // Bowler view: behind bowler running up along positive Z towards pitch
-    this.bowlerCamPos = new THREE.Vector3(0, 6.5, 29.5);
+    // Bowler view: behind bowler running up along positive Z towards pitch (start behind z=27)
+    this.bowlerCamPos = new THREE.Vector3(0, 6.5, 33.5);
     this.bowlerCamLookAt = new THREE.Vector3(0, 2.0, -9.5);
-    // Batsman view: behind batsman at z = -9.5 looking toward bowler at +Z
+    // Batsman view: behind batsman wickets at z = -12.6 looking toward bowler at +Z
     this.batsmanCamPos = new THREE.Vector3(0, 5.5, -17.5);
     this.batsmanCamLookAt = new THREE.Vector3(0, 2.0, 10.5);
 
@@ -127,15 +127,14 @@ class CricketGame {
       broadcast: { pos: new THREE.Vector3(-6.7, 76.8, -108.6), target: new THREE.Vector3(0, 4.2, 27) },
       ground:    { pos: new THREE.Vector3(8.8, 35.6, -86.2),   target: new THREE.Vector3(0, 1.5, 1) }
     };
-    this.activeCameraPreset = 'aerial'; // Default per Babylon JSON: "activeView": "aerial"
+    this.activeCameraPreset = 'behind_wickets';
 
     this.camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.1, 800);
-    const initCam = this.cameraPresets.aerial;
-    this.defaultCamPos = initCam.pos.clone();
-    this.defaultCamLookAt = initCam.target.clone();
-    this.currentCamLookAt = initCam.target.clone();
-    this.targetCamPos = initCam.pos.clone();
-    this.targetCamLookAt = initCam.target.clone();
+    this.defaultCamPos = this.batsmanCamPos.clone();
+    this.defaultCamLookAt = this.batsmanCamLookAt.clone();
+    this.currentCamLookAt = this.batsmanCamLookAt.clone();
+    this.targetCamPos = this.batsmanCamPos.clone();
+    this.targetCamLookAt = this.batsmanCamLookAt.clone();
     this.cameraTracking = false;
 
     this.camera.position.copy(this.defaultCamPos);
@@ -208,10 +207,6 @@ class CricketGame {
     this.battingUI.onSwing = (command) => {
       if (!this.ball || !this.ball.active || this.ball.isHitShot) return;
 
-      // Bat connection check: ball is approaching striker crease around z = -6.0 to -11.5
-      const ballZ = this.ball.pos ? this.ball.pos.z : -9.5;
-      if (ballZ < -11.5 || ballZ > -3.0) return;
-
       this.ballIncoming = false;
       this._playBatSound();
 
@@ -238,51 +233,59 @@ class CricketGame {
     this.pitchTargetGroup = new THREE.Group();
 
     // 1. Outer reticle ring
-    const ringGeo = new THREE.RingGeometry(0.25, 0.33, 32);
+    const ringGeo = new THREE.RingGeometry(0.32, 0.46, 32);
     const ringMat = new THREE.MeshBasicMaterial({
-      color: 0xff3838,
+      color: 0xff1744,
       side: THREE.DoubleSide,
       transparent: true,
-      opacity: 0.9
+      opacity: 0.95,
+      depthTest: false
     });
     const ringMesh = new THREE.Mesh(ringGeo, ringMat);
     ringMesh.rotation.x = -Math.PI / 2;
+    ringMesh.renderOrder = 999;
     this.pitchTargetGroup.add(ringMesh);
 
     // 2. Inner target dot
-    const dotGeo = new THREE.CircleGeometry(0.07, 16);
+    const dotGeo = new THREE.CircleGeometry(0.10, 16);
     const dotMat = new THREE.MeshBasicMaterial({
       color: 0xffffff,
-      side: THREE.DoubleSide
+      side: THREE.DoubleSide,
+      depthTest: false
     });
     const dotMesh = new THREE.Mesh(dotGeo, dotMat);
     dotMesh.rotation.x = -Math.PI / 2;
+    dotMesh.renderOrder = 999;
     this.pitchTargetGroup.add(dotMesh);
 
     // 3. Crosshair markers
-    const crossMat = new THREE.MeshBasicMaterial({ color: 0xffd32a, side: THREE.DoubleSide });
-    const c1 = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 0.035), crossMat);
+    const crossMat = new THREE.MeshBasicMaterial({ color: 0xffea00, side: THREE.DoubleSide, depthTest: false });
+    const c1 = new THREE.Mesh(new THREE.PlaneGeometry(0.18, 0.05), crossMat);
     c1.rotation.x = -Math.PI / 2;
-    c1.position.x = -0.42;
-    const c2 = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 0.035), crossMat);
+    c1.position.x = -0.58;
+    c1.renderOrder = 999;
+    const c2 = new THREE.Mesh(new THREE.PlaneGeometry(0.18, 0.05), crossMat);
     c2.rotation.x = -Math.PI / 2;
-    c2.position.x = 0.42;
-    const c3 = new THREE.Mesh(new THREE.PlaneGeometry(0.035, 0.12), crossMat);
+    c2.position.x = 0.58;
+    c2.renderOrder = 999;
+    const c3 = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 0.18), crossMat);
     c3.rotation.x = -Math.PI / 2;
-    c3.position.z = -0.42;
-    const c4 = new THREE.Mesh(new THREE.PlaneGeometry(0.035, 0.12), crossMat);
+    c3.position.z = -0.58;
+    c3.renderOrder = 999;
+    const c4 = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 0.18), crossMat);
     c4.rotation.x = -Math.PI / 2;
-    c4.position.z = 0.42;
+    c4.position.z = 0.58;
+    c4.renderOrder = 999;
     this.pitchTargetGroup.add(c1, c2, c3, c4);
 
-    this.pitchTargetGroup.position.set(0, 0.045, 1.2);
+    this.pitchTargetGroup.position.set(0, 0.27, 1.2);
     this.pitchTargetGroup.visible = false;
     this.scene.add(this.pitchTargetGroup);
   }
 
   _setupPitchScreenPicker() {
     this.pitchRaycaster = new THREE.Raycaster();
-    this.pitchPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.02);
+    this.pitchPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.24);
     this.mouseCoords = new THREE.Vector2();
 
     const handlePointerOnPitch = (e) => {
@@ -307,7 +310,7 @@ class CricketGame {
         const pz = Math.max(-1.8, Math.min(3.4, intersection.z));
 
         if (this.pitchTargetGroup) {
-          this.pitchTargetGroup.position.set(px, 0.045, pz);
+          this.pitchTargetGroup.position.set(px, 0.27, pz);
           this.pitchTargetGroup.visible = true;
         }
         this.bowlingUI.setLandingZone(px, pz);
@@ -612,7 +615,7 @@ class CricketGame {
       this.showNotice(`⚾ Your turn to bowl ball ${data.ball} of over ${data.over}! Click on pitch to set landing spot.`);
       this._updateCameraMode();
       if (this.pitchTargetGroup) {
-        this.pitchTargetGroup.position.set(this.bowlingUI.landingZone.x, 0.045, this.bowlingUI.landingZone.z);
+        this.pitchTargetGroup.position.set(this.bowlingUI.landingZone.x, 0.27, this.bowlingUI.landingZone.z);
         this.pitchTargetGroup.visible = true;
       }
       this.bowlingUI.show({ timeout: 20000 });
@@ -622,6 +625,20 @@ class CricketGame {
     this.network.on('bowler_runup', (data) => {
       const swingStr = data.swingDirection ? ` &bull; ${data.swingDirection.toUpperCase()}` : '';
       this.domActionBanner.innerHTML = `⚡ ${data.bowler?.name} charging in (${data.deliveryType.toUpperCase()}${swingStr})... Get ready!`;
+
+      // Position pitch target reticle clearly so batsman can see where ball will land
+      if (this.pitchTargetGroup) {
+        const lzX = typeof data.landingZone?.x === 'number' ? data.landingZone.x : 0;
+        const lzZ = typeof data.landingZone?.z === 'number' ? data.landingZone.z : 0.45;
+        this.pitchTargetGroup.position.set(lzX * 1.8, 0.27, -2.0 - lzZ * 5.0);
+        this.pitchTargetGroup.visible = true;
+      }
+
+      // Reset bowler camera to behind the bowler at run-up start (z = 33.5)
+      if (this.isUserBowling && !this.cameraTracking) {
+        this.defaultCamPos.set(0, 6.5, 33.5);
+        this.defaultCamLookAt.set(0, 2.0, -9.5);
+      }
 
       // Crucial: ensure batsmen are firmly at crease and any prior running is cleanly halted
       this._resetBatsmenToCrease();
@@ -665,7 +682,6 @@ class CricketGame {
     });
 
     this.network.on('delivery', (data) => {
-      if (this.pitchTargetGroup) this.pitchTargetGroup.visible = false;
       const paceStr = data.paceKmh ? ` [${data.paceKmh} km/h]` : '';
       const swingStr = data.swingDirection ? ` &bull; ${data.swingDirection.toUpperCase()}` : '';
       this.domActionBanner.textContent = `⚾ ${data.bowler?.name} delivers ${data.deliveryType.toUpperCase()}${swingStr}${paceStr}!`;

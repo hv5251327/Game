@@ -351,22 +351,33 @@ export class CricketCharacter {
 
     // 6. Batsman Bat: blade (0.28 x 1.85 x 0.28) + handle (diameter 0.12, height 0.65)
     if (isBatsman) {
-      // Batsman bat positioned naturally in hands in front of body
-      this.batPivot.position.set(0.2, 0.4, 0.35);
+      // Position bat held naturally in front of batsman (pointed down to ground in front of feet)
+      this.batPivot.position.set(0.15, 1.2, 0.45);
+      this.batPivot.rotation.set(0.15, 0, 0);
 
-      const bladeGeo = new THREE.BoxGeometry(0.28, 1.85, 0.28);
-      const blade = new THREE.Mesh(bladeGeo, batMat);
-      blade.position.set(0.4, 1.4, 0.1);
-      blade.rotation.z = -0.15;
-      blade.castShadow = true;
-
+      // Handle held up top near hands (local y = 0.55 to 1.2)
       const handleGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.65, 8);
       const handle = new THREE.Mesh(handleGeo, new THREE.MeshStandardMaterial({ color: 0x1f1f1f, roughness: 0.7 }));
-      handle.position.set(0.4, 2.6, 0.1);
-      handle.rotation.z = -0.15;
+      handle.position.set(0, 0.85, 0);
+
+      // Blade extending down toward ground (local y = -0.35 to 0.55)
+      const bladeGeo = new THREE.BoxGeometry(0.28, 1.85, 0.28);
+      const blade = new THREE.Mesh(bladeGeo, batMat);
+      blade.position.set(0, -0.35, 0);
+      blade.castShadow = true;
 
       this.batPivot.add(blade);
       this.batPivot.add(handle);
+
+      // Forward-ready arm posture for batsman
+      if (this.rightArmPivot) {
+        this.rightArmPivot.rotation.x = 0.45;
+        this.rightArmPivot.rotation.z = -0.25;
+      }
+      if (this.leftArmPivot) {
+        this.leftArmPivot.rotation.x = 0.35;
+        this.leftArmPivot.rotation.z = 0.25;
+      }
     }
   }
 
@@ -380,9 +391,6 @@ export class CricketCharacter {
     this.swingDuration = (this.config.swing_phases ? 0.55 : 0.5) / (speedMult * (0.8 + this.currentPower * 0.4));
     this.isSwinging = true;
     this.swingProgress = 0;
-
-    const dirInfo = DIRECTION_VECTORS[this.currentDirection] || DIRECTION_VECTORS.forward;
-    this.batPivot.rotation.y = dirInfo.angle;
   }
 
   setPosition(x, y, z) {
@@ -403,40 +411,64 @@ export class CricketCharacter {
       if (this.swingProgress >= 1.0) {
         this.swingProgress = 1.0;
         this.isSwinging = false;
-        this.batPivot.rotation.set(0, 0, 0);
-        this.bodyPivot.rotation.y = 0;
+        // Restore standard forward stance
+        this.batPivot.rotation.set(0.15, 0, 0);
+        this.bodyPivot.rotation.set(0, 0, 0);
+        if (this.rightArmPivot) {
+          this.rightArmPivot.rotation.set(0.45, 0, -0.25);
+        }
+        if (this.leftArmPivot) {
+          this.leftArmPivot.rotation.set(0.35, 0, 0.25);
+        }
       } else {
         this._updateSwingPhases(this.swingProgress);
       }
     } else {
       const isBatsman = this.role.includes('batter') || this.role.includes('batsman');
       if (isBatsman && this.batPivot) {
-        this.batPivot.rotation.x = Math.sin(this.animTime * 3.0) * 0.05;
+        // Natural gentle bat tapping on crease
+        this.batPivot.rotation.x = 0.15 + Math.sin(this.animTime * 3.5) * 0.08;
       }
     }
   }
 
   _updateSwingPhases(p) {
-    const phases = this.config.swing_phases || CHARACTER_PRESETS.ant_batter_01.swing_phases;
-    let cur = phases[0];
-    let next = phases[phases.length - 1];
+    // Authentic straight cricket bat swing: backlift raised back and down-through forward drive
+    const dirInfo = DIRECTION_VECTORS[this.currentDirection] || DIRECTION_VECTORS.forward;
+    const targetAimY = dirInfo.angle * 0.45;
 
-    for (let i = 0; i < phases.length - 1; i++) {
-      const p1 = phases[i].time / phases[phases.length - 1].time;
-      const p2 = phases[i + 1].time / phases[phases.length - 1].time;
-      if (p >= p1 && p <= p2) {
-        cur = phases[i];
-        next = phases[i + 1];
-        const t = (p - p1) / (p2 - p1);
-        const batAngleDeg = cur.bat_angle + (next.bat_angle - cur.bat_angle) * t;
-        const bodyTwistDeg = cur.body_twist + (next.body_twist - cur.body_twist) * t;
+    let swingX, twistY, armX;
+    if (p < 0.25) {
+      // Phase 1: High backlift - bat raises backward preparing to strike forward
+      const t = p / 0.25;
+      swingX = 0.15 - 0.95 * t; // raises up-back
+      twistY = -0.15 * t;
+      armX = 0.45 - 0.6 * t;
+    } else if (p < 0.55) {
+      // Phase 2: Forward down-swing accelerating directly into ball contact point
+      const t = (p - 0.25) / 0.30;
+      swingX = -0.80 + 1.85 * t; // driving down and forward through ball
+      twistY = -0.15 + 0.35 * t;
+      armX = -0.15 + 1.1 * t;
+    } else {
+      // Phase 3: High elegant forward follow-through
+      const t = (p - 0.55) / 0.45;
+      swingX = 1.05 + 0.45 * (1 - Math.cos(t * Math.PI * 0.5));
+      twistY = 0.20 + 0.15 * t;
+      armX = 0.95 + 0.25 * t;
+    }
 
-        const dirInfo = DIRECTION_VECTORS[this.currentDirection] || DIRECTION_VECTORS.forward;
-        this.batPivot.rotation.z = (batAngleDeg * Math.PI / 180) * (0.8 + this.currentPower * 0.4);
-        this.batPivot.rotation.x = Math.sin(t * Math.PI) * 0.25;
-        this.bodyPivot.rotation.y = (bodyTwistDeg * Math.PI / 180) + dirInfo.angle * 0.5;
-        break;
-      }
+    this.batPivot.rotation.x = swingX * (0.85 + this.currentPower * 0.3);
+    this.batPivot.rotation.y = targetAimY;
+    this.batPivot.rotation.z = -dirInfo.x * 0.25;
+
+    this.bodyPivot.rotation.y = twistY + targetAimY * 0.35;
+
+    if (this.rightArmPivot) {
+      this.rightArmPivot.rotation.x = armX;
+    }
+    if (this.leftArmPivot) {
+      this.leftArmPivot.rotation.x = armX * 0.85;
     }
   }
 
@@ -572,6 +604,14 @@ export class CricketCharacter {
     this.group.position.x = xPos;
     this.group.position.y = 0.0;
     this.group.position.z = zPos;
+
+    const isBatsman = this.role.includes('batter') || this.role.includes('batsman');
+    if (isBatsman) {
+      if (this.batPivot) this.batPivot.rotation.set(0.15, 0, 0);
+      if (this.bodyPivot) this.bodyPivot.rotation.set(0, 0, 0);
+      if (this.rightArmPivot) this.rightArmPivot.rotation.set(0.45, 0, -0.25);
+      if (this.leftArmPivot) this.leftArmPivot.rotation.set(0.35, 0, 0.25);
+    }
   }
 
   triggerCatch() {
