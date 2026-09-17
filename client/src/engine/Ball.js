@@ -111,6 +111,7 @@ export class Ball {
     this.deliveryBounced = false;
     this.bounceCount = 0;
     this.flightTime = 0;
+    this.isBoundaryShot = (runs === 4 || runs === 6 || isSix);
 
     // Direction vector (normalized on XZ plane)
     const dir = new THREE.Vector2(dirVector.x, dirVector.z).normalize();
@@ -123,9 +124,10 @@ export class Ball {
       speedXZ = baseSpeed * (0.85 + power * 0.35);
       initialVy = 32.0 * (0.85 + power * 0.3);
     } else if (runs === 4) {
-      // Crisp boundary four: travels with good pace to touch/cross the 96m rope
-      const baseSpeed = 54;
-      speedXZ = baseSpeed * (0.8 + power * 0.4);
+      // Crisp boundary four: travels with strong pace all the way to the 96m rope
+      // Increased base speed so the ball actually reaches the boundary with reduced friction
+      const baseSpeed = 68;
+      speedXZ = baseSpeed * (0.9 + power * 0.25);
       if (dirVector.z < -0.5) {
         initialVy = shotType === 'loft' ? 22.0 : 12.5;
       } else {
@@ -234,18 +236,23 @@ export class Ball {
       if (Math.abs(this.vel.y) > 0.8) {
         // Crisp turf bounce with damping
         this.vel.y = -this.vel.y * this.restitution;
-        this.vel.x *= this.groundFriction;
-        this.vel.z *= this.groundFriction;
+        // Boundary shots keep speed; normal shots lose energy on bounce
+        const bounceFriction = this.isBoundaryShot ? 0.97 : this.groundFriction;
+        this.vel.x *= bounceFriction;
+        this.vel.z *= bounceFriction;
         this.bounceCount++;
         this._spawnBounceRipple(this.pos);
 
         if (this.onBounce) this.onBounce(this.pos);
       } else {
-        // Continuous realistic rolling on turf (physical rolling resistance ~1.85 m/s^2)
+        // Continuous rolling on turf
+        // Boundary shots have very low rolling resistance so ball reaches the rope
         this.vel.y = 0;
         const currentSpeed = Math.hypot(this.vel.x, this.vel.z);
         if (currentSpeed > 0.05) {
-          const newSpeed = Math.max(0, currentSpeed - 2.2 * delta);
+          // Boundary: ~0.3 m/s² deceleration; normal: ~2.2 m/s²
+          const decel = this.isBoundaryShot ? 0.3 : 2.2;
+          const newSpeed = Math.max(0, currentSpeed - decel * delta);
           const ratio = newSpeed / currentSpeed;
           this.vel.x *= ratio;
           this.vel.z *= ratio;

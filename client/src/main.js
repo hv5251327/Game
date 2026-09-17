@@ -56,6 +56,14 @@ class CricketGame {
     // Pitch Targeting Marker
     this.pitchTargetGroup = null;
 
+    // Multiplayer role tracking
+    this.myRole = null; // 'striker' | 'nonstriker' | 'bowler' | 'fielder'
+    this.fielderSocketMap = new Map(); // socketId -> fielder avatar (for multiplayer fielder movement)
+
+    // WASD fielder movement key state
+    this._fielderKeys = { w: false, a: false, s: false, d: false };
+    this._fielderMoveInterval = null;
+
     this._setupDOM();
     this._initThree();
     this._initAudio();
@@ -948,6 +956,90 @@ class CricketGame {
     this.network.on('error_msg', (data) => {
       this.showNotice(`❌ ${data.msg}`);
     });
+
+    // Role assignment from server: tells this client who they are this over
+    this.network.on('player_role', (data) => {
+      this.myRole = data.role;
+      if (data.role === 'striker') {
+        this.isUserBowling = false;
+        this.showNotice(`🏏 You are the STRIKER. Watch the ball and swing!`);
+      } else if (data.role === 'nonstriker') {
+        this.isUserBowling = false;
+        this.battingUI.hide();
+        this.showNotice(`🏃 You are the NON-STRIKER. Wait at the bowler end.`);
+      } else if (data.role === 'bowler') {
+        this.isUserBowling = true;
+        this.showNotice(`⚾ You are the BOWLER this over!`);
+      } else if (data.role === 'fielder') {
+        this.isUserBowling = true; // hides batting UI
+        this._startFielderMovement();
+        this.showNotice(`🏃 You are FIELDING — use WASD to move on the field!`);
+      }
+    });
+
+    // Remote fielder moved by another player — update their avatar position
+    this.network.on('fielder_moved', (data) => {
+      const avatar = this.fielderSocketMap.get(data.socketId);
+      if (avatar) {
+        avatar.group.position.x = data.x;
+        avatar.group.position.z = data.z;
+      }
+    });
+  }
+
+  // Start WASD keyboard tracking for the local fielding player
+  _startFielderMovement() {
+    // Track key state
+    const onDown = (e) => {
+      const k = e.key.toLowerCase();
+      if (k in this._fielderKeys) { this._fielderKeys[k] = true; e.preventDefault(); }
+    };
+    const onUp = (e) => {
+      const k = e.key.toLowerCase();
+      if (k in this._fielderKeys) this._fielderKeys[k] = false;
+    };
+    window.addEventListener('keydown', onDown);
+    window.addEventListener('keyup', onUp);
+    this._fielderKeyDownHandler = onDown;
+    this._fielderKeyUpHandler = onUp;
+
+    // Move the local fielder avatar and broadcast position at 12 fps
+    const speed = 0.8; // units per tick at 80ms intervals
+    let fielderX = 0;
+    let fielderZ = 30; // default fielder start position in outfield
+
+    clearInterval(this._fielderMoveInterval);
+    this._fielderMoveInterval = setInterval(() => {
+      if (this.myRole !== 'fielder') {
+        clearInterval(this._fielderMoveInterval);
+        return;
+      }
+      let moved = false;
+      if (this._fielderKeys.w) { fielderZ -= speed; moved = true; }
+      if (this._fielderKeys.s) { fielderZ += speed; moved = true; }
+      if (this._fielderKeys.a) { fielderX -= speed; moved = true; }
+      if (this._fielderKeys.d) { fielderX += speed; moved = true; }
+
+      // Clamp to within the 96m ground radius
+      const dist = Math.hypot(fielderX, fielderZ);
+      if (dist > 94) {
+        const scale = 94 / dist;
+        fielderX *= scale; fielderZ *= scale;
+      }
+
+      if (moved) {
+        // Move the first fielder avatar as the "player-controlled" fielder
+        if (this.fielders.length > 0) {
+          this.fielders[0].group.position.x = fielderX;
+          this.fielders[0].group.position.z = fielderZ;
+          this.fielders[0].group.rotation.y = Math.atan2(
+            this._fielderKeys.a ? -1 : this._fielderKeys.d ? 1 : 0,
+            this._fielderKeys.s ? 1 : -1
+          );
+        }
+        this.network.fielderMove(fielderX, fielderZ);
+      }
+    }, 80);
   }
 
   _setupDefaultCharacters() {

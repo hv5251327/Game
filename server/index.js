@@ -443,6 +443,8 @@ class CricketRoom {
     this.runupInProgress = false;
     clearTimeout(this._runupTimeout);
     clearTimeout(this._batTimeout);
+    clearTimeout(this._botRequestTimer);
+    this._botRequestTimer = null;
 
     const card = this._currentCard();
     card.currentOverBalls = [];
@@ -458,6 +460,9 @@ class CricketRoom {
       nonStriker: this._playerInfo(nonStriker),
       scorecard: this._scorecardSnapshot()
     });
+
+    // Notify each human player of their exact role for this over
+    this._emitRoleEvents();
 
     setTimeout(() => this._requestNextBall(), 800);
   }
@@ -891,9 +896,18 @@ class CricketRoom {
       return { type: 'noball', noBall: true, runs: 1, ballPath: 'crease_noball' };
     }
 
-    // Wide check: bowler missed landing zone by a lot
-    if (accuracy < 0.22 && Math.abs(bowl.landingZone?.x || 0) > 0.85) {
+    // Wide check: ball clearly outside off/leg stump line — unplayable wide
+    const lzX = bowl.landingZone?.x || 0;
+    if (Math.abs(lzX) > 1.2) {
       return { type: 'wide', wide: true, runs: 0, ballPath: 'wide' };
+    }
+    // Wide check: bowler missed accuracy AND ball angled too far outside
+    if (accuracy < 0.22 && Math.abs(lzX) > 0.85) {
+      return { type: 'wide', wide: true, runs: 0, ballPath: 'wide' };
+    }
+    // Down-leg wide: ball going well past leg stump and batsman didn't attempt a shot
+    if (shotType === 'leave' && lzX < -0.75) {
+      return { type: 'wide', wide: true, runs: 0, ballPath: 'wide_down_leg' };
     }
 
     // Timing score: sweet spot around 0.50 - 0.75
@@ -1105,8 +1119,31 @@ class CricketRoom {
     setTimeout(() => this._requestNextBall(), 1000);
   }
 
+  // Send each human player their match role so the client can show/hide the correct UI
+  _emitRoleEvents() {
+    if (this.mode === 'single_batting') return; // Not applicable for single batting
+    const strikerId = this.battingOrder[this.currentBatsmanIdx];
+    const nonStrikerId = this.battingOrder[this.currentNonStrikerIdx];
+    const bowlingIds = this.bowlingTeam === 'a' ? this.teamA : this.teamB;
+
+    for (const [id, player] of this.players) {
+      if (player.isBot) continue;
+      if (id === strikerId) {
+        io.to(id).emit('player_role', { role: 'striker', batsman: this._playerInfo(strikerId), nonStriker: this._playerInfo(nonStrikerId) });
+      } else if (id === nonStrikerId) {
+        io.to(id).emit('player_role', { role: 'nonstriker', batsman: this._playerInfo(strikerId), nonStriker: this._playerInfo(nonStrikerId) });
+      } else if (id === this.currentBowler) {
+        io.to(id).emit('player_role', { role: 'bowler' });
+      } else if (bowlingIds.includes(id)) {
+        io.to(id).emit('player_role', { role: 'fielder' });
+      }
+    }
+  }
+
   _requestNextBall() {
+    // CRITICAL: never request next ball if the over is already finished or game is not in play
     if (this.state !== 'PLAYING') return;
+    if (this.currentBall >= 6) return;
 
     this.ballInFlight = false;
     this.runupInProgress = false;
@@ -1115,7 +1152,14 @@ class CricketRoom {
 
     const bowlerPlayer = this.players.get(this.currentBowler);
     if (bowlerPlayer && bowlerPlayer.isBot) {
-      this._botBowl(this.currentBowler);
+      // Add ~1.2s delay between bot deliveries so the match doesn't feel instant
+      clearTimeout(this._botRequestTimer);
+      this._botRequestTimer = setTimeout(() => {
+        this._botRequestTimer = null;
+        if (this.state === 'PLAYING' && !this.ballInFlight && !this.runupInProgress && this.currentBall < 6) {
+          this._botBowl(this.currentBowler);
+        }
+      }, 1200);
     } else if (this.currentBowler) {
       const batsmanId = this.mode === 'single_batting'
         ? this.sbQueue[this.sbCurrentBatsmanIdx]
@@ -1131,7 +1175,7 @@ class CricketRoom {
       // 20-second safety window for human bowler to aim, set swing & bowl
       clearTimeout(this._bowlerTimeout);
       this._bowlerTimeout = setTimeout(() => {
-        if (this.state === 'PLAYING' && !this.ballInFlight && this.currentBowler) {
+        if (this.state === 'PLAYING' && !this.ballInFlight && this.currentBowler && this.currentBall < 6) {
           this._botBowl(this.currentBowler);
         }
       }, 20000);
@@ -1588,6 +1632,19 @@ io.on('connection', (socket) => {
     const room = findRoom(socket.id);
     if (!room) return;
     room.handleRunsCompleted(socket.id, data?.runs);
+  });
+
+  socket.on('fielder_move', (data) => {
+    const room = findRoom(socket.id);
+    if (!room || room.state !== 'PLAYING') return;
+    const player = room.players.get(socket.id);
+    if (!player) return;
+    // Broadcast position update so all clients can move this fielder avatar
+    io.to(room.code).emit('fielder_moved', {
+      socketId: socket.id,
+      x: parseFloat(data.x) || 0,
+      z: parseFloat(data.z) || 0
+    });
   });
 
   socket.on('disconnect', () => {
