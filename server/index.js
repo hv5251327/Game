@@ -100,15 +100,29 @@ class CricketRoom {
   _tick() {
     if (this.state !== 'PLAYING') return;
 
-    // If ball is not in flight and bowler is bot, auto-bowl
-    if (!this.ballInFlight && !this.pendingBowlerRequest && !this.pendingNextBatsman) {
+    // Safety net: if no ball is in flight AND no pending timers at all, nudge the bot after 4s
+    // This covers edge cases where _requestNextBall was never called (e.g. after innings_setup)
+    if (!this.ballInFlight && !this.runupInProgress && !this.pendingBowlerRequest &&
+        !this.pendingNextBatsman && !this._botRequestTimer && !this._botBowlingTimer &&
+        this.currentBall < 6) {
       const bowler = this.players.get(this.currentBowler);
-      if (bowler && bowler.isBot && !this._botBowlingTimer) {
-        this._botBowlingTimer = setTimeout(() => {
-          this._botBowlingTimer = null;
-          this._botBowl(this.currentBowler);
-        }, 1000 + Math.random() * 800);
+      if (bowler && bowler.isBot) {
+        // Only schedule if we've been idle for > 3 ticks (600ms) — prevents instant re-fire
+        this._tickIdleCount = (this._tickIdleCount || 0) + 1;
+        if (this._tickIdleCount >= 15) { // 15 × 200ms = 3 seconds idle
+          this._tickIdleCount = 0;
+          this._botBowlingTimer = setTimeout(() => {
+            this._botBowlingTimer = null;
+            if (this.state === 'PLAYING' && !this.ballInFlight && this.currentBall < 6) {
+              this._botBowl(this.currentBowler);
+            }
+          }, 800);
+        }
+      } else {
+        this._tickIdleCount = 0;
       }
+    } else {
+      this._tickIdleCount = 0;
     }
   }
 
@@ -445,6 +459,9 @@ class CricketRoom {
     clearTimeout(this._batTimeout);
     clearTimeout(this._botRequestTimer);
     this._botRequestTimer = null;
+    clearTimeout(this._botBowlingTimer);
+    this._botBowlingTimer = null;
+    this._tickIdleCount = 0;
 
     const card = this._currentCard();
     card.currentOverBalls = [];

@@ -657,6 +657,13 @@ class CricketGame {
       const swingStr = data.swingDirection ? ` &bull; ${data.swingDirection.toUpperCase()}` : '';
       this.domActionBanner.innerHTML = `⚡ ${data.bowler?.name} charging in (${data.deliveryType.toUpperCase()}${swingStr})... Get ready!`;
 
+      // === RESET OLD BALL: hide any lingering ball from previous delivery ===
+      if (this.ball) {
+        this.ball.active = false;
+        this.ball.group.visible = false;
+        if (this.ball.trailMeshes) this.ball.trailMeshes.forEach(m => m.visible = false);
+      }
+
       // Position pitch target reticle clearly so batsman and bowler can see where ball will land
       const lzX = typeof data.landingZone?.x === 'number' ? data.landingZone.x : 0;
       const lzZ = typeof data.landingZone?.z === 'number' ? data.landingZone.z : -5.5;
@@ -680,8 +687,10 @@ class CricketGame {
       this.battingUI.hide();
 
       // Animate bowler run-up stride towards the bowling crease over 2500ms
+      // Bowler starts at x=1.2 (off-stump side of the umpire at x=0) — authentic cricket position
+      const BOWLER_LANE_X = 1.2;
       if (this.bowlerAvatar) {
-        this.bowlerAvatar.setPosition(0, 0.0, 27.0);
+        this.bowlerAvatar.setPosition(BOWLER_LANE_X, 0.0, 27.0);
         this.bowlerAvatar.setRotation(Math.PI);
         const startZ = 27.0;
         const targetZPos = 10.5;
@@ -692,6 +701,7 @@ class CricketGame {
           const p = Math.min(1.0, elapsed / duration);
           if (this.bowlerAvatar) {
             this.bowlerAvatar.group.position.z = startZ + (targetZPos - startZ) * p;
+            this.bowlerAvatar.group.position.x = BOWLER_LANE_X;
 
             // Stride cycle: 7 strides over the run-up
             const strideAngle = p * Math.PI * 14;
@@ -700,7 +710,6 @@ class CricketGame {
             if (p < 0.72) {
               // Running stride phase:
               this.bowlerAvatar.group.position.y = Math.abs(stride) * 0.18;
-              this.bowlerAvatar.group.position.x = Math.sin(strideAngle * 0.5) * 0.08;
 
               // Leg strides using hip pivots:
               if (this.bowlerAvatar.leftLegPivot && this.bowlerAvatar.rightLegPivot) {
@@ -717,7 +726,6 @@ class CricketGame {
               const leapProgress = (p - 0.72) / 0.28;
               // Athletic delivery leap off turf
               this.bowlerAvatar.group.position.y = Math.sin(leapProgress * Math.PI) * 0.45;
-              this.bowlerAvatar.group.position.x = 0;
 
               // Legs brace for delivery: front leg planting forward, back leg trailing
               if (this.bowlerAvatar.leftLegPivot && this.bowlerAvatar.rightLegPivot) {
@@ -744,7 +752,7 @@ class CricketGame {
           if (p < 1.0) {
             requestAnimationFrame(runupStep);
           } else if (this.bowlerAvatar) {
-            this.bowlerAvatar.setPosition(0, 0.0, targetZPos);
+            this.bowlerAvatar.setPosition(BOWLER_LANE_X, 0.0, targetZPos);
             if (this.bowlerAvatar.leftLegPivot) this.bowlerAvatar.leftLegPivot.rotation.x = 0;
             if (this.bowlerAvatar.rightLegPivot) this.bowlerAvatar.rightLegPivot.rotation.x = 0;
             if (this.bowlerAvatar.leftArmPivot) this.bowlerAvatar.leftArmPivot.rotation.x = 0;
@@ -764,15 +772,16 @@ class CricketGame {
       const swingStr = data.swingDirection ? ` &bull; ${data.swingDirection.toUpperCase()}` : '';
       this.domActionBanner.textContent = `⚾ ${data.bowler?.name} delivers ${data.deliveryType.toUpperCase()}${swingStr}${paceStr}!`;
       if (this.bowlerAvatar) {
-        this.bowlerAvatar.setPosition(0, 0.0, 10.5);
+        // Place bowler at x=1.2 (off-stump side of umpire) matching run-up lane
+        this.bowlerAvatar.setPosition(1.2, 0.0, 10.5);
         this.bowlerAvatar.triggerBowlAction();
       }
 
       // Lock batsmen firmly to crease for delivery arrival
       this._resetBatsmenToCrease();
 
-      // Authentic cricket ball delivery: release from bowler hand (z = 10.5, y = 3.2m) to pitch landing spot
-      const startPos = new THREE.Vector3(0, 3.2, 10.5);
+      // Ball release from bowler's side lane (x=1.2), NOT through the umpire at x=0
+      const startPos = new THREE.Vector3(1.2, 3.2, 10.5);
       const lzX = typeof data.landingZone?.x === 'number' ? data.landingZone.x : 0;
       const lzZ = typeof data.landingZone?.z === 'number' ? data.landingZone.z : -5.5;
       const targetZ = lzZ < 0 ? Math.max(-9.2, Math.min(-1.0, lzZ)) : (-9.0 + lzZ * 7.5);
@@ -791,11 +800,16 @@ class CricketGame {
         this.defaultCamLookAt.set(0, 2.0, -9.5);
       }
 
-      // Ball is now actively incoming — show Batting UI with 1.4s arrival window matching ball flight
+      // Ball is now actively incoming — show Batting UI only for the striker
       this.ballIncoming = true;
-      const isBattingUser = !this.isUserBowling;
+      const isBattingUser = (this.myRole === 'striker') || (!this.isUserBowling && this.myRole !== 'nonstriker' && this.myRole !== 'fielder');
       if (isBattingUser) {
         this.battingUI.show({ timeout: 1400 });
+      }
+
+      // Show fielding controls for the fielding player
+      if (this.myRole === 'fielder') {
+        this._showFieldingControls();
       }
     });
 
@@ -803,6 +817,7 @@ class CricketGame {
       this.ballIncoming = false;
       this.battingUI.hide();
       this.bowlingUI.hide();
+      this._hideFieldingControls(); // clear fielding buttons after each delivery
       if (this.pitchTargetGroup) this.pitchTargetGroup.visible = false;
       this._updateScorecardUI(data.scorecard);
 
@@ -985,6 +1000,126 @@ class CricketGame {
         avatar.group.position.z = data.z;
       }
     });
+  }
+
+  // Show fielding action buttons (CATCH/STOP & THROW) during a delivery
+  _showFieldingControls() {
+    this._hideFieldingControls(); // clear any existing
+
+    const panel = document.createElement('div');
+    panel.id = 'fielding-controls';
+    panel.style.cssText = `
+      position:fixed; bottom:200px; right:18px;
+      display:flex; flex-direction:column; gap:10px;
+      z-index:950;
+    `;
+
+    const catchBtn = document.createElement('button');
+    catchBtn.id = 'btn-field-catch';
+    catchBtn.innerHTML = '🧤 CATCH / STOP [C]';
+    catchBtn.style.cssText = `
+      padding:14px 20px; border-radius:14px; border:2px solid rgba(76,217,100,0.7);
+      background:rgba(76,217,100,0.15); color:#4CD964; font-weight:900;
+      font-size:0.95rem; cursor:pointer; letter-spacing:1px;
+      box-shadow:0 4px 18px rgba(76,217,100,0.3);
+    `;
+    catchBtn.addEventListener('click', () => this._fielderCatchBall());
+
+    const throwBtn = document.createElement('button');
+    throwBtn.id = 'btn-field-throw';
+    throwBtn.innerHTML = '🎯 THROW TO STUMPS [T]';
+    throwBtn.style.cssText = `
+      padding:14px 20px; border-radius:14px; border:2px solid rgba(255,200,50,0.7);
+      background:rgba(255,200,50,0.15); color:#ffd32a; font-weight:900;
+      font-size:0.95rem; cursor:pointer; letter-spacing:1px;
+      box-shadow:0 4px 18px rgba(255,200,50,0.2);
+    `;
+    throwBtn.style.display = 'none'; // visible only after catching
+    throwBtn.addEventListener('click', () => this._fielderThrowBall());
+
+    panel.appendChild(catchBtn);
+    panel.appendChild(throwBtn);
+    document.body.appendChild(panel);
+    this._fieldingPanel = panel;
+    this._hasCaughtBall = false;
+
+    // Keyboard shortcuts
+    this._fieldingKeyHandler = (e) => {
+      const k = e.key.toLowerCase();
+      if (k === 'c' && !this._hasCaughtBall) { e.preventDefault(); this._fielderCatchBall(); }
+      if (k === 't' && this._hasCaughtBall) { e.preventDefault(); this._fielderThrowBall(); }
+    };
+    window.addEventListener('keydown', this._fieldingKeyHandler);
+  }
+
+  _hideFieldingControls() {
+    if (this._fieldingPanel) {
+      this._fieldingPanel.remove();
+      this._fieldingPanel = null;
+    }
+    if (this._fieldingKeyHandler) {
+      window.removeEventListener('keydown', this._fieldingKeyHandler);
+      this._fieldingKeyHandler = null;
+    }
+    this._hasCaughtBall = false;
+  }
+
+  // Fielder stops/catches the ball at their position
+  _fielderCatchBall() {
+    if (!this.ball || !this.ball.active) return;
+    if (this._hasCaughtBall) return;
+    this._hasCaughtBall = true;
+
+    // Stop ball physics at current position
+    const fielder = this.fielders[0];
+    const fPos = fielder ? fielder.group.position : this.ball.pos.clone();
+
+    this.ball.vel.set(0, 0, 0);
+    this.ball.pos.set(fPos.x, 0.5, fPos.z);
+    this.ball.group.position.copy(this.ball.pos);
+
+    this.showNotice('🧤 Caught! Now press THROW [T] to fire it at the stumps!');
+
+    // Switch buttons: hide CATCH, show THROW
+    const catchBtn = document.getElementById('btn-field-catch');
+    const throwBtn = document.getElementById('btn-field-throw');
+    if (catchBtn) catchBtn.style.display = 'none';
+    if (throwBtn) throwBtn.style.display = 'block';
+  }
+
+  // Fielder throws ball back toward the stumps
+  _fielderThrowBall() {
+    if (!this._hasCaughtBall || !this.ball) return;
+    this._hasCaughtBall = false;
+    this._hideFieldingControls();
+
+    const fielder = this.fielders[0];
+    const fPos = fielder ? fielder.group.position.clone() : this.ball.pos.clone();
+
+    // Throw toward the closer of the two stumps
+    const distToStriker = Math.abs(fPos.z - (-12.6));
+    const distToBowler = Math.abs(fPos.z - 12.6);
+    const stumpTarget = new THREE.Vector3(0, 0.85, distToStriker < distToBowler ? -12.6 : 12.6);
+
+    this.showNotice(`🎯 Throw fired at the ${stumpTarget.z < 0 ? 'striker' : 'bowler'} end stumps!`);
+
+    const startTime = performance.now();
+    const throwDuration = 700;
+    const throwStep = (now) => {
+      const p = Math.min(1.0, (now - startTime) / throwDuration);
+      this.ball.pos.x = fPos.x + (stumpTarget.x - fPos.x) * p;
+      this.ball.pos.z = fPos.z + (stumpTarget.z - fPos.z) * p;
+      this.ball.pos.y = 0.5 + Math.sin(p * Math.PI) * 3.5;
+      this.ball.group.position.copy(this.ball.pos);
+      if (p < 1.0) {
+        requestAnimationFrame(throwStep);
+      } else {
+        this.ball.active = false;
+        this.ball.group.visible = false;
+        this.showNotice('🏏 Ball returned to wicketkeeper/bowler.');
+      }
+    };
+    requestAnimationFrame(throwStep);
   }
 
   // Start WASD keyboard tracking for the local fielding player
