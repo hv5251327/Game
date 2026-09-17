@@ -23,7 +23,7 @@ export class NetworkClient {
       'room_joined','player_joined','player_left','team_updated',
       'toss_started','toss_result','toss_decision_needed','toss_decision',
       'innings_setup','batting_order_set','bowling_order_needed','over_started',
-      'delivery','ball_result','wicket','over_complete','innings_end',
+      'bowler_runup','delivery','ball_result','wicket','over_complete','innings_end',
       'game_over','sb_turn_started','new_batsman','next_batsman_needed',
       'bowler_needed','bowl_now','run_out_confirmed','error_msg'
     ];

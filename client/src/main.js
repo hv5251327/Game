@@ -36,9 +36,9 @@ class CricketGame {
     // Bowler view: behind bowler running up along positive Z towards pitch (start behind z=27)
     this.bowlerCamPos = new THREE.Vector3(0, 6.5, 33.5);
     this.bowlerCamLookAt = new THREE.Vector3(0, 2.0, -9.5);
-    // Batsman view: behind batsman wickets at z = -12.6 looking toward bowler at +Z
-    this.batsmanCamPos = new THREE.Vector3(0, 5.5, -17.5);
-    this.batsmanCamLookAt = new THREE.Vector3(0, 2.0, 10.5);
+    // Batsman view: elevated behind batsman wickets looking down the pitch towards bowler (+Z)
+    this.batsmanCamPos = new THREE.Vector3(0, 8.2, -22.5);
+    this.batsmanCamLookAt = new THREE.Vector3(0, 1.6, 2.0);
 
     // Interactive Manual Running State
     this.manualRunningActive = false;
@@ -121,13 +121,14 @@ class CricketGame {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x82C7FE);
 
-    // Exact Camera presets matching Babylon.js sceneConfig
+    // Exact Camera presets matching Babylon.js sceneConfig + behind batsman
     this.cameraPresets = {
-      aerial:    { pos: new THREE.Vector3(43.2, 129.3, -84.9), target: new THREE.Vector3(0, 0, 20) },
+      batsman:   { pos: new THREE.Vector3(0, 8.2, -22.5),      target: new THREE.Vector3(0, 1.6, 2.0) },
       broadcast: { pos: new THREE.Vector3(-6.7, 76.8, -108.6), target: new THREE.Vector3(0, 4.2, 27) },
-      ground:    { pos: new THREE.Vector3(8.8, 35.6, -86.2),   target: new THREE.Vector3(0, 1.5, 1) }
+      ground:    { pos: new THREE.Vector3(8.8, 35.6, -86.2),   target: new THREE.Vector3(0, 1.5, 1) },
+      aerial:    { pos: new THREE.Vector3(43.2, 129.3, -84.9), target: new THREE.Vector3(0, 0, 20) }
     };
-    this.activeCameraPreset = 'behind_wickets';
+    this.activeCameraPreset = 'batsman';
 
     this.camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.1, 800);
     this.defaultCamPos = this.batsmanCamPos.clone();
@@ -466,7 +467,7 @@ class CricketGame {
       this.domScorecardModal.classList.add('hidden');
     });
 
-    ['broadcast', 'ground', 'aerial'].forEach(view => {
+    ['batsman', 'broadcast', 'ground', 'aerial'].forEach(view => {
       document.getElementById(`btn-cam-${view}`)?.addEventListener('click', () => {
         this.setCameraView(view);
       });
@@ -516,7 +517,11 @@ class CricketGame {
     if (this.domVRHelmetOverlay) {
       this.domVRHelmetOverlay.classList.toggle('hidden', !this.isVRMode);
     }
-    this.showNotice(this.isVRMode ? '🥽 Batsman VR View Active [V] — Facing the bowler!' : '📺 Broadcast Camera Restored.');
+    // In VR mode, hide striker's headPivot so interior head geometry does not obstruct first-person view
+    if (this.strikerAvatar && this.strikerAvatar.headPivot) {
+      this.strikerAvatar.headPivot.visible = !this.isVRMode;
+    }
+    this.showNotice(this.isVRMode ? '🥽 Batsman VR View Active [V] — Looking out through helmet visor at bowler!' : '📺 Broadcast Camera Restored.');
   }
 
   _bindNetwork() {
@@ -1687,10 +1692,10 @@ class CricketGame {
 
     // Camera Logic: VR Batsman POV vs Broadcast Camera Tracking
     if (this.isVRMode) {
-      // 1. FIRST-PERSON BATSMAN VR VIEW
-      // Camera placed right at the batsman's head / helmet looking down the pitch towards the bowler
-      const sPos = this.strikerAvatar ? this.strikerAvatar.group.position : new THREE.Vector3(0, 0.0, 3.8);
-      this.targetCamPos.set(sPos.x, 0.62, sPos.z - 0.22);
+      // 1. FIRST-PERSON BATSMAN VR VIEW FROM THE HELMET
+      // Camera placed right at the batsman's helmet eye level looking out at the bowler
+      const sPos = this.strikerAvatar ? this.strikerAvatar.group.position : new THREE.Vector3(0, 0.0, -9.5);
+      this.targetCamPos.set(sPos.x, sPos.y + 3.62, sPos.z + 0.32);
 
       if (this.ball && this.ball.active) {
         const bPos = this.ball.pos;
@@ -1698,28 +1703,28 @@ class CricketGame {
           // Ball arriving towards batsman: batsman eyes track incoming delivery and pitch bounce!
           this.targetCamLookAt.set(
             bPos.x * 0.7 + this.vrMouseOffsetX,
-            Math.max(0.18, bPos.y) - this.vrMouseOffsetY,
+            Math.max(0.3, bPos.y) - this.vrMouseOffsetY,
             bPos.z
           );
         } else {
           // Ball hit: batsman turns and tracks the ball soaring into the outfield!
           this.targetCamLookAt.set(
             bPos.x + this.vrMouseOffsetX,
-            Math.max(0.4, bPos.y) - this.vrMouseOffsetY,
+            Math.max(0.5, bPos.y) - this.vrMouseOffsetY,
             bPos.z
           );
         }
       } else {
         // Focused down the pitch towards the bowler
-        const bwlPos = this.bowlerAvatar ? this.bowlerAvatar.group.position : new THREE.Vector3(0, 0.0, -3.7);
+        const bwlPos = this.bowlerAvatar ? this.bowlerAvatar.group.position : new THREE.Vector3(0, 0.0, 10.5);
         this.targetCamLookAt.set(
           bwlPos.x * 0.5 + this.vrMouseOffsetX,
-          0.75 - this.vrMouseOffsetY,
+          2.0 - this.vrMouseOffsetY,
           bwlPos.z
         );
       }
-      this.camera.position.lerp(this.targetCamPos, 7.5 * delta);
-      this.currentCamLookAt.lerp(this.targetCamLookAt, 8.5 * delta);
+      this.camera.position.lerp(this.targetCamPos, 8.5 * delta);
+      this.currentCamLookAt.lerp(this.targetCamLookAt, 9.5 * delta);
       this.camera.lookAt(this.currentCamLookAt);
     } else if (this.cameraTracking && this.ball && this.ball.active) {
       const bPos = this.ball.pos;

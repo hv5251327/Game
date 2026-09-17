@@ -438,6 +438,9 @@ class CricketRoom {
     this.pendingBowlerRequest = false;
     this.currentBall = 0;
     this.ballInFlight = false;
+    this.runupInProgress = false;
+    clearTimeout(this._runupTimeout);
+    clearTimeout(this._batTimeout);
 
     const card = this._currentCard();
     card.currentOverBalls = [];
@@ -1013,6 +1016,11 @@ class CricketRoom {
 
   _requestNextBall() {
     if (this.state !== 'PLAYING') return;
+
+    this.ballInFlight = false;
+    this.runupInProgress = false;
+    clearTimeout(this._runupTimeout);
+    clearTimeout(this._batTimeout);
 
     const bowlerPlayer = this.players.get(this.currentBowler);
     if (bowlerPlayer && bowlerPlayer.isBot) {
