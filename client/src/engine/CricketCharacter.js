@@ -450,17 +450,17 @@ export class CricketCharacter {
     } else {
       const isBatsman = this.role.includes('batter') || this.role.includes('batsman');
       if (isBatsman && this.batPivot) {
-        // Natural gentle bat tapping on crease in sideways stance held in hands
+        // Natural gentle bat tapping on crease in hands at the hip
         const tap = Math.sin(this.animTime * 3.0);
-        const tapLift = Math.max(0, tap) * 0.06;
-        this.batPivot.position.y = 1.30 + tapLift;
-        this.batPivot.rotation.x = -0.25 + tap * 0.025;
+        const tapLift = Math.max(0, tap) * 0.05;
+        this.batPivot.position.y = 1.28 + tapLift;
+        this.batPivot.rotation.x = 0.08 + tap * 0.02;
         // Arms gently follow the bat tap so hands stay locked on the handle
         if (this.leftArmPivot) {
-          this.leftArmPivot.rotation.x = 0.38 + tap * 0.018;
+          this.leftArmPivot.rotation.x = 0.12 + tap * 0.015;
         }
         if (this.rightArmPivot) {
-          this.rightArmPivot.rotation.x = 0.55 + tap * 0.022;
+          this.rightArmPivot.rotation.x = 0.18 + tap * 0.018;
         }
       }
     }
@@ -666,46 +666,46 @@ export class CricketCharacter {
     // Side-on cricket stance: body rotated ~85 degrees across the pitch.
     // Left shoulder points along +Z towards the bowler.
     // Right shoulder points along -Z towards the wicketkeeper.
-    // Slight forward bend at hips (rotation.x = 0.10) for athletic balance on balls of feet.
+    // Athletic posture with weight balanced on balls of feet.
     if (this.bodyPivot) {
-      this.bodyPivot.rotation.set(0.10, 1.48, 0);
+      this.bodyPivot.rotation.set(0.06, 1.48, 0);
     }
 
     // ── HEAD ───────────────────────────────────────────────────────────────
     // Head turned over the front (left) shoulder looking straight down the pitch at the bowler (+Z).
-    // Eyes level, chin tucked slightly into the shoulder.
+    // Eyes level, chin tucked slightly into the front shoulder.
     if (this.headPivot) {
-      this.headPivot.rotation.set(-0.06, -1.38, 0);
+      this.headPivot.rotation.set(-0.04, -1.40, 0);
     }
 
     // ── BAT ────────────────────────────────────────────────────────────────
-    // The bat is held in BOTH hands in front of the body with blade resting on the turf at the crease.
-    // Handle is held at waist/thigh height (y ≈ 2.0 - 2.3).
-    // Blade extends down to turf level (y ≈ 0.04).
-    // Bat has a slight classic backlift angle (tilted slightly back towards keeper/slips).
+    // The bat is held directly in BOTH hands at the hip/thigh, hanging down naturally.
+    // Blade bottom rests on the turf inside the crease (y ≈ 0.02m).
+    // Bat is tucked into the hands on the side of the body, NOT sticking out in front (z = -0.02).
     if (this.batPivot) {
-      this.batPivot.position.set(0.04, 1.30, 0.28);
-      this.batPivot.rotation.set(-0.25, -0.15, -0.05);
+      this.batPivot.position.set(0.08, 1.28, -0.02);
+      this.batPivot.rotation.set(0.08, 0.05, -0.05);
     }
 
     // ── ARMS & HANDS ────────────────────────────────────────────────────────
-    // Both arms angle inwards and downwards to firmly grip the bat handle.
-    // Top hand (Left Hand): controls bat, reaches top glove (y ≈ 2.32).
-    // Bottom hand (Right Hand): guides bat, reaches bottom glove (y ≈ 2.03).
+    // Both arms hang down naturally from the shoulders, angling inward to firmly grip the handle.
+    // Arms do NOT reach out in front; hands hold the bat right at the hip/waist.
+    // Top hand (Left Hand): upper grip on handle.
+    // Bottom hand (Right Hand): lower grip on handle.
     if (this.leftArmPivot) {
-      this.leftArmPivot.rotation.set(0.38, -0.15, -0.44);
+      this.leftArmPivot.rotation.set(0.12, 0.08, -0.62);
     }
     if (this.rightArmPivot) {
-      this.rightArmPivot.rotation.set(0.55, 0.18, 0.40);
+      this.rightArmPivot.rotation.set(0.18, -0.05, 0.52);
     }
 
     // ── LEGS ───────────────────────────────────────────────────────────────
-    // Athletic ready stance: shoulder-width apart, knees slightly flexed.
+    // Athletic ready stance: feet shoulder-width, knees comfortably flexed.
     if (this.leftLegPivot) {
-      this.leftLegPivot.rotation.set(0.12, 0, 0.05);
+      this.leftLegPivot.rotation.set(0.10, 0, 0.04);
     }
     if (this.rightLegPivot) {
-      this.rightLegPivot.rotation.set(0.08, 0, -0.05);
+      this.rightLegPivot.rotation.set(0.06, 0, -0.04);
     }
   }
 
