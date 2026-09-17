@@ -450,10 +450,10 @@ export class CricketCharacter {
     } else {
       const isBatsman = this.role.includes('batter') || this.role.includes('batsman');
       if (isBatsman && this.batPivot) {
-        // Natural gentle bat tapping on crease in sideways stance
+        // Natural gentle bat tapping on crease in sideways stance held in hands
         const tap = Math.sin(this.animTime * 3.5);
-        this.batPivot.rotation.x = 0.18 + tap * 0.06;
-        this.batPivot.position.y = 1.28 + Math.max(0, tap) * 0.035;
+        this.batPivot.rotation.x = 0.12 + tap * 0.05;
+        this.batPivot.position.y = 1.25 + Math.max(0, tap) * 0.035;
       }
     }
   }
@@ -467,27 +467,27 @@ export class CricketCharacter {
     if (p < 0.25) {
       // Phase 1: High backlift - bat raises backward towards keeper preparing to strike forward
       const t = p / 0.25;
-      swingX = 0.18 - 1.10 * t;
-      batZ = 0.38 - 0.25 * t;
-      batY = 1.28 + 0.32 * t;
+      swingX = 0.12 - 1.10 * t;
+      batZ = 0.08 - 0.25 * t;
+      batY = 1.25 + 0.35 * t;
       twistY = (isLHB ? -1.42 : 1.42) - (isLHB ? -0.18 : 0.18) * t;
-      armX = 0.55 - 0.6 * t;
+      armX = 0.45 - 0.6 * t;
     } else if (p < 0.55) {
       // Phase 2: Forward down-swing accelerating down and forward through ball
       const t = (p - 0.25) / 0.30;
-      swingX = -0.92 + 2.05 * t;
-      batZ = 0.13 + 0.55 * t;
+      swingX = -0.98 + 2.15 * t;
+      batZ = -0.17 + 0.55 * t;
       batY = 1.60 - 0.40 * t;
       twistY = (isLHB ? -1.24 : 1.24) - (isLHB ? -0.45 : 0.45) * t;
-      armX = -0.05 + 1.0 * t;
+      armX = -0.15 + 1.0 * t;
     } else {
       // Phase 3: High elegant forward follow-through
       const t = (p - 0.55) / 0.45;
-      swingX = 1.13 + 0.45 * (1 - Math.cos(t * Math.PI * 0.5));
-      batZ = 0.68 + 0.20 * t;
+      swingX = 1.17 + 0.45 * (1 - Math.cos(t * Math.PI * 0.5));
+      batZ = 0.38 + 0.20 * t;
       batY = 1.20 + 0.45 * t;
       twistY = (isLHB ? -0.79 : 0.79) - (isLHB ? -0.20 : 0.20) * t;
-      armX = 0.95 + 0.25 * t;
+      armX = 0.85 + 0.25 * t;
     }
 
     this.batPivot.rotation.x = swingX * (0.85 + this.currentPower * 0.3);
@@ -629,9 +629,9 @@ export class CricketCharacter {
       this.group.scale.x = Math.abs(baseScale);
     }
 
-    let zPos = -9.5;
-    if (this.stance.depth === 'deep') zPos = -10.4;
-    else if (this.stance.depth === 'forward') zPos = -8.6;
+    let zPos = -11.4;
+    if (this.stance.depth === 'deep') zPos = -11.8;
+    else if (this.stance.depth === 'forward') zPos = -11.0;
 
     let xPos = 0;
     if (this.stance.guard === 'leg') xPos = this.stance.hand === 'LHB' ? 0.6 : -0.6;
@@ -663,16 +663,16 @@ export class CricketCharacter {
       this.headPivot.rotation.set(0, headY, 0);
     }
     if (this.batPivot) {
-      // In bodyPivot space: held directly in front of the waist/groin, blade grounded on crease
-      this.batPivot.position.set(batX, 1.28, 0.38);
-      this.batPivot.rotation.set(0.18, isLHB ? 0.15 : -0.15, isLHB ? 0.10 : -0.10);
+      // In bodyPivot space: held directly in hands at hip level, blade grounded on crease
+      this.batPivot.position.set(batX, 1.25, 0.08);
+      this.batPivot.rotation.set(0.12, isLHB ? 0.15 : -0.15, isLHB ? 0.10 : -0.10);
     }
-    // Both arms angle forward and inward to firmly grip the bat handle
+    // Both arms angle naturally downward to hold the bat handle in hands
     if (this.leftArmPivot) {
-      this.leftArmPivot.rotation.set(isLHB ? 0.65 : 0.48, isLHB ? 0.32 : -0.32, isLHB ? 0.22 : -0.25);
+      this.leftArmPivot.rotation.set(isLHB ? 0.38 : 0.28, isLHB ? 0.25 : -0.25, isLHB ? 0.18 : -0.22);
     }
     if (this.rightArmPivot) {
-      this.rightArmPivot.rotation.set(isLHB ? 0.48 : 0.65, isLHB ? -0.32 : 0.32, isLHB ? -0.25 : 0.22);
+      this.rightArmPivot.rotation.set(isLHB ? 0.28 : 0.42, isLHB ? -0.25 : 0.25, isLHB ? -0.22 : 0.20);
     }
   }
 

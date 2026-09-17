@@ -25,12 +25,12 @@ export class Ball {
     this.group.add(seam);
 
     // Initial position
-    this.group.position.set(0, 0.5, -9.5);
+    this.group.position.set(0, 0.5, -11.4);
     this.scene.add(this.group);
     this.group.visible = false;
 
     // Physics State
-    this.pos = new THREE.Vector3(0, 0.5, -9.5);
+    this.pos = new THREE.Vector3(0, 0.5, -11.4);
     this.vel = new THREE.Vector3(0, 0, 0);
     this.gravity = -21.0;
     this.restitution = 0.62;
@@ -181,8 +181,8 @@ export class Ball {
 
         if (this.onBounce) this.onBounce(this.pos);
 
-        // Phase 2: Compute realistic cricket bounce trajectory to batsman crease (z = -9.5)
-        const targetZ = -9.5;
+        // Phase 2: Compute realistic cricket bounce trajectory to batsman crease (z = -11.4)
+        const targetZ = this.batsmanTarget ? this.batsmanTarget.z : -11.4;
         const distRemaining = targetZ - this.pos.z; // negative distance to batsman
         const isSpin = this.deliveryType.includes('spin');
         const isBouncer = this.deliveryType === 'bouncer';
