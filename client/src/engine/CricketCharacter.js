@@ -382,24 +382,24 @@ export class CricketCharacter {
 
     // 6. Batsman Bat: blade (0.28 x 1.85 x 0.28) + handle (diameter 0.12, height 0.65)
     if (isBatsman) {
-      // Handle held up top near hands (local y = 0.55 to 1.2)
-      const handleGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.65, 8);
+      // Handle gripped up top in hands (local y = 0.50 to 1.20)
+      const handleGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.70, 12);
       const handle = new THREE.Mesh(handleGeo, new THREE.MeshStandardMaterial({ color: 0x1f1f1f, roughness: 0.7 }));
       handle.position.set(0, 0.85, 0);
 
-      // Blade extending down toward ground (local y = -0.35 to 0.55)
-      const bladeGeo = new THREE.BoxGeometry(0.28, 1.85, 0.28);
+      // Realistic cricket bat blade: flat face, wide profile (0.28w x 1.85h x 0.13d)
+      const bladeGeo = new THREE.BoxGeometry(0.28, 1.85, 0.13);
       const blade = new THREE.Mesh(bladeGeo, batMat);
       blade.position.set(0, -0.35, 0);
       blade.castShadow = true;
 
       // Batting Gloves gripping the handle in batsman hands
       const gloveMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.45 });
-      const topGlove = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.22, 0.24), gloveMat);
+      const topGlove = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.22, 0.20), gloveMat);
       topGlove.position.set(0, 1.05, 0);
       topGlove.castShadow = true;
 
-      const bottomGlove = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.22, 0.24), gloveMat);
+      const bottomGlove = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.22, 0.20), gloveMat);
       bottomGlove.position.set(0, 0.75, 0);
       bottomGlove.castShadow = true;
 
@@ -451,9 +451,17 @@ export class CricketCharacter {
       const isBatsman = this.role.includes('batter') || this.role.includes('batsman');
       if (isBatsman && this.batPivot) {
         // Natural gentle bat tapping on crease in sideways stance held in hands
-        const tap = Math.sin(this.animTime * 3.5);
-        this.batPivot.rotation.x = 0.12 + tap * 0.05;
-        this.batPivot.position.y = 1.25 + Math.max(0, tap) * 0.035;
+        const tap = Math.sin(this.animTime * 3.0);
+        const tapLift = Math.max(0, tap) * 0.06;
+        this.batPivot.position.y = 1.30 + tapLift;
+        this.batPivot.rotation.x = -0.25 + tap * 0.025;
+        // Arms gently follow the bat tap so hands stay locked on the handle
+        if (this.leftArmPivot) {
+          this.leftArmPivot.rotation.x = 0.38 + tap * 0.018;
+        }
+        if (this.rightArmPivot) {
+          this.rightArmPivot.rotation.x = 0.55 + tap * 0.022;
+        }
       }
     }
   }
@@ -502,9 +510,11 @@ export class CricketCharacter {
 
     if (this.rightArmPivot) {
       this.rightArmPivot.rotation.x = armX;
+      this.rightArmPivot.rotation.z = 0.25;
     }
     if (this.leftArmPivot) {
       this.leftArmPivot.rotation.x = armX * 0.85;
+      this.leftArmPivot.rotation.z = -0.28;
     }
   }
 
@@ -651,28 +661,51 @@ export class CricketCharacter {
     const isBatsman = this.role.includes('batter') || this.role.includes('batsman');
     if (!isBatsman) return;
 
-    const isLHB = this.stance && this.stance.hand === 'LHB';
-    const bodyY = isLHB ? -1.42 : 1.42; // Side-on stance turned ~81.5 degrees across pitch
-    const headY = isLHB ? 1.32 : -1.32; // Head turned looking over front shoulder down pitch at bowler (+Z)
-    const batX = isLHB ? 0.06 : -0.06;
-
+    // Force RHB (Right Hand Batsman)
+    // ── BODY ───────────────────────────────────────────────────────────────
+    // Side-on cricket stance: body rotated ~85 degrees across the pitch.
+    // Left shoulder points along +Z towards the bowler.
+    // Right shoulder points along -Z towards the wicketkeeper.
+    // Slight forward bend at hips (rotation.x = 0.10) for athletic balance on balls of feet.
     if (this.bodyPivot) {
-      this.bodyPivot.rotation.set(0, bodyY, 0);
+      this.bodyPivot.rotation.set(0.10, 1.48, 0);
     }
+
+    // ── HEAD ───────────────────────────────────────────────────────────────
+    // Head turned over the front (left) shoulder looking straight down the pitch at the bowler (+Z).
+    // Eyes level, chin tucked slightly into the shoulder.
     if (this.headPivot) {
-      this.headPivot.rotation.set(0, headY, 0);
+      this.headPivot.rotation.set(-0.06, -1.38, 0);
     }
+
+    // ── BAT ────────────────────────────────────────────────────────────────
+    // The bat is held in BOTH hands in front of the body with blade resting on the turf at the crease.
+    // Handle is held at waist/thigh height (y ≈ 2.0 - 2.3).
+    // Blade extends down to turf level (y ≈ 0.04).
+    // Bat has a slight classic backlift angle (tilted slightly back towards keeper/slips).
     if (this.batPivot) {
-      // In bodyPivot space: held directly in hands at hip level, blade grounded on crease
-      this.batPivot.position.set(batX, 1.25, 0.08);
-      this.batPivot.rotation.set(0.12, isLHB ? 0.15 : -0.15, isLHB ? 0.10 : -0.10);
+      this.batPivot.position.set(0.04, 1.30, 0.28);
+      this.batPivot.rotation.set(-0.25, -0.15, -0.05);
     }
-    // Both arms angle naturally downward to hold the bat handle in hands
+
+    // ── ARMS & HANDS ────────────────────────────────────────────────────────
+    // Both arms angle inwards and downwards to firmly grip the bat handle.
+    // Top hand (Left Hand): controls bat, reaches top glove (y ≈ 2.32).
+    // Bottom hand (Right Hand): guides bat, reaches bottom glove (y ≈ 2.03).
     if (this.leftArmPivot) {
-      this.leftArmPivot.rotation.set(isLHB ? 0.38 : 0.28, isLHB ? 0.25 : -0.25, isLHB ? 0.18 : -0.22);
+      this.leftArmPivot.rotation.set(0.38, -0.15, -0.44);
     }
     if (this.rightArmPivot) {
-      this.rightArmPivot.rotation.set(isLHB ? 0.28 : 0.42, isLHB ? -0.25 : 0.25, isLHB ? -0.22 : 0.20);
+      this.rightArmPivot.rotation.set(0.55, 0.18, 0.40);
+    }
+
+    // ── LEGS ───────────────────────────────────────────────────────────────
+    // Athletic ready stance: shoulder-width apart, knees slightly flexed.
+    if (this.leftLegPivot) {
+      this.leftLegPivot.rotation.set(0.12, 0, 0.05);
+    }
+    if (this.rightLegPivot) {
+      this.rightLegPivot.rotation.set(0.08, 0, -0.05);
     }
   }
 
