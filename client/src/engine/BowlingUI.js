@@ -1,15 +1,16 @@
-// BowlingUI: Streamlined Cricket Bowling Controller
-// Features: Mouse pitch targeting, Dedicated Pace Meter, and Two Swing Options (Swing Left / Swing Right)
+// BowlingUI: Professional Cricket Bowling Controller
+// Features: Dynamic pitch targeting, High-precision Pace Meter with sweet spot & crease line, and Swing Controls
 export class BowlingUI {
   constructor(container) {
     this.container = container;
-    this.landingZone = { x: -0.2, z: 0.45 }; // Default good length, top of off
+    this.landingZone = { x: -0.2, z: -5.5 }; // Default good length, top of off stump
     this.swingDirection = 'left'; // 'left' | 'right'
     this.power = 0.5;
     this.barDirection = 1;
-    this.barSpeed = 1.3;
+    this.barSpeed = 1.15; // Smooth, rhythmic timing speed
     this.active = false;
     this.onBowl = null;
+    this.onTargetMoved = null;
     this.animFrame = null;
     this.lastTime = 0;
     this._build();
@@ -28,37 +29,36 @@ export class BowlingUI {
           <span id="bowl-timer-badge" class="timer-countdown-badge">⏱️ <span id="bowl-timer-count">20</span>s</span>
         </div>
         <div id="bowl-status-banner" class="bowl-status-banner">
-          TARGET: <strong>GOOD LENGTH (Outside Off)</strong> &bull; <span id="bowl-speed-display" style="color:#ffd32a;">140 km/h</span>
+          TARGET: <strong>GOOD LENGTH (Outside Off)</strong> &bull; <span id="bowl-speed-display" style="color:#ffd32a; font-weight:900;">140 km/h</span>
         </div>
       </div>
 
-      <!-- 1. Two Options to Swing Left or Right -->
+      <!-- Real-time Line, Length & Swing Controls -->
       <div class="swing-dual-container">
-        <div class="swing-dual-label">SWING DIRECTION:</div>
+        <div class="swing-dual-label">SWING SELECTION:</div>
         <div class="swing-dual-options">
-          <button type="button" class="swing-dual-btn active" data-swing="left" id="btn-swing-left" title="Swing Left / Curve Inwards [1 or L]">
-            ↩ SWING LEFT [1]
+          <button type="button" class="swing-dual-btn active" data-swing="left" id="btn-swing-left" title="Swing Inwards towards batsman [1 or L]">
+            ↩ IN-SWING [1]
           </button>
-          <button type="button" class="swing-dual-btn" data-swing="right" id="btn-swing-right" title="Swing Right / Curve Outwards [2 or R]">
-            ↪ SWING RIGHT [2]
+          <button type="button" class="swing-dual-btn" data-swing="right" id="btn-swing-right" title="Swing Outwards away from batsman [2 or R]">
+            ↪ OUT-SWING [2]
           </button>
         </div>
       </div>
 
-      <!-- Real-time Line and Length Readout from On-Screen Click -->
       <div class="bowl-hud-stats">
-        <span id="bowl-length-label">Length: <strong>Good Length</strong> &bull; Swing: <strong style="color:#7bed9f;">SWING LEFT</strong></span>
+        <span id="bowl-length-label">Length: <strong>Good Length</strong> &bull; Swing: <strong style="color:#7bed9f;">IN-SWING</strong></span>
         <span id="bowl-line-label">Line: <strong>Outside Off</strong></span>
       </div>
 
-      <!-- 2. Dedicated Meter for Pace with No-Ball Crease Line -->
+      <!-- High-Precision Pace Meter with Sweet Spot & Crease Overstep Line -->
       <div class="bowling-meter-wrap">
         <div class="bowl-meter-labels">
           <span>MIN PACE</span>
-          <span class="meter-label-sweet">⚡ OPTIMAL PACE ⚡</span>
+          <span class="meter-label-sweet">⚡ OPTIMAL PACE (135–148 km/h) ⚡</span>
           <span class="meter-label-noball">🚨 NO-BALL LINE</span>
         </div>
-        <div class="bowl-meter-track" id="bowl-pace-track" title="Click or press SPACE to lock in pace and bowl">
+        <div class="bowl-meter-track" id="bowl-pace-track" title="Click anywhere on meter or press SPACE to lock in pace and bowl!">
           <div class="bowl-meter-sweet-zone"></div>
           <div class="bowl-meter-noball-zone" title="Overstep Crease = NO-BALL"></div>
           <div class="bowl-meter-noball-crease-line" title="Crease Line">
@@ -68,10 +68,10 @@ export class BowlingUI {
         </div>
       </div>
 
-      <!-- Action Button & On-Screen Pitch Instruction Hint -->
-      <button type="button" id="btn-bowl" class="btn-bowl-pro">⚡ BOWL DELIVERY [SPACE] ⚡</button>
+      <!-- Big Delivery Action Button -->
+      <button type="button" id="btn-bowl" class="btn-bowl-pro">⚡ LOCK IN PACE & BOWL [SPACE] ⚡</button>
       <div class="bowl-keyboard-hint">
-        🎯 <strong>Click directly on pitch screen to set landing spot!</strong> &bull; <strong>[1]/[2]</strong> Swing &bull; <strong>SPACE</strong> to Bowl
+        🎯 <strong>Click or drag on pitch to set landing spot!</strong> &bull; <strong>W/S</strong> Fuller/Shorter &bull; <strong>A/D</strong> Off/Leg &bull; <strong>SPACE</strong> to Bowl
       </div>
     `;
     this.el.style.display = 'none';
@@ -110,7 +110,7 @@ export class BowlingUI {
         return;
       }
 
-      // Keys 1/L for Swing Left, 2/R for Swing Right
+      // Keys 1/L for In-Swing, 2/R for Out-Swing
       if (k === '1' || k === 'l') {
         this._setSwingDirection('left');
         return;
@@ -120,25 +120,30 @@ export class BowlingUI {
         return;
       }
 
-      // Optional arrow keys for fine tuning
+      // Arrow keys / WASD for fine-tuning landing spot on the pitch
       let moved = false;
       if (k === 'arrowleft' || k === 'a') {
-        this.landingZone.x = Math.max(-1.0, this.landingZone.x - 0.08);
+        this.landingZone.x = Math.max(-1.3, this.landingZone.x - 0.12);
         moved = true;
       } else if (k === 'arrowright' || k === 'd') {
-        this.landingZone.x = Math.min(1.0, this.landingZone.x + 0.08);
+        this.landingZone.x = Math.min(1.3, this.landingZone.x + 0.12);
         moved = true;
       } else if (k === 'arrowup' || k === 'w') {
-        this.landingZone.z = Math.max(0.06, this.landingZone.z - 0.08); // Fuller (Yorker)
+        // Forward down pitch towards batsman (Fuller / Yorker)
+        this.landingZone.z = Math.max(-9.2, this.landingZone.z - 0.35);
         moved = true;
       } else if (k === 'arrowdown' || k === 's') {
-        this.landingZone.z = Math.min(0.94, this.landingZone.z + 0.08); // Shorter (Bouncer)
+        // Backward towards bowler (Shorter / Bouncer)
+        this.landingZone.z = Math.min(-1.0, this.landingZone.z + 0.35);
         moved = true;
       }
 
       if (moved) {
         e.preventDefault();
         this._updateLabels();
+        if (this.onTargetMoved) {
+          this.onTargetMoved(this.landingZone.x, this.landingZone.z);
+        }
       }
     });
   }
@@ -163,21 +168,21 @@ export class BowlingUI {
 
     const z = this.landingZone.z;
     let lenStr = 'Good Length';
-    if (z >= 2.3) lenStr = 'Yorker / Full Length';
-    else if (z >= 1.0) lenStr = 'Full Pitch';
-    else if (z >= -0.2) lenStr = 'Good Length';
-    else if (z >= -1.2) lenStr = 'Short of Length';
+    if (z <= -8.2) lenStr = 'Yorker / Blockhole';
+    else if (z <= -6.5) lenStr = 'Full Pitch / Half-Volley';
+    else if (z <= -4.2) lenStr = 'Good Length';
+    else if (z <= -2.5) lenStr = 'Short of a Length';
     else lenStr = 'Bouncer / Short Pitch';
 
     const x = this.landingZone.x;
-    let lineStr = 'Middle Stump';
-    if (x < -0.55) lineStr = 'Way Outside Off';
-    else if (x < -0.15) lineStr = 'Off Stump Line';
-    else if (x > 0.55) lineStr = 'Down Leg Side';
-    else if (x > 0.2) lineStr = 'On the Pads (Leg Stump)';
-    else lineStr = 'Middle Stump Line';
+    let lineStr = 'Middle Stump Line';
+    if (x < -0.70) lineStr = 'Wide Outside Off';
+    else if (x < -0.20) lineStr = 'Outside Off Stump';
+    else if (x < 0.20) lineStr = 'Middle & Off Stump';
+    else if (x < 0.65) lineStr = 'Leg Stump / On Pads';
+    else lineStr = 'Down Leg Side';
 
-    const swingText = this.swingDirection === 'left' ? 'SWING LEFT' : 'SWING RIGHT';
+    const swingText = this.swingDirection === 'left' ? 'IN-SWING' : 'OUT-SWING';
     if (lengthLabel) lengthLabel.innerHTML = `Length: <strong>${lenStr}</strong> &bull; Swing: <strong style="color:#7bed9f;">${swingText}</strong>`;
     if (lineLabel) lineLabel.innerHTML = `Line: <strong>${lineStr}</strong>`;
 
@@ -185,7 +190,7 @@ export class BowlingUI {
     const speedEst = Math.round(baseKmh + this.power * 45);
 
     if (statusBanner) {
-      statusBanner.innerHTML = `TARGET: <strong>${lenStr}</strong> &bull; <span style="color:#ffd32a;">${speedEst} km/h (${swingText})</span>`;
+      statusBanner.innerHTML = `TARGET: <strong>${lenStr} (${lineStr})</strong> &bull; <span style="color:#ffd32a; font-weight:900;">${speedEst} km/h (${swingText})</span>`;
     }
   }
 
@@ -243,13 +248,13 @@ export class BowlingUI {
     if (statusBanner) {
       const baseKmh = 105;
       const curSpeed = Math.round(baseKmh + this.power * 45);
-      const swingText = this.swingDirection === 'left' ? 'SWING LEFT' : 'SWING RIGHT';
+      const swingText = this.swingDirection === 'left' ? 'IN-SWING' : 'OUT-SWING';
 
       if (this.power >= 0.88) {
-        statusBanner.innerHTML = `🚨 <strong style="color:#ff4757;">OVERSTEPPED CREASE! NO-BALL RISK!</strong> &bull; <span style="color:#ff6b81;">${curSpeed} km/h</span>`;
+        statusBanner.innerHTML = `🚨 <strong style="color:#ff4757;">OVERSTEPPED CREASE! NO-BALL RISK!</strong> &bull; <span style="color:#ff6b81; font-weight:900;">${curSpeed} km/h</span>`;
       } else {
-        const isSweet = this.power >= 0.55 && this.power <= 0.82;
-        statusBanner.innerHTML = `${isSweet ? '⚡ OPTIMAL PACE!' : 'PACE'} &bull; <span style="color:#ffd32a;">${curSpeed} km/h</span> &bull; <span>${swingText}</span>`;
+        const isSweet = this.power >= 0.52 && this.power <= 0.84;
+        statusBanner.innerHTML = `${isSweet ? '⚡ OPTIMAL PACE!' : 'PACE'} &bull; <span style="color:#ffd32a; font-weight:900;">${curSpeed} km/h</span> &bull; <span>${swingText}</span>`;
       }
     }
 
@@ -271,8 +276,8 @@ export class BowlingUI {
     const paceKmh = Math.round(baseKmh + this.power * 45);
 
     let delivType = 'pace';
-    if (this.landingZone.z >= 2.3) delivType = 'yorker';
-    else if (this.landingZone.z <= -1.2) delivType = 'bouncer';
+    if (this.landingZone.z <= -8.0) delivType = 'yorker';
+    else if (this.landingZone.z >= -2.5) delivType = 'bouncer';
     else if (this.swingDirection === 'left') delivType = 'inswing';
     else if (this.swingDirection === 'right') delivType = 'outswing';
 

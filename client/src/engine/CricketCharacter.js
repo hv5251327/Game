@@ -172,6 +172,8 @@ export class CricketCharacter {
     this.rightArmPivot = null;
     this.leftArmPivot = null;
     this.headPivot = null;
+    this.rightLegPivot = null;
+    this.leftLegPivot = null;
 
     this.animTime = Math.random() * Math.PI * 2;
     this.targetPos = new THREE.Vector3();
@@ -282,40 +284,63 @@ export class CricketCharacter {
       this.bodyPivot.add(cb);
     }
 
-    // 4. Legs & Shoes at x = -0.27, 0.27
-    // Leg: Box (width: 0.31, height: 1.38, depth: 0.38) at (x, 0.83, 0)
-    // Shoe: Box (width: 0.42, height: 0.18, depth: 0.7) at (x, 0.05, 0.08) - bottom contacts turf at y = 0
+    // 4. Legs & Shoes at x = -0.27, 0.27 with independent hip pivots for running and bowling
     const legGeo = new THREE.BoxGeometry(0.31, 1.38, 0.38);
     const shoeGeo = new THREE.BoxGeometry(0.42, 0.18, 0.7);
     const padGeo = new THREE.BoxGeometry(0.38, 0.88, 0.18);
     const keeperPadGeo = new THREE.BoxGeometry(0.38, 0.9, 0.22);
 
-    [-0.27, 0.27].forEach(x => {
-      const leg = new THREE.Mesh(legGeo, kitMat);
-      leg.position.set(x, 0.83, 0);
-      leg.castShadow = true;
-      this.bodyPivot.add(leg);
+    this.leftLegPivot = new THREE.Group();
+    this.leftLegPivot.position.set(-0.27, 1.5, 0);
+    this.bodyPivot.add(this.leftLegPivot);
 
-      const shoe = new THREE.Mesh(shoeGeo, shoeMat);
-      shoe.position.set(x, 0.09, 0.08);
-      shoe.castShadow = true;
-      this.bodyPivot.add(shoe);
+    const lLeg = new THREE.Mesh(legGeo, kitMat);
+    lLeg.position.set(0, -0.67, 0);
+    lLeg.castShadow = true;
+    this.leftLegPivot.add(lLeg);
 
-      // Batsman Pads: Box (width: 0.38, height: 0.88, depth: 0.18) at (x, 0.7, 0.2)
-      if (isBatsman) {
-        const pad = new THREE.Mesh(padGeo, accentMat);
-        pad.position.set(x, 0.7, 0.2);
-        pad.castShadow = true;
-        this.bodyPivot.add(pad);
-      }
+    const lShoe = new THREE.Mesh(shoeGeo, shoeMat);
+    lShoe.position.set(0, -1.41, 0.08);
+    lShoe.castShadow = true;
+    this.leftLegPivot.add(lShoe);
 
-      // Keeper Pads: Box (width: 0.38, height: 0.9, depth: 0.22) at (x, 0.7, 0.15)
-      if (isKeeper) {
-        const kPad = new THREE.Mesh(keeperPadGeo, kitMat);
-        kPad.position.set(x, 0.7, 0.15);
-        this.bodyPivot.add(kPad);
-      }
-    });
+    if (isBatsman) {
+      const pad = new THREE.Mesh(padGeo, accentMat);
+      pad.position.set(0, -0.80, 0.2);
+      pad.castShadow = true;
+      this.leftLegPivot.add(pad);
+    }
+    if (isKeeper) {
+      const kPad = new THREE.Mesh(keeperPadGeo, kitMat);
+      kPad.position.set(0, -0.80, 0.15);
+      this.leftLegPivot.add(kPad);
+    }
+
+    this.rightLegPivot = new THREE.Group();
+    this.rightLegPivot.position.set(0.27, 1.5, 0);
+    this.bodyPivot.add(this.rightLegPivot);
+
+    const rLeg = new THREE.Mesh(legGeo, kitMat);
+    rLeg.position.set(0, -0.67, 0);
+    rLeg.castShadow = true;
+    this.rightLegPivot.add(rLeg);
+
+    const rShoe = new THREE.Mesh(shoeGeo, shoeMat);
+    rShoe.position.set(0, -1.41, 0.08);
+    rShoe.castShadow = true;
+    this.rightLegPivot.add(rShoe);
+
+    if (isBatsman) {
+      const pad = new THREE.Mesh(padGeo, accentMat);
+      pad.position.set(0, -0.80, 0.2);
+      pad.castShadow = true;
+      this.rightLegPivot.add(pad);
+    }
+    if (isKeeper) {
+      const kPad = new THREE.Mesh(keeperPadGeo, kitMat);
+      kPad.position.set(0, -0.80, 0.15);
+      this.rightLegPivot.add(kPad);
+    }
 
     // 5. Arms at x = -0.67 and 0.67
     // Arm: Box (width: 0.24, height: 1.15, depth: 0.26) at (x, 2.4, 0)

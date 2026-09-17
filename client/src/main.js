@@ -224,7 +224,7 @@ class CricketGame {
     };
 
     this.bowlingUI.onBowl = (data) => {
-      if (this.pitchTargetGroup) this.pitchTargetGroup.visible = false;
+      // Keep pitchTargetGroup visible so the landing marker stays on the pitch during bowler runup & delivery!
       this.network.bowl(data);
     };
   }
@@ -305,9 +305,9 @@ class CricketGame {
       this.pitchRaycaster.setFromCamera(this.mouseCoords, this.camera);
       const intersection = new THREE.Vector3();
       if (this.pitchRaycaster.ray.intersectPlane(this.pitchPlane, intersection)) {
-        // Clamp within realistic pitch bounds
-        const px = Math.max(-1.1, Math.min(1.1, intersection.x));
-        const pz = Math.max(-1.8, Math.min(3.4, intersection.z));
+        // Full pitch bounds: z = -9.2 (yorker at batsman crease) to -1.0 (bouncer), x = -1.3 to 1.3
+        const px = Math.max(-1.3, Math.min(1.3, intersection.x));
+        const pz = Math.max(-9.2, Math.min(-1.0, intersection.z));
 
         if (this.pitchTargetGroup) {
           this.pitchTargetGroup.position.set(px, 0.27, pz);
@@ -319,6 +319,14 @@ class CricketGame {
 
     window.addEventListener('pointermove', handlePointerOnPitch);
     window.addEventListener('pointerdown', handlePointerOnPitch);
+
+    // Also update 3D pitch marker when bowler fine-tunes landing zone via WASD / arrow keys
+    this.bowlingUI.onTargetMoved = (x, z) => {
+      if (this.pitchTargetGroup) {
+        this.pitchTargetGroup.position.set(x, 0.27, z);
+        this.pitchTargetGroup.visible = true;
+      }
+    };
   }
 
   _initAudio() {
@@ -612,8 +620,18 @@ class CricketGame {
       this._resetBatsmenToCrease();
       this.ballIncoming = false;
       this.battingUI.hide();
+      this.isUserBowling = true;
       this.showNotice(`⚾ Your turn to bowl ball ${data.ball} of over ${data.over}! Click on pitch to set landing spot.`);
       this._updateCameraMode();
+
+      // Position bowler at start of runup behind the bowler stumps
+      if (this.bowlerAvatar) {
+        this.bowlerAvatar.setPosition(0, 0.0, 27.0);
+        this.bowlerAvatar.setRotation(Math.PI);
+      }
+      this.defaultCamPos.set(0, 6.5, 33.5);
+      this.defaultCamLookAt.set(0, 2.0, -9.5);
+
       if (this.pitchTargetGroup) {
         this.pitchTargetGroup.position.set(this.bowlingUI.landingZone.x, 0.27, this.bowlingUI.landingZone.z);
         this.pitchTargetGroup.visible = true;
@@ -621,16 +639,19 @@ class CricketGame {
       this.bowlingUI.show({ timeout: 20000 });
     });
 
-    // Bowler Run-Up Event: bowler begins full 2.5-second runup from back (z = 27.0 -> z = 10.5)
+    // Bowler Run-Up Event: bowler begins full 2.5-second runup from behind (z = 27.0 -> z = 10.5)
     this.network.on('bowler_runup', (data) => {
       const swingStr = data.swingDirection ? ` &bull; ${data.swingDirection.toUpperCase()}` : '';
       this.domActionBanner.innerHTML = `⚡ ${data.bowler?.name} charging in (${data.deliveryType.toUpperCase()}${swingStr})... Get ready!`;
 
-      // Position pitch target reticle clearly so batsman can see where ball will land
+      // Position pitch target reticle clearly so batsman and bowler can see where ball will land
+      const lzX = typeof data.landingZone?.x === 'number' ? data.landingZone.x : 0;
+      const lzZ = typeof data.landingZone?.z === 'number' ? data.landingZone.z : -5.5;
+      const targetZ = lzZ < 0 ? Math.max(-9.2, Math.min(-1.0, lzZ)) : (-9.0 + lzZ * 7.5);
+      const targetX = Math.max(-1.3, Math.min(1.3, lzX));
+
       if (this.pitchTargetGroup) {
-        const lzX = typeof data.landingZone?.x === 'number' ? data.landingZone.x : 0;
-        const lzZ = typeof data.landingZone?.z === 'number' ? data.landingZone.z : 0.45;
-        this.pitchTargetGroup.position.set(lzX * 1.8, 0.27, -2.0 - lzZ * 5.0);
+        this.pitchTargetGroup.position.set(targetX, 0.27, targetZ);
         this.pitchTargetGroup.visible = true;
       }
 
@@ -650,16 +671,56 @@ class CricketGame {
         this.bowlerAvatar.setPosition(0, 0.0, 27.0);
         this.bowlerAvatar.setRotation(Math.PI);
         const startZ = 27.0;
-        const targetZ = 10.5;
+        const targetZPos = 10.5;
         const startTime = performance.now();
         const duration = 2500;
         const runupStep = (now) => {
           const elapsed = now - startTime;
           const p = Math.min(1.0, elapsed / duration);
           if (this.bowlerAvatar) {
-            this.bowlerAvatar.group.position.z = startZ + (targetZ - startZ) * p;
-            this.bowlerAvatar.group.position.y = Math.abs(Math.sin(p * Math.PI * 12)) * 0.15;
-            this.bowlerAvatar.group.position.x = Math.sin(p * Math.PI * 6) * 0.08;
+            this.bowlerAvatar.group.position.z = startZ + (targetZPos - startZ) * p;
+
+            // Stride cycle: 7 strides over the run-up
+            const strideAngle = p * Math.PI * 14;
+            const stride = Math.sin(strideAngle);
+
+            if (p < 0.72) {
+              // Running stride phase:
+              this.bowlerAvatar.group.position.y = Math.abs(stride) * 0.18;
+              this.bowlerAvatar.group.position.x = Math.sin(strideAngle * 0.5) * 0.08;
+
+              // Leg strides using hip pivots:
+              if (this.bowlerAvatar.leftLegPivot && this.bowlerAvatar.rightLegPivot) {
+                this.bowlerAvatar.leftLegPivot.rotation.x = stride * 0.70;
+                this.bowlerAvatar.rightLegPivot.rotation.x = -stride * 0.70;
+              }
+              // Arm pumping:
+              if (this.bowlerAvatar.leftArmPivot && this.bowlerAvatar.rightArmPivot) {
+                this.bowlerAvatar.leftArmPivot.rotation.x = -stride * 0.75;
+                this.bowlerAvatar.rightArmPivot.rotation.x = stride * 0.75;
+              }
+            } else {
+              // Delivery stride & gather leap phase (final 28% of run-up):
+              const leapProgress = (p - 0.72) / 0.28;
+              // Athletic delivery leap off turf
+              this.bowlerAvatar.group.position.y = Math.sin(leapProgress * Math.PI) * 0.45;
+              this.bowlerAvatar.group.position.x = 0;
+
+              // Legs brace for delivery: front leg planting forward, back leg trailing
+              if (this.bowlerAvatar.leftLegPivot && this.bowlerAvatar.rightLegPivot) {
+                this.bowlerAvatar.leftLegPivot.rotation.x = Math.sin(leapProgress * Math.PI) * 0.5;
+                this.bowlerAvatar.rightLegPivot.rotation.x = -Math.sin(leapProgress * Math.PI) * 0.4;
+              }
+
+              // Full 360-degree windmill bowling arm rotation!
+              if (this.bowlerAvatar.rightArmPivot) {
+                this.bowlerAvatar.rightArmPivot.rotation.x = -leapProgress * Math.PI * 2;
+              }
+              if (this.bowlerAvatar.leftArmPivot) {
+                // Non-bowling arm pulls down to chest
+                this.bowlerAvatar.leftArmPivot.rotation.x = -Math.sin(leapProgress * Math.PI) * 1.2;
+              }
+            }
 
             // When user is bowling, dynamic back view camera follows behind the bowler gliding forward!
             if (this.isUserBowling && !this.cameraTracking) {
@@ -670,7 +731,11 @@ class CricketGame {
           if (p < 1.0) {
             requestAnimationFrame(runupStep);
           } else if (this.bowlerAvatar) {
-            this.bowlerAvatar.setPosition(0, 0.0, targetZ);
+            this.bowlerAvatar.setPosition(0, 0.0, targetZPos);
+            if (this.bowlerAvatar.leftLegPivot) this.bowlerAvatar.leftLegPivot.rotation.x = 0;
+            if (this.bowlerAvatar.rightLegPivot) this.bowlerAvatar.rightLegPivot.rotation.x = 0;
+            if (this.bowlerAvatar.leftArmPivot) this.bowlerAvatar.leftArmPivot.rotation.x = 0;
+            if (this.bowlerAvatar.rightArmPivot) this.bowlerAvatar.rightArmPivot.rotation.x = 0;
             if (this.isUserBowling && !this.cameraTracking) {
               this.defaultCamPos.set(0, 6.5, 17.0);
               this.defaultCamLookAt.set(0, 2.0, -9.5);
@@ -696,11 +761,12 @@ class CricketGame {
       // Authentic cricket ball delivery: release from bowler hand (z = 10.5, y = 3.2m) to pitch landing spot
       const startPos = new THREE.Vector3(0, 3.2, 10.5);
       const lzX = typeof data.landingZone?.x === 'number' ? data.landingZone.x : 0;
-      const lzZ = typeof data.landingZone?.z === 'number' ? data.landingZone.z : 0.45;
-      // Map landing zone to pitch coordinates: pitch center z=0, spans z=-13 to +13
-      // Good length is around z = -2.0 to -5.0
-      const landingPos = new THREE.Vector3(lzX * 1.8, 0.24, -2.0 - lzZ * 5.0);
-      const targetPos = new THREE.Vector3(lzX, 1.8, -9.5);
+      const lzZ = typeof data.landingZone?.z === 'number' ? data.landingZone.z : -5.5;
+      const targetZ = lzZ < 0 ? Math.max(-9.2, Math.min(-1.0, lzZ)) : (-9.0 + lzZ * 7.5);
+      const targetX = Math.max(-1.3, Math.min(1.3, lzX));
+
+      const landingPos = new THREE.Vector3(targetX, 0.24, targetZ);
+      const targetPos = new THREE.Vector3(targetX, 1.8, -9.5);
 
       this.ball.bowlDelivery(startPos, landingPos, targetPos, data.deliveryType, data.swingDirection);
 

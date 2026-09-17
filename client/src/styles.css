@@ -860,26 +860,26 @@ body, html {
   border-color: #ffd32a;
 }
 
-/* Bowling UI - Docked to bottom-right (Babylon.js ref: bowler controls opposite side to batting) */
+/* Bowling UI - Centered at bottom for clear pitch view and smooth controls */
 #bowling-ui,
 .bowling-controller-side-panel {
   position: fixed;
-  bottom: 22px;
-  right: 22px;
-  left: auto;
-  transform: none;
-  background: rgba(14, 38, 16, 0.95);
+  bottom: 20px;
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  background: rgba(10, 28, 12, 0.96);
   border: 2px solid #2ed573;
-  border-radius: 18px;
-  padding: 14px 18px;
-  width: 290px;
+  border-radius: 20px;
+  padding: 14px 22px;
+  width: 520px;
   max-width: calc(100vw - 32px);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   pointer-events: auto;
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.8), 0 0 24px rgba(46, 213, 115, 0.3);
-  backdrop-filter: blur(10px);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.85), 0 0 30px rgba(46, 213, 115, 0.4);
+  backdrop-filter: blur(12px);
   z-index: 105;
   user-select: none;
 }
@@ -1073,52 +1073,96 @@ body, html {
 .bowling-meter-wrap {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 5px;
 }
 
 .bowl-meter-labels {
   display: flex;
   justify-content: space-between;
-  font-size: 0.65rem;
-  font-weight: 700;
+  align-items: center;
+  font-size: 0.68rem;
+  font-weight: 800;
   color: #ced6e0;
 }
 
 .meter-label-sweet {
   color: #2ed573;
-  text-shadow: 0 0 6px rgba(46, 213, 115, 0.6);
+  text-shadow: 0 0 8px rgba(46, 213, 115, 0.7);
+  letter-spacing: 0.5px;
+}
+
+.meter-label-noball {
+  color: #ff4757;
+  text-shadow: 0 0 8px rgba(255, 71, 87, 0.7);
+  letter-spacing: 0.5px;
 }
 
 .bowl-meter-track {
   position: relative;
   width: 100%;
-  height: 16px;
-  background: #1e272e;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: 8px;
+  height: 28px;
+  background: #111a14;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-radius: 14px;
   overflow: hidden;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.7);
+  cursor: pointer;
 }
 
 .bowl-meter-sweet-zone {
   position: absolute;
-  left: 48%;
-  width: 28%;
+  left: 52%;
+  width: 32%;
   height: 100%;
-  background: linear-gradient(90deg, rgba(46, 213, 115, 0.6), rgba(46, 213, 115, 0.95), rgba(46, 213, 115, 0.6));
-  box-shadow: inset 0 0 6px #2ed573;
+  background: linear-gradient(90deg, rgba(46, 213, 115, 0.65), rgba(46, 213, 115, 0.95), rgba(46, 213, 115, 0.65));
+  box-shadow: inset 0 0 10px #2ed573;
+}
+
+.bowl-meter-noball-zone {
+  position: absolute;
+  left: 88%;
+  width: 12%;
+  height: 100%;
+  background: repeating-linear-gradient(45deg, rgba(255, 71, 87, 0.6), rgba(255, 71, 87, 0.6) 6px, rgba(255, 71, 87, 0.9) 6px, rgba(255, 71, 87, 0.9) 12px);
+  box-shadow: inset 0 0 8px #ff4757;
+}
+
+.bowl-meter-noball-crease-line {
+  position: absolute;
+  left: 88%;
+  top: 0;
+  width: 3px;
+  height: 100%;
+  background: #fff;
+  box-shadow: 0 0 8px #fff, 0 0 4px #ff4757;
+  z-index: 4;
+}
+
+.crease-line-text {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  font-size: 0.52rem;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: 0.5px;
+  text-shadow: 0 1px 3px #000;
+  pointer-events: none;
 }
 
 .bowl-meter-marker {
   position: absolute;
-  top: 0;
+  top: -2px;
   left: 0;
-  width: 7px;
-  height: 100%;
+  width: 12px;
+  height: calc(100% + 4px);
   background: #ffd32a;
-  border-radius: 4px;
-  box-shadow: 0 0 10px #ffd32a, 0 0 3px #fff;
+  border: 1.5px solid #ffffff;
+  border-radius: 6px;
+  box-shadow: 0 0 14px #ffd32a, 0 0 6px #fff;
   transform: translateX(-50%);
   pointer-events: none;
+  z-index: 5;
 }
 
 .btn-bowl-pro {
@@ -2065,16 +2109,16 @@ body, html {
     border-radius: 6px !important;
   }
 
-  /* Side-docked Bowling Controller for Mobile */
+  /* Centered Bowling Controller for Mobile */
   #bowling-ui,
   .bowling-controller-side-panel {
     bottom: 8px !important;
-    right: 8px !important;
-    left: auto !important;
-    transform: none !important;
-    width: 250px !important;
-    max-width: 68vw !important;
-    padding: 8px 10px !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+    width: 95% !important;
+    max-width: 420px !important;
+    padding: 8px 12px !important;
     gap: 6px !important;
     border-radius: 14px !important;
   }
@@ -2162,11 +2206,12 @@ body, html {
 
   #bowling-ui,
   .bowling-controller-side-panel {
-    width: 220px !important;
-    max-width: 65vw !important;
+    width: 98% !important;
+    max-width: 360px !important;
     bottom: 5px !important;
-    right: 5px !important;
-    left: auto !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
     padding: 6px 8px !important;
   }
 
