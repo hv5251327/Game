@@ -9,8 +9,10 @@ export class BattingUI {
     this.shotType = 'drive';
     this.power = 0;
     this.barDirection = 1;
-    this.barSpeed = 2.4; // fills in ~0.42s matching ball arrival speed
+    // Slower arc (fills in ~1.6s) = easier timing window, more forgiving
+    this.barSpeed = 1.6;
     this.onSwing = null;
+    // Force all batsmen as RHB — no LHB option
     this.stance = { hand: 'RHB', depth: 'normal', guard: 'middle' };
     this.onStanceChange = null;
     this.animFrame = null;
@@ -39,10 +41,12 @@ export class BattingUI {
         <span id="bat-timer-badge" style="margin-left:auto;background:rgba(255,255,255,0.1);border-radius:20px;padding:2px 10px;font-size:0.8rem;color:#ffd32a;">⏱ <span id="bat-timer-count">7</span>s</span>
       </div>
 
-      <!-- Shot Type Pills -->
+      <!-- Shot Type Pills — including Pull & Hook for bouncers -->
       <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;">
         <button class="bat-pill active" data-shot="drive"   style="padding:4px 10px;border-radius:20px;border:1px solid rgba(255,255,255,0.3);background:rgba(76,217,100,0.2);color:#4CD964;font-size:0.72rem;cursor:pointer;font-weight:700;">💥 Drive</button>
         <button class="bat-pill"        data-shot="loft"    style="padding:4px 10px;border-radius:20px;border:1px solid rgba(255,255,255,0.12);background:transparent;color:rgba(255,255,255,0.55);font-size:0.72rem;cursor:pointer;">🚀 Loft [L]</button>
+        <button class="bat-pill"        data-shot="pull"    style="padding:4px 10px;border-radius:20px;border:1px solid rgba(255,255,255,0.12);background:transparent;color:rgba(255,255,255,0.55);font-size:0.72rem;cursor:pointer;">⬆ Pull [P]</button>
+        <button class="bat-pill"        data-shot="hook"    style="padding:4px 10px;border-radius:20px;border:1px solid rgba(255,255,255,0.12);background:transparent;color:rgba(255,255,255,0.55);font-size:0.72rem;cursor:pointer;">↩ Hook [H]</button>
         <button class="bat-pill"        data-shot="sweep"   style="padding:4px 10px;border-radius:20px;border:1px solid rgba(255,255,255,0.12);background:transparent;color:rgba(255,255,255,0.55);font-size:0.72rem;cursor:pointer;">🧹 Sweep</button>
         <button class="bat-pill"        data-shot="cut"     style="padding:4px 10px;border-radius:20px;border:1px solid rgba(255,255,255,0.12);background:transparent;color:rgba(255,255,255,0.55);font-size:0.72rem;cursor:pointer;">⚔️ Cut</button>
         <button class="bat-pill"        data-shot="defend"  style="padding:4px 10px;border-radius:20px;border:1px solid rgba(255,255,255,0.12);background:transparent;color:rgba(255,255,255,0.55);font-size:0.72rem;cursor:pointer;">🛡️ Defend</button>
@@ -160,9 +164,10 @@ export class BattingUI {
       const k = e.key.toLowerCase();
 
       if (k === ' ' || k === 'enter') { e.preventDefault(); this._swing(); return; }
-      if (k === 'h') { e.preventDefault(); this._toggleHand(); return; }
       if (k === 'g') { e.preventDefault(); this._toggleDepth(); return; }
       if (k === 'l') { this.shotType = (this.shotType === 'loft') ? 'drive' : 'loft'; this._refreshPills(); this._updateShotLabel(); return; }
+      if (k === 'p') { this.shotType = 'pull'; this._refreshPills(); this._setDirection('left'); return; }
+      if (k === 'h') { this.shotType = 'hook'; this._refreshPills(); this._setDirection('forward_left'); return; }
 
       if (k === 'arrowup' || k === 'w') this._setDirection('forward');
       else if (k === 'arrowdown' || k === 's') this._setDirection('backward');
@@ -267,7 +272,8 @@ export class BattingUI {
 
     if (this._timingArc) {
       this._timingArc.setAttribute('stroke-dasharray', `${filled.toFixed(1)} ${(circumference - filled).toFixed(1)}`);
-      const inSweet = this.power >= 0.5 && this.power <= 0.75;
+      // Wide sweet zone: 40%–85% = green, else orange
+      const inSweet = this.power >= 0.4 && this.power <= 0.85;
       this._timingArc.setAttribute('stroke', inSweet ? '#4CD964' : '#ffa502');
     }
 
@@ -278,7 +284,7 @@ export class BattingUI {
     // Pulse swing button when in sweet spot
     const swingBtn = this.el.querySelector('#btn-bat-swing');
     if (swingBtn) {
-      const inSweet = this.power >= 0.5 && this.power <= 0.75;
+      const inSweet = this.power >= 0.4 && this.power <= 0.85;
       swingBtn.style.boxShadow = inSweet
         ? '0 0 28px rgba(76,217,100,0.8)'
         : '0 0 10px rgba(76,217,100,0.2)';

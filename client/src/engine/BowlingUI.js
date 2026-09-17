@@ -36,6 +36,20 @@ export class BowlingUI {
         <span id="bowl-timer-badge" style="margin-left:auto;background:rgba(255,255,255,0.1);border-radius:20px;padding:2px 10px;font-size:0.8rem;color:#ffd32a;">⏱ <span id="bowl-timer-count">20</span>s</span>
       </div>
 
+      <!-- Over / Around Wicket Toggle -->
+      <div style="display:flex;gap:6px;width:100%;justify-content:center;">
+        <button id="btn-approach-over" class="approach-btn" data-approach="over"
+          style="flex:1;padding:5px 8px;border-radius:10px;border:1px solid rgba(76,217,100,0.6);
+            background:rgba(76,217,100,0.15);color:#4CD964;font-size:0.72rem;cursor:pointer;font-weight:700;">
+          🔵 Over Wicket
+        </button>
+        <button id="btn-approach-around" class="approach-btn" data-approach="around"
+          style="flex:1;padding:5px 8px;border-radius:10px;border:1px solid rgba(255,255,255,0.12);
+            background:transparent;color:rgba(255,255,255,0.5);font-size:0.72rem;cursor:pointer;">
+          🔴 Around Wicket
+        </button>
+      </div>
+
       <!-- Circular Power Meter -->
       <div style="position:relative;width:150px;height:150px;">
         <svg id="bowl-arc-svg" width="150" height="150" style="position:absolute;top:0;left:0;">
@@ -94,6 +108,21 @@ export class BowlingUI {
 
     this.el.style.display = 'none';
     this.container.appendChild(this.el);
+
+    // Over/Around wicket buttons
+    this.bowlingApproach = 'over'; // default: over the wicket
+    this.el.querySelectorAll('.approach-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.bowlingApproach = btn.dataset.approach;
+        this.el.querySelectorAll('.approach-btn').forEach(b => {
+          const active = (b.dataset.approach === this.bowlingApproach);
+          b.style.background = active ? 'rgba(76,217,100,0.15)' : 'transparent';
+          b.style.color = active ? '#4CD964' : 'rgba(255,255,255,0.5)';
+          b.style.borderColor = active ? 'rgba(76,217,100,0.6)' : 'rgba(255,255,255,0.12)';
+        });
+      });
+    });
 
     // Swing buttons
     this.el.querySelector('#btn-swing-l').addEventListener('click', (e) => { e.stopPropagation(); this._setSwing('left'); });
@@ -275,7 +304,8 @@ export class BowlingUI {
         power: parseFloat(this.power.toFixed(2)),
         accuracy: parseFloat(accuracy.toFixed(2)),
         isNoBall,
-        paceKmh
+        paceKmh,
+        bowlingApproach: this.bowlingApproach  // 'over' or 'around'
       });
     }
   }

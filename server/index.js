@@ -913,35 +913,49 @@ class CricketRoom {
       return { type: 'noball', noBall: true, runs: 1, ballPath: 'crease_noball' };
     }
 
-    // Wide check: ball clearly outside off/leg stump line — unplayable wide
-    const lzX = bowl.landingZone?.x || 0;
-    if (Math.abs(lzX) > 1.2) {
-      return { type: 'wide', wide: true, runs: 0, ballPath: 'wide' };
+    // ── WIDE DETECTION (Right-Hand Batsman) ──────────────────────────────────
+    const lzX = typeof bowl.landingZone?.x === 'number' ? bowl.landingZone.x : 0;
+    // For RHB: off stump is at x < 0 (negative x side), leg stump at x > 0
+    // lzX: landing zone x (negative = off side, positive = leg side)
+    //
+    // Umpire's wide rules (real cricket):
+    //  - Outside off: ball lands/passes more than 1 bat-width outside off stump without being played
+    //  - Down leg: ball clearly passing down leg side (leg side is x > 0 for RHB)
+    //  - Onside balls going past the batsman on leg side = always wide in real cricket
+
+    // 1. Clear off-side wide: ball way outside off stump (x < -1.0 = definitely outside channel)
+    if (lzX < -1.0) {
+      return { type: 'wide', wide: true, runs: 1, ballPath: 'wide_off' };
     }
-    // Wide check: bowler missed accuracy AND ball angled too far outside
-    if (accuracy < 0.22 && Math.abs(lzX) > 0.85) {
-      return { type: 'wide', wide: true, runs: 0, ballPath: 'wide' };
+    // 2. Down-leg wide: ball clearly going to leg side (x > 0.65) — umpire raises arm
+    if (lzX > 0.65) {
+      return { type: 'wide', wide: true, runs: 1, ballPath: 'wide_down_leg' };
     }
-    // Down-leg wide: ball going well past leg stump and batsman didn't attempt a shot
-    if (shotType === 'leave' && lzX < -0.75) {
-      return { type: 'wide', wide: true, runs: 0, ballPath: 'wide_down_leg' };
+    // 3. Inaccurate delivery also called wide outside off
+    if (accuracy < 0.22 && lzX < -0.75) {
+      return { type: 'wide', wide: true, runs: 1, ballPath: 'wide_off_inaccurate' };
+    }
+    // 4. Down-leg wide if batsman leaves any ball going past leg stump area
+    if (shotType === 'leave' && lzX > 0.45) {
+      return { type: 'wide', wide: true, runs: 1, ballPath: 'wide_down_leg_leave' };
     }
 
-    // Timing score: sweet spot around 0.50 - 0.75
+    // ── TIMING ────────────────────────────────────────────────────────────────
+    // Server-side sweet zone widened to match easier client arc (40%–85%)
     const sweetCenter = 0.62;
     const timingDiff = Math.abs(timing - sweetCenter);
-    const isPerfect = timingDiff < 0.08;
-    const isGood = timingDiff < 0.22;
-    const isEarly = timing < 0.32;
-    const isLate = timing > 0.85;
+    const isPerfect = timingDiff < 0.12;   // was 0.08 — wider perfect zone
+    const isGood = timingDiff < 0.28;      // was 0.22 — much wider good zone
+    const isEarly = timing < 0.25;         // was 0.32 — less early misses
+    const isLate = timing > 0.92;          // was 0.85 — less late misses
     const missHit = isEarly || isLate;
 
     // Batsman Leaves / Did not swing before ball arrived
     if (shotType === 'leave') {
-      const lzX = Math.abs(bowl.landingZone?.x || 0);
+      const absLzX = Math.abs(bowl.landingZone?.x || 0);
       const lzZ = typeof bowl.landingZone?.z === 'number' ? bowl.landingZone.z : -5.5;
       // Only bowled if delivery was on middle stump line AND pitching right at the batsman's stumps
-      if (lzX < 0.08 && lzZ <= -8.8 && Math.random() < 0.12) {
+      if (absLzX < 0.08 && lzZ <= -8.8 && Math.random() < 0.12) {
         return { type: 'wicket', wicket: true, dismissal: 'Bowled', ballPath: 'bowled' };
       }
       return { type: 'runs', runs: 0, ballPath: 'leave_dot' };
@@ -952,21 +966,38 @@ class CricketRoom {
       if (shotType === 'defend' || direction === 'backward' || isPerfect) {
         return { type: 'runs', runs: isPerfect ? 1 : 0, ballPath: 'yorker_defended' };
       }
-      const lzX = Math.abs(bowl.landingZone?.x || 0);
-      if (missHit && lzX < 0.09 && Math.random() < 0.20) {
+      const lzX2 = Math.abs(bowl.landingZone?.x || 0);
+      if (missHit && lzX2 < 0.09 && Math.random() < 0.20) {
         return { type: 'wicket', wicket: true, dismissal: 'Bowled', ballPath: 'bowled' };
       }
       return { type: 'runs', runs: 0, ballPath: 'yorker_missed_dot' };
     }
 
-    // Bouncer delivery logic
+    // ── BOUNCER: fully hittable with pull/hook/cut ────────────────────────────
     if (deliveryType === 'bouncer') {
-      if ((shotType === 'sweep' || direction === 'left') && !isGood && Math.random() < 0.18) {
+      // Pull shot: ball goes over square leg — always a run-scoring option
+      if (shotType === 'pull' || (direction === 'left' && (isGood || isPerfect))) {
+        const runs = isPerfect ? 6 : isGood ? 4 : 2;
+        return { type: 'runs', runs, ballPath: 'pull_shot', shotType: 'pull', direction: 'left' };
+      }
+      // Hook shot: ball swings to fine leg
+      if (shotType === 'hook' || (direction === 'forward_left' && isGood)) {
+        const runs = isPerfect ? 6 : 4;
+        return { type: 'runs', runs, ballPath: 'hook_shot', shotType: 'hook', direction: 'forward_left' };
+      }
+      // Upper cut: late cut over point
+      if (shotType === 'cut' || (direction === 'right' && isGood)) {
+        return { type: 'runs', runs: isPerfect ? 6 : 4, ballPath: 'upper_cut', shotType: 'cut', direction: 'right' };
+      }
+      // Good drive/loft on a bouncer = reasonable run scoring
+      if ((shotType === 'loft' || shotType === 'drive') && isGood) {
+        return { type: 'runs', runs: isPerfect ? 4 : 2, ballPath: 'bouncer_drive', direction };
+      }
+      // Only get out if really badly timed AND swept (top edge)
+      if (shotType === 'sweep' && !isGood && Math.random() < 0.10) {
         return { type: 'wicket', wicket: true, dismissal: 'Caught', ballPath: 'top_edge_caught' };
       }
-      if ((shotType === 'cut' || direction === 'right' || direction === 'backward_right') && isGood) {
-        return { type: 'runs', runs: 4, ballPath: 'upper_cut_four' };
-      }
+      // Otherwise: evade / duck for dot ball (not out!)
       return { type: 'runs', runs: 0, ballPath: 'bouncer_duck_dot' };
     }
 

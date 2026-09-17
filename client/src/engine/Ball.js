@@ -6,21 +6,23 @@ export class Ball {
     this.scene = scene;
     this.group = new THREE.Group();
 
-    // Ball mesh: color #D9362B, radius 0.22 (scaled for 4m player models)
+    // Ball mesh: white (ODI/T20 Kookaburra), radius 0.22 (scaled for 4m player models)
     this.radius = 0.22;
     const geo = new THREE.SphereGeometry(this.radius, 18, 18);
     const mat = new THREE.MeshStandardMaterial({
-      color: 0xD9362B,
-      roughness: 0.3,
-      metalness: 0.1
+      color: 0xF5F2E8,   // off-white white ball
+      roughness: 0.22,
+      metalness: 0.04,
+      emissive: 0x1a1a14,
+      emissiveIntensity: 0.12
     });
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.castShadow = true;
     this.group.add(this.mesh);
 
-    // Seam
+    // Seam (slightly golden stitch on white ball)
     const seamGeo = new THREE.TorusGeometry(this.radius, 0.015, 8, 36);
-    const seamMat = new THREE.MeshStandardMaterial({ color: 0xFFF2D0, roughness: 0.5 });
+    const seamMat = new THREE.MeshStandardMaterial({ color: 0xC8A060, roughness: 0.5 });
     const seam = new THREE.Mesh(seamGeo, seamMat);
     this.group.add(seam);
 

@@ -127,7 +127,7 @@ class CricketGame {
 
   _initThree() {
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x82C7FE);
+    this.scene.background = new THREE.Color(0x091826); // dark evening sky matching ground sky dome
 
     // Exact Camera presets matching Babylon.js sceneConfig + behind batsman
     this.cameraPresets = {
@@ -157,8 +157,8 @@ class CricketGame {
 
     document.getElementById('canvas-container').appendChild(this.renderer.domElement);
 
-    // Exact Lighting matching Babylon scene sunset keylight:
-    const keyLight = new THREE.DirectionalLight(0xFFF4C2, 1.3);
+    // Brighter lighting for well-lit floodlit cricket stadium
+    const keyLight = new THREE.DirectionalLight(0xFFF4C2, 2.6);  // was 1.3
     keyLight.position.set(-60, 90, -70);
     keyLight.castShadow = true;
     keyLight.shadow.mapSize.width = 2048;
@@ -172,8 +172,13 @@ class CricketGame {
     keyLight.shadow.bias = -0.0005;
     this.scene.add(keyLight);
 
-    const fillLight = new THREE.AmbientLight(0xBDE3FF, 0.45);
+    const fillLight = new THREE.AmbientLight(0xC8DEFF, 1.2);  // was 0.45
     this.scene.add(fillLight);
+
+    // Extra ground-level fill from opposite side
+    const backFill = new THREE.DirectionalLight(0xFFE8C0, 1.1);
+    backFill.position.set(50, 40, 80);
+    this.scene.add(backFill);
 
     const updateFOVAndSize = () => {
       const width = window.innerWidth;
@@ -512,8 +517,31 @@ class CricketGame {
         if (!this.isUserBowling && this.manualRunningActive) {
           this._handleUserCancelRun();
         }
+      } else if (e.code === 'KeyF' && !e.target.matches('input, select')) {
+        // F = open Field Arrangement panel (captain only)
+        if (this.isUserBowling || this.myRole === 'bowler' || this.myRole === 'fielder') {
+          this._showFieldArrangement();
+        }
       }
     });
+
+    // Inject a "⚙ Field" HUD button dynamically if it doesn't exist in HTML
+    if (!document.getElementById('btn-field-arrangement')) {
+      const fieldBtn = document.createElement('button');
+      fieldBtn.id = 'btn-field-arrangement';
+      fieldBtn.innerHTML = '⚙ Field [F]';
+      fieldBtn.style.cssText = `
+        position:fixed; top:14px; right:14px; z-index:600;
+        padding:7px 14px; border-radius:10px;
+        border:1px solid rgba(255,200,50,0.5);
+        background:rgba(255,200,50,0.1); color:#ffd32a;
+        font-weight:700; font-size:0.8rem; cursor:pointer;
+        display:none;
+      `;
+      fieldBtn.addEventListener('click', () => this._showFieldArrangement());
+      document.body.appendChild(fieldBtn);
+      this._domFieldBtn = fieldBtn;
+    }
   }
 
   _toggleVRMode() {
@@ -619,13 +647,16 @@ class CricketGame {
       this._updateScorecardUI(data.scorecard);
       this._updateCameraMode();
 
+      // Show Field Arrangement button for the bowling side
+      if (this._domFieldBtn) this._domFieldBtn.style.display = 'block';
+
       // Rotate/update bowler avatar
       if (this.bowlerAvatar) {
         this.bowlerAvatar.destroy();
       }
       const isSnail = data.bowler?.isBot || (data.scorecard?.bowlingTeam === 'b');
       this.bowlerAvatar = new CricketCharacter(this.scene, isSnail ? 'snail_bowler_01' : 'ant_fielder_right');
-      this.bowlerAvatar.setPosition(0, 0.0, 27.0);
+      this.bowlerAvatar.setPosition(1.2, 0.0, 27.0);  // offset from umpire lane
       this.bowlerAvatar.setRotation(Math.PI);
     });
 
@@ -637,9 +668,11 @@ class CricketGame {
       this.showNotice(`⚾ Your turn to bowl ball ${data.ball} of over ${data.over}! Click on pitch to set landing spot.`);
       this._updateCameraMode();
 
-      // Position bowler at start of runup behind the bowler stumps
+      // Position bowler at start of runup — x=1.2 for over wicket (default), x=-1.2 for around wicket
+      const approach = this.bowlingUI?.bowlingApproach || 'over';
+      const laneX = approach === 'around' ? -1.2 : 1.2;
       if (this.bowlerAvatar) {
-        this.bowlerAvatar.setPosition(0, 0.0, 27.0);
+        this.bowlerAvatar.setPosition(laneX, 0.0, 27.0);
         this.bowlerAvatar.setRotation(Math.PI);
       }
       this.defaultCamPos.set(0, 6.5, 33.5);
@@ -1562,6 +1595,101 @@ class CricketGame {
         this.domThisOverBalls.appendChild(span);
       });
     }
+  }
+
+  // ─── FIELD ARRANGEMENT: WCC2-style preset formations for captain ─────────
+  _showFieldArrangement() {
+    // Remove existing panel if open
+    const existing = document.getElementById('field-arrangement-panel');
+    if (existing) { existing.remove(); return; }
+
+    const PRESETS = {
+      'Aggressive Attack': [
+        { name: 'Slip', x: 1.8, z: -16 }, { name: 'Gully', x: 3.5, z: -18 },
+        { name: 'Point', x: 18, z: -12 }, { name: 'Cover', x: 20, z: 5 },
+        { name: 'Mid-Off', x: 8, z: 18 }, { name: 'Mid-On', x: -8, z: 18 },
+        { name: 'Sq Leg', x: -14, z: -8 }, { name: 'Fine Leg', x: -6, z: -28 },
+        { name: 'Third Man', x: 8, z: -30 },
+      ],
+      'Defensive Ring': [
+        { name: 'Point', x: 22, z: -5 }, { name: 'Cover', x: 20, z: 10 },
+        { name: 'Mid-Off', x: 10, z: 22 }, { name: 'Mid-On', x: -10, z: 22 },
+        { name: 'Sq Leg', x: -22, z: -5 }, { name: 'Fine Leg', x: -8, z: -28 },
+        { name: 'Third Man', x: 8, z: -28 }, { name: 'Long On', x: -28, z: 35 },
+        { name: 'Long Off', x: 28, z: 35 },
+      ],
+      "Spinner's Web": [
+        { name: 'Slip', x: 1.5, z: -16 }, { name: 'Silly Mid-On', x: -3, z: -5 },
+        { name: 'Silly Mid-Off', x: 3, z: -5 }, { name: 'Leg Slip', x: -1.5, z: -16 },
+        { name: 'Cover', x: 18, z: 8 }, { name: 'Mid-Off', x: 8, z: 20 },
+        { name: 'Mid-On', x: -8, z: 20 }, { name: 'Square Leg', x: -18, z: -6 },
+        { name: 'Fine Leg', x: -8, z: -28 },
+      ],
+      'Run-Save T20': [
+        { name: 'Deep Point', x: 38, z: -8 }, { name: 'Deep Cover', x: 35, z: 20 },
+        { name: 'Long Off', x: 22, z: 52 }, { name: 'Long On', x: -22, z: 52 },
+        { name: 'Mid-Wicket', x: -30, z: 12 }, { name: 'Square Leg', x: -38, z: -8 },
+        { name: 'Fine Leg', x: -18, z: -55 }, { name: 'Third Man', x: 18, z: -55 },
+        { name: 'Slip', x: 1.8, z: -16 },
+      ],
+    };
+
+    const panel = document.createElement('div');
+    panel.id = 'field-arrangement-panel';
+    panel.style.cssText = `
+      position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+      background:rgba(8,14,28,0.97); border:2px solid rgba(255,200,50,0.4);
+      border-radius:18px; padding:22px 24px; z-index:1100;
+      font-family:'Segoe UI',sans-serif; min-width:340px; max-width:420px;
+      box-shadow:0 8px 40px rgba(0,0,0,0.9);
+    `;
+
+    const title = document.createElement('div');
+    title.style.cssText = 'color:#ffd32a;font-size:1.15rem;font-weight:900;margin-bottom:6px;';
+    title.textContent = '🏏 FIELD ARRANGEMENT';
+    panel.appendChild(title);
+
+    const sub = document.createElement('div');
+    sub.style.cssText = 'color:rgba(255,255,255,0.55);font-size:0.8rem;margin-bottom:16px;';
+    sub.textContent = 'Choose a preset formation or tap a fielder on the ground to drag them:';
+    panel.appendChild(sub);
+
+    Object.entries(PRESETS).forEach(([name, positions]) => {
+      const btn = document.createElement('button');
+      btn.textContent = `⚙ ${name}`;
+      btn.style.cssText = `
+        display:block; width:100%; padding:10px 14px; margin-bottom:8px;
+        border-radius:10px; border:1px solid rgba(255,200,50,0.3);
+        background:rgba(255,200,50,0.08); color:#fff; cursor:pointer;
+        font-size:0.88rem; font-weight:700; text-align:left;
+      `;
+      btn.addEventListener('click', () => {
+        // Move fielder avatars to preset positions
+        positions.forEach((pos, i) => {
+          if (this.fielders[i]) {
+            this.fielders[i].group.position.x = pos.x;
+            this.fielders[i].group.position.z = pos.z;
+            // Face toward the pitch center
+            this.fielders[i].group.rotation.y = Math.atan2(-pos.x, -pos.z);
+          }
+        });
+        this.showNotice(`🏏 Field set to: ${name}`);
+        panel.remove();
+      });
+      panel.appendChild(btn);
+    });
+
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = '✕ Close';
+    closeBtn.style.cssText = `
+      margin-top:4px; padding:8px 16px; border-radius:8px;
+      border:1px solid rgba(255,255,255,0.2); background:transparent;
+      color:rgba(255,255,255,0.5); cursor:pointer; font-size:0.82rem;
+    `;
+    closeBtn.addEventListener('click', () => panel.remove());
+    panel.appendChild(closeBtn);
+
+    document.body.appendChild(panel);
   }
 
   _showCaptainPickBowler(bowlers, over) {
