@@ -171,6 +171,7 @@ export class CricketCharacter {
 
     this.rightArmPivot = null;
     this.leftArmPivot = null;
+    this.headPivot = null;
 
     this.animTime = Math.random() * Math.PI * 2;
     this.targetPos = new THREE.Vector3();
@@ -243,32 +244,36 @@ export class CricketCharacter {
     torso.castShadow = true;
     this.bodyPivot.add(torso);
 
-    // 2. Head: Sphere (diameter: 0.68 -> radius: 0.34) at (0, 3.65, 0)
+    // 2. Head & Helmet Group (can rotate independently to look over shoulder in cricket stance)
+    this.headPivot = new THREE.Group();
+    this.headPivot.position.set(0, 3.65, 0);
+    this.bodyPivot.add(this.headPivot);
+
     const headGeo = new THREE.SphereGeometry(0.34, 16, 16);
     const head = new THREE.Mesh(headGeo, skinMat);
-    head.position.set(0, 3.65, 0);
+    head.position.set(0, 0, 0);
     head.castShadow = true;
-    this.bodyPivot.add(head);
+    this.headPivot.add(head);
 
     // 3. Helmet & Visor (players) OR Umpire Cap & Clipboard
     if (!isUmpire) {
-      // Helmet: Sphere (diameter: 0.76 -> radius: 0.38) at (0, 3.87, 0)
+      // Helmet: Sphere (diameter: 0.76 -> radius: 0.38) at local (0, 0.22, 0)
       const helmetGeo = new THREE.SphereGeometry(0.38, 16, 16);
       const helmet = new THREE.Mesh(helmetGeo, accentMat);
-      helmet.position.set(0, 3.87, 0);
-      this.bodyPivot.add(helmet);
+      helmet.position.set(0, 0.22, 0);
+      this.headPivot.add(helmet);
 
-      // Visor: Box (width: 0.48, height: 0.08, depth: 0.16) at (0, 3.74, 0.3)
+      // Visor: Box (width: 0.48, height: 0.08, depth: 0.16) at local (0, 0.09, 0.3)
       const visorGeo = new THREE.BoxGeometry(0.48, 0.08, 0.16);
       const visor = new THREE.Mesh(visorGeo, new THREE.MeshStandardMaterial({ color: 0x1a2124, roughness: 0.3 }));
-      visor.position.set(0, 3.74, 0.3);
-      this.bodyPivot.add(visor);
+      visor.position.set(0, 0.09, 0.3);
+      this.headPivot.add(visor);
     } else {
-      // Cap: Box (width: 0.74, height: 0.16, depth: 0.74) at (0, 4.08, 0)
+      // Cap: Box (width: 0.74, height: 0.16, depth: 0.74) at local (0, 0.43, 0)
       const capGeo = new THREE.BoxGeometry(0.74, 0.16, 0.74);
       const cap = new THREE.Mesh(capGeo, accentMat);
-      cap.position.set(0, 4.08, 0);
-      this.bodyPivot.add(cap);
+      cap.position.set(0, 0.43, 0);
+      this.headPivot.add(cap);
 
       // Clipboard: Box (width: 0.38, height: 0.5, depth: 0.05) at (-0.65, 2.5, 0)
       const cbGeo = new THREE.BoxGeometry(0.38, 0.5, 0.05);
@@ -351,10 +356,6 @@ export class CricketCharacter {
 
     // 6. Batsman Bat: blade (0.28 x 1.85 x 0.28) + handle (diameter 0.12, height 0.65)
     if (isBatsman) {
-      // Position bat held naturally in front of batsman (pointed down to ground in front of feet)
-      this.batPivot.position.set(0.15, 1.2, 0.45);
-      this.batPivot.rotation.set(0.15, 0, 0);
-
       // Handle held up top near hands (local y = 0.55 to 1.2)
       const handleGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.65, 8);
       const handle = new THREE.Mesh(handleGeo, new THREE.MeshStandardMaterial({ color: 0x1f1f1f, roughness: 0.7 }));
@@ -369,15 +370,7 @@ export class CricketCharacter {
       this.batPivot.add(blade);
       this.batPivot.add(handle);
 
-      // Forward-ready arm posture for batsman
-      if (this.rightArmPivot) {
-        this.rightArmPivot.rotation.x = 0.45;
-        this.rightArmPivot.rotation.z = -0.25;
-      }
-      if (this.leftArmPivot) {
-        this.leftArmPivot.rotation.x = 0.35;
-        this.leftArmPivot.rotation.z = 0.25;
-      }
+      this._applySidewaysStance();
     }
   }
 
@@ -411,58 +404,63 @@ export class CricketCharacter {
       if (this.swingProgress >= 1.0) {
         this.swingProgress = 1.0;
         this.isSwinging = false;
-        // Restore standard forward stance
-        this.batPivot.rotation.set(0.15, 0, 0);
-        this.bodyPivot.rotation.set(0, 0, 0);
-        if (this.rightArmPivot) {
-          this.rightArmPivot.rotation.set(0.45, 0, -0.25);
-        }
-        if (this.leftArmPivot) {
-          this.leftArmPivot.rotation.set(0.35, 0, 0.25);
-        }
+        // Restore standard sideways cricket stance
+        this._applySidewaysStance();
       } else {
         this._updateSwingPhases(this.swingProgress);
       }
     } else {
       const isBatsman = this.role.includes('batter') || this.role.includes('batsman');
       if (isBatsman && this.batPivot) {
-        // Natural gentle bat tapping on crease
-        this.batPivot.rotation.x = 0.15 + Math.sin(this.animTime * 3.5) * 0.08;
+        // Natural gentle bat tapping on crease in sideways stance
+        const tap = Math.sin(this.animTime * 3.5);
+        this.batPivot.rotation.x = 0.12 + tap * 0.07;
+        this.batPivot.position.y = 1.28 + Math.max(0, tap) * 0.035;
       }
     }
   }
 
   _updateSwingPhases(p) {
-    // Authentic straight cricket bat swing: backlift raised back and down-through forward drive
+    const isLHB = this.stance && this.stance.hand === 'LHB';
     const dirInfo = DIRECTION_VECTORS[this.currentDirection] || DIRECTION_VECTORS.forward;
     const targetAimY = dirInfo.angle * 0.45;
 
-    let swingX, twistY, armX;
+    let swingX, twistY, armX, batY, batZ;
     if (p < 0.25) {
-      // Phase 1: High backlift - bat raises backward preparing to strike forward
+      // Phase 1: High backlift - bat raises backward towards keeper preparing to strike forward
       const t = p / 0.25;
-      swingX = 0.15 - 0.95 * t; // raises up-back
-      twistY = -0.15 * t;
+      swingX = 0.12 - 1.05 * t;
+      batZ = -0.10 - 0.25 * t;
+      batY = 1.28 + 0.32 * t;
+      twistY = (isLHB ? -1.42 : 1.42) - (isLHB ? -0.18 : 0.18) * t;
       armX = 0.45 - 0.6 * t;
     } else if (p < 0.55) {
-      // Phase 2: Forward down-swing accelerating directly into ball contact point
+      // Phase 2: Forward down-swing accelerating down and forward through ball
       const t = (p - 0.25) / 0.30;
-      swingX = -0.80 + 1.85 * t; // driving down and forward through ball
-      twistY = -0.15 + 0.35 * t;
+      swingX = -0.93 + 2.05 * t;
+      batZ = -0.35 + 0.60 * t;
+      batY = 1.60 - 0.40 * t;
+      twistY = (isLHB ? -1.24 : 1.24) - (isLHB ? -0.45 : 0.45) * t;
       armX = -0.15 + 1.1 * t;
     } else {
       // Phase 3: High elegant forward follow-through
       const t = (p - 0.55) / 0.45;
-      swingX = 1.05 + 0.45 * (1 - Math.cos(t * Math.PI * 0.5));
-      twistY = 0.20 + 0.15 * t;
+      swingX = 1.12 + 0.48 * (1 - Math.cos(t * Math.PI * 0.5));
+      batZ = 0.25 + 0.25 * t;
+      batY = 1.20 + 0.45 * t;
+      twistY = (isLHB ? -0.79 : 0.79) - (isLHB ? -0.20 : 0.20) * t;
       armX = 0.95 + 0.25 * t;
     }
 
     this.batPivot.rotation.x = swingX * (0.85 + this.currentPower * 0.3);
-    this.batPivot.rotation.y = targetAimY;
+    this.batPivot.rotation.y = (isLHB ? -0.10 : 0.10) + targetAimY;
     this.batPivot.rotation.z = -dirInfo.x * 0.25;
+    this.batPivot.position.set((isLHB ? -0.12 : 0.12) + dirInfo.x * 0.2, batY, batZ);
 
     this.bodyPivot.rotation.y = twistY + targetAimY * 0.35;
+    if (this.headPivot) {
+      this.headPivot.rotation.y = isLHB ? (1.32 - targetAimY * 0.2) : (-1.32 + targetAimY * 0.2);
+    }
 
     if (this.rightArmPivot) {
       this.rightArmPivot.rotation.x = armX;
@@ -607,10 +605,34 @@ export class CricketCharacter {
 
     const isBatsman = this.role.includes('batter') || this.role.includes('batsman');
     if (isBatsman) {
-      if (this.batPivot) this.batPivot.rotation.set(0.15, 0, 0);
-      if (this.bodyPivot) this.bodyPivot.rotation.set(0, 0, 0);
-      if (this.rightArmPivot) this.rightArmPivot.rotation.set(0.45, 0, -0.25);
-      if (this.leftArmPivot) this.leftArmPivot.rotation.set(0.35, 0, 0.25);
+      this._applySidewaysStance();
+    }
+  }
+
+  _applySidewaysStance() {
+    const isBatsman = this.role.includes('batter') || this.role.includes('batsman');
+    if (!isBatsman) return;
+
+    const isLHB = this.stance && this.stance.hand === 'LHB';
+    const bodyY = isLHB ? -1.42 : 1.42; // Side-on stance turned ~81.5 degrees across pitch
+    const headY = isLHB ? 1.32 : -1.32; // Head turned looking over front shoulder down pitch at bowler (+Z)
+    const batX = isLHB ? -0.12 : 0.12;
+
+    if (this.bodyPivot) {
+      this.bodyPivot.rotation.set(0, bodyY, 0);
+    }
+    if (this.headPivot) {
+      this.headPivot.rotation.set(0, headY, 0);
+    }
+    if (this.batPivot) {
+      this.batPivot.position.set(batX, 1.28, -0.10);
+      this.batPivot.rotation.set(0.12, isLHB ? -0.10 : 0.10, 0);
+    }
+    if (this.leftArmPivot) {
+      this.leftArmPivot.rotation.set(0.40, isLHB ? -0.15 : 0.15, isLHB ? 0.25 : -0.25);
+    }
+    if (this.rightArmPivot) {
+      this.rightArmPivot.rotation.set(0.45, isLHB ? 0.15 : -0.15, isLHB ? -0.20 : 0.20);
     }
   }
 

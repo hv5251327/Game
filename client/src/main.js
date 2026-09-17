@@ -1540,11 +1540,9 @@ class CricketGame {
         this.strikerAvatar.setStance(this.battingUI.stance);
       } else {
         this.strikerAvatar.setPosition(0, 0.0, -9.5);
+        this.strikerAvatar.setStance();
       }
       this.strikerAvatar.setRotation(0);
-      if (this.strikerAvatar.bodyPivot) {
-        this.strikerAvatar.bodyPivot.rotation.set(0, 0, 0);
-      }
     }
 
     if (this.nonStrikerAvatar) {
